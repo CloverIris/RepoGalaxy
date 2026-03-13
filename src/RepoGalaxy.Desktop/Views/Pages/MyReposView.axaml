@@ -1,0 +1,134 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RepoGalaxy.Desktop.ViewModels"
+             x:Class="RepoGalaxy.Desktop.Views.Pages.MyReposView"
+             x:DataType="vm:MyReposViewModel">
+
+  <Grid RowDefinitions="Auto,*" Margin="24">
+    
+    <!-- 标题栏 -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,24">
+      <TextBlock Grid.Column="0" 
+                 Text="📦 我的仓库" 
+                 FontSize="28" 
+                 FontWeight="Bold"
+                 VerticalAlignment="Center" />
+      
+      <Button Grid.Column="1"
+              Content="🔄 刷新"
+              Command="{Binding RefreshCommand}"
+              Background="Transparent"
+              BorderBrush="#30363D"
+              BorderThickness="1"
+              CornerRadius="4"
+              VerticalAlignment="Center" />
+    </Grid>
+
+    <!-- 内容 -->
+    <ScrollViewer Grid.Row="1">
+      <ItemsControl ItemsSource="{Binding Repositories}"
+                    IsVisible="{Binding !IsLoading}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel Orientation="Horizontal" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Width="280"
+                    Height="140"
+                    Margin="0,0,16,16"
+                    Background="#161B22"
+                    BorderBrush="#30363D"
+                    BorderThickness="1"
+                    CornerRadius="8">
+              <Grid RowDefinitions="*,Auto" Margin="16">
+                <StackPanel Grid.Row="0" Spacing="4">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="📦" FontSize="16" />
+                    <TextBlock Text="{Binding Name}"
+                               FontWeight="SemiBold"
+                               FontSize="16"
+                               TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                  <TextBlock Text="{Binding Description}"
+                             TextTrimming="CharacterEllipsis"
+                             MaxLines="2"
+                             FontSize="12"
+                             Opacity="0.8"
+                             Margin="0,4,0,0" />
+                </StackPanel>
+                
+                <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto">
+                  <Border Grid.Column="0"
+                          Background="#23863630"
+                          BorderBrush="#238636"
+                          BorderThickness="1"
+                          CornerRadius="4"
+                          Padding="8,2"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Center">
+                    <TextBlock Text="{Binding PrimaryLanguage}"
+                               FontSize="11"
+                               Foreground="#3FB950" />
+                  </Border>
+                  
+                  <StackPanel Grid.Column="1" 
+                              Orientation="Horizontal" 
+                              Spacing="4"
+                              Margin="8,0"
+                              VerticalAlignment="Center">
+                    <TextBlock Text="⭐" FontSize="12" />
+                    <TextBlock Text="{Binding StarsFormatted}"
+                               FontSize="12"
+                               Opacity="0.9" />
+                  </StackPanel>
+                  
+                  <StackPanel Grid.Column="2" 
+                              Orientation="Horizontal" 
+                              Spacing="4"
+                              VerticalAlignment="Center">
+                    <TextBlock Text="⑂" FontSize="12" />
+                    <TextBlock Text="{Binding ForksFormatted}"
+                               FontSize="12"
+                               Opacity="0.9" />
+                  </StackPanel>
+                </Grid>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <!-- 加载状态 -->
+    <ProgressBar Grid.Row="1"
+                 IsVisible="{Binding IsLoading}"
+                 IsIndeterminate="True"
+                 Height="4"
+                 VerticalAlignment="Top" />
+
+    <!-- 空状态 -->
+    <Border Grid.Row="1"
+            IsVisible="{Binding !IsLoading}"
+            Background="#161B22"
+            BorderBrush="#30363D"
+            BorderThickness="1"
+            CornerRadius="12"
+            Padding="48"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center">
+      <StackPanel Spacing="12" HorizontalAlignment="Center">
+        <TextBlock Text="📦" FontSize="64" HorizontalAlignment="Center" />
+        <TextBlock Text="请先登录GitHub"
+                   FontSize="20"
+                   FontWeight="SemiBold"
+                   HorizontalAlignment="Center" />
+        <TextBlock Text="登录后可以查看和管理您的GitHub仓库"
+                 Opacity="0.7"
+                 HorizontalAlignment="Center" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

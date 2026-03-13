@@ -1,0 +1,124 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RepoGalaxy.Desktop.ViewModels"
+             x:Class="RepoGalaxy.Desktop.Views.RepoDetailView"
+             x:DataType="vm:RepoDetailViewModel"
+             IsVisible="{Binding IsOpen}">
+    
+    <Border Background="#161B22" 
+            CornerRadius="12"
+            BorderBrush="#30363D"
+            BorderThickness="1"
+            Padding="24"
+            Width="400"
+            Margin="20">
+        <Border.Transitions>
+            <Transitions>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.3"/>
+            </Transitions>
+        </Border.Transitions>
+        
+        <StackPanel Spacing="16">
+            <!-- 头部 -->
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="{Binding RepoName}" 
+                               FontSize="20" 
+                               FontWeight="Bold"
+                               Foreground="#E6EDF3"/>
+                    <TextBlock Text="{Binding Owner}" 
+                               FontSize="13"
+                               Opacity="0.7"
+                               Foreground="#7D8590"/>
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Content="✕"
+                        FontSize="16"
+                        Background="Transparent"
+                        Foreground="#7D8590"
+                        Command="{Binding CloseCommand}"/>
+            </Grid>
+            
+            <!-- 描述 -->
+            <TextBlock Text="{Binding Description}"
+                       TextWrapping="Wrap"
+                       FontSize="14"
+                       Foreground="#E6EDF3"
+                       MaxHeight="100"/>
+            
+            <!-- 统计 -->
+            <Grid ColumnDefinitions="*,*,*,*">
+                <StackPanel Grid.Column="0" 
+                            Orientation="Horizontal" 
+                            HorizontalAlignment="Center"
+                            Spacing="4">
+                    <TextBlock Text="⭐" FontSize="14"/>
+                    <TextBlock Text="{Binding StarCount}" 
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="#E6EDF3"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" 
+                            Orientation="Horizontal" 
+                            HorizontalAlignment="Center"
+                            Spacing="4">
+                    <TextBlock Text="🍴" FontSize="14"/>
+                    <TextBlock Text="{Binding ForkCount}" 
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="#E6EDF3"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" 
+                            Orientation="Horizontal" 
+                            HorizontalAlignment="Center"
+                            Spacing="4">
+                    <TextBlock Text="👁️" FontSize="14"/>
+                    <TextBlock Text="{Binding WatchCount}" 
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="#E6EDF3"/>
+                </StackPanel>
+                <StackPanel Grid.Column="3" 
+                            Orientation="Horizontal" 
+                            HorizontalAlignment="Center"
+                            Spacing="4">
+                    <TextBlock Text="📝" FontSize="14"/>
+                    <TextBlock Text="{Binding IssueCount}" 
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="#E6EDF3"/>
+                </StackPanel>
+            </Grid>
+            
+            <!-- 操作按钮 -->
+            <StackPanel Orientation="Horizontal" 
+                        Spacing="8"
+                        HorizontalAlignment="Right">
+                <Button Content="⭐ Star"
+                        Background="#238636"
+                        Foreground="White"
+                        CornerRadius="6"
+                        Padding="12,6"
+                        Command="{Binding StarCommand}"/>
+                <Button Content="📥 Clone"
+                        Background="#21262D"
+                        Foreground="#E6EDF3"
+                        CornerRadius="6"
+                        Padding="12,6"
+                        Command="{Binding CloneCommand}"/>
+                <Button Content="🔗 GitHub"
+                        Background="#21262D"
+                        Foreground="#E6EDF3"
+                        CornerRadius="6"
+                        Padding="12,6"
+                        Command="{Binding OpenGitHubCommand}"/>
+            </StackPanel>
+            
+            <!-- 更新时间 -->
+            <TextBlock Text="{Binding LastUpdatedText}"
+                       FontSize="11"
+                       Foreground="#7D8590"
+                       HorizontalAlignment="Right"/>
+        </StackPanel>
+    </Border>
+</UserControl>

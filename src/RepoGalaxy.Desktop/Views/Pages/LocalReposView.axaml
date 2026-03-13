@@ -1,0 +1,135 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RepoGalaxy.Desktop.ViewModels"
+             x:Class="RepoGalaxy.Desktop.Views.Pages.LocalReposView"
+             x:DataType="vm:LocalReposViewModel">
+
+  <Grid RowDefinitions="Auto,Auto,*" Margin="24">
+    
+    <!-- 标题 -->
+    <TextBlock Grid.Row="0" 
+               Text="💻 本地仓库" 
+               FontSize="28" 
+               FontWeight="Bold"
+               Margin="0,0,0,16" />
+
+    <!-- 扫描路径 -->
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,24">
+      <TextBox Grid.Column="0"
+               Text="{Binding ScanPath}"
+               Watermark="输入要扫描的路径..."
+               VerticalAlignment="Center"
+               Height="36"
+               CornerRadius="4"
+               Background="#161B22"
+               BorderBrush="#30363D" />
+      
+      <Button Grid.Column="1"
+              Content="🔍 扫描"
+              Command="{Binding ScanCommand}"
+              Margin="12,0,0,0"
+              Background="#238636"
+              Foreground="White"
+              CornerRadius="4"
+              Padding="16,8" />
+    </Grid>
+
+    <!-- 内容 -->
+    <ScrollViewer Grid.Row="2">
+      <ItemsControl ItemsSource="{Binding LocalRepositories}"
+                    IsVisible="{Binding !IsLoading}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel Orientation="Horizontal" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Width="360"
+                    Height="120"
+                    Margin="0,0,16,16"
+                    Background="#161B22"
+                    BorderBrush="#30363D"
+                    BorderThickness="1"
+                    CornerRadius="8">
+              <Grid RowDefinitions="*,Auto" Margin="16">
+                <StackPanel Grid.Row="0" Spacing="4">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="💻" FontSize="16" />
+                    <TextBlock Text="{Binding Name}"
+                               FontWeight="SemiBold"
+                               FontSize="16"
+                               TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                  <TextBlock Text="{Binding LocalPath}"
+                             Opacity="0.7"
+                             FontSize="12"
+                             TextTrimming="CharacterEllipsis" />
+                  <StackPanel Orientation="Horizontal" Spacing="8" Opacity="0.8">
+                    <TextBlock Text="添加于:" FontSize="11" />
+                    <TextBlock Text="{Binding AddedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
+                               FontSize="11" />
+                  </StackPanel>
+                </StackPanel>
+                
+                <StackPanel Grid.Row="1" 
+                            Orientation="Horizontal" 
+                            Spacing="8"
+                            HorizontalAlignment="Right">
+                  <Border IsVisible="{Binding IsTracked}"
+                          Background="#1F6FEB30"
+                          BorderBrush="#1F6FEB"
+                          BorderThickness="1"
+                          CornerRadius="4"
+                          Padding="8,2">
+                    <TextBlock Text="已关联"
+                               FontSize="11"
+                               Foreground="#58A6FF" />
+                  </Border>
+                  
+                  <Button Content="❌"
+                          Background="Transparent"
+                          BorderThickness="0"
+                          Padding="4"
+                          FontSize="12"
+                          Click="OnRemoveClick"
+                          Tag="{Binding Id}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <!-- 加载状态 -->
+    <ProgressBar Grid.Row="2"
+                 IsVisible="{Binding IsLoading}"
+                 IsIndeterminate="True"
+                 Height="4"
+                 VerticalAlignment="Top" />
+
+    <!-- 空状态 -->
+    <Border Grid.Row="2"
+            IsVisible="{Binding !IsLoading}"
+            Background="#161B22"
+            BorderBrush="#30363D"
+            BorderThickness="1"
+            CornerRadius="12"
+            Padding="48"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center">
+      <StackPanel Spacing="12" HorizontalAlignment="Center">
+        <TextBlock Text="💻" FontSize="64" HorizontalAlignment="Center" />
+        <TextBlock Text="没有发现本地仓库"
+                   FontSize="20"
+                   FontWeight="SemiBold"
+                   HorizontalAlignment="Center" />
+        <TextBlock Text="输入路径并点击扫描，发现本地的Git仓库"
+                 Opacity="0.7"
+                 HorizontalAlignment="Center" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

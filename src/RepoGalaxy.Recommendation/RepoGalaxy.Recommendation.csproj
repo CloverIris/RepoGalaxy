@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RepoGalaxy.Core\RepoGalaxy.Core.csproj" />
+    <ProjectReference Include="..\RepoGalaxy.Data\RepoGalaxy.Data.csproj" />
+    <ProjectReference Include="..\RepoGalaxy.GitHub\RepoGalaxy.GitHub.csproj" />
+  </ItemGroup>
+
+</Project>

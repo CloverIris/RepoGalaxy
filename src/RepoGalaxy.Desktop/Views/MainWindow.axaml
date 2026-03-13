@@ -1,0 +1,196 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:RepoGalaxy.Desktop.ViewModels"
+        x:Class="RepoGalaxy.Desktop.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="RepoGalaxy"
+        Width="1280" Height="800"
+        MinWidth="900" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Background="#0D1117">
+
+  <Grid ColumnDefinitions="72,*">
+    
+    <!-- 左侧导航栏 - Fluent UI 2 风格 (72px宽) -->
+    <Border Grid.Column="0" 
+            Background="#161B22"
+            BorderBrush="#30363D"
+            BorderThickness="0,0,1,0">
+      <Grid RowDefinitions="Auto,*,Auto">
+        
+        <!-- Logo -->
+        <Border Grid.Row="0" Height="64" HorizontalAlignment="Center">
+          <TextBlock Text="🌌" FontSize="28" VerticalAlignment="Center" />
+        </Border>
+
+        <!-- 导航项 -->
+        <StackPanel Grid.Row="1" Spacing="8" Margin="8,16,8,0">
+          
+          <!-- 主页/探索 -->
+          <Button Command="{Binding NavigateCommand}"
+                  CommandParameter="Explore"
+                  Width="56" Height="56"
+                  Background="Transparent"
+                  BorderThickness="0"
+                  CornerRadius="8"
+                  HorizontalContentAlignment="Center"
+                  VerticalContentAlignment="Center">
+            <StackPanel Spacing="4">
+              <TextBlock Text="🌌" FontSize="20" HorizontalAlignment="Center" />
+              <TextBlock Text="主页" FontSize="11" Opacity="0.9" HorizontalAlignment="Center" />
+            </StackPanel>
+          </Button>
+
+          <!-- 收藏 -->
+          <Button Command="{Binding NavigateCommand}"
+                  CommandParameter="Bookmarks"
+                  Width="56" Height="56"
+                  Background="Transparent"
+                  BorderThickness="0"
+                  CornerRadius="8"
+                  HorizontalContentAlignment="Center"
+                  VerticalContentAlignment="Center">
+            <StackPanel Spacing="4">
+              <TextBlock Text="⭐" FontSize="20" HorizontalAlignment="Center" />
+              <TextBlock Text="收藏" FontSize="11" Opacity="0.9" HorizontalAlignment="Center" />
+            </StackPanel>
+          </Button>
+
+          <!-- 仓库 -->
+          <Button Command="{Binding NavigateCommand}"
+                  CommandParameter="MyRepos"
+                  Width="56" Height="56"
+                  Background="Transparent"
+                  BorderThickness="0"
+                  CornerRadius="8"
+                  HorizontalContentAlignment="Center"
+                  VerticalContentAlignment="Center">
+            <StackPanel Spacing="4">
+              <TextBlock Text="📦" FontSize="20" HorizontalAlignment="Center" />
+              <TextBlock Text="仓库" FontSize="11" Opacity="0.9" HorizontalAlignment="Center" />
+            </StackPanel>
+          </Button>
+
+          <!-- 本地 -->
+          <Button Command="{Binding NavigateCommand}"
+                  CommandParameter="Local"
+                  Width="56" Height="56"
+                  Background="Transparent"
+                  BorderThickness="0"
+                  CornerRadius="8"
+                  HorizontalContentAlignment="Center"
+                  VerticalContentAlignment="Center">
+            <StackPanel Spacing="4">
+              <TextBlock Text="💻" FontSize="20" HorizontalAlignment="Center" />
+              <TextBlock Text="本地" FontSize="11" Opacity="0.9" HorizontalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+
+        <!-- 底部设置 -->
+        <StackPanel Grid.Row="2" Spacing="8" Margin="8,0,8,16">
+          <Button Command="{Binding OpenSettingsCommand}"
+                  Width="56" Height="56"
+                  Background="Transparent"
+                  BorderThickness="0"
+                  CornerRadius="8"
+                  HorizontalContentAlignment="Center"
+                  VerticalContentAlignment="Center">
+            <StackPanel Spacing="4">
+              <TextBlock Text="⚙️" FontSize="20" HorizontalAlignment="Center" />
+              <TextBlock Text="设置" FontSize="11" Opacity="0.9" HorizontalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- 主内容区 -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,*">
+      
+      <!-- 顶部标题栏 - Fluent UI 2 风格 -->
+      <Border Grid.Row="0" 
+              Height="64"
+              Background="#161B22"
+              BorderBrush="#30363D"
+              BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="*,Auto,Auto" Margin="24,0">
+          
+          <!-- 搜索框 -->
+          <TextBox Grid.Column="0"
+                   Watermark="搜索仓库..."
+                   VerticalAlignment="Center"
+                   MaxWidth="400"
+                   HorizontalAlignment="Left"
+                   Height="36"
+                   CornerRadius="18"
+                   Background="#0D1117"
+                   BorderBrush="#30363D">
+            <TextBox.InnerLeftContent>
+              <TextBlock Text="🔍" Margin="12,0,0,0" Opacity="0.6"/>
+            </TextBox.InnerLeftContent>
+          </TextBox>
+
+          <!-- 同步按钮 -->
+          <Button Grid.Column="1"
+                  Content="🔄 同步"
+                  Command="{Binding SyncDataCommand}"
+                  IsVisible="{Binding IsAuthenticated}"
+                  IsEnabled="{Binding !IsSyncing}"
+                  Margin="0,0,12,0"
+                  VerticalAlignment="Center"
+                  Background="Transparent"
+                  BorderBrush="#30363D"
+                  BorderThickness="1"
+                  CornerRadius="4" />
+
+          <!-- 用户信息 -->
+          <StackPanel Grid.Column="2" 
+                      Orientation="Horizontal" 
+                      Spacing="12"
+                      VerticalAlignment="Center">
+            
+            <!-- 未登录 -->
+            <Button Content="登录"
+                    Command="{Binding LoginCommand}"
+                    IsVisible="{Binding !IsAuthenticated}"
+                    Background="#238636"
+                    Foreground="White"
+                    CornerRadius="4"
+                    Padding="16,8" />
+
+            <!-- 已登录 -->
+            <StackPanel Orientation="Horizontal" 
+                        Spacing="12"
+                        IsVisible="{Binding IsAuthenticated}"
+                        VerticalAlignment="Center">
+              <Border Width="36" Height="36" CornerRadius="18" Background="#58A6FF">
+                <TextBlock Text="{Binding CurrentUserInitials}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="White"
+                           FontWeight="SemiBold"
+                           FontSize="14"/>
+              </Border>
+              <TextBlock Text="{Binding CurrentUserLogin}"
+                         VerticalAlignment="Center"
+                         Opacity="0.9" />
+              <Button Content="退出"
+                      Command="{Binding LogoutCommand}"
+                      Background="Transparent"
+                      BorderBrush="#30363D"
+                      BorderThickness="1"
+                      CornerRadius="4"
+                      Padding="12,6" />
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- 内容区 -->
+      <Border Grid.Row="1" Background="#0D1117">
+        <ContentControl Content="{Binding CurrentView}" />
+      </Border>
+    </Grid>
+  </Grid>
+</Window>

@@ -1,0 +1,15 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="using:RepoGalaxy.Desktop.Converters"
+             x:Class="RepoGalaxy.Desktop.App"
+             RequestedThemeVariant="Dark">
+
+    <Application.Resources>
+        <converters:EnumToBoolConverter x:Key="EnumToBoolConverter" />
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="/Styles/AppStyles.axaml" />
+    </Application.Styles>
+</Application>

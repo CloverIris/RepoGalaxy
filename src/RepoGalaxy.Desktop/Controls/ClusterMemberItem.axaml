@@ -1,0 +1,64 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="RepoGalaxy.Desktop.Controls.ClusterMemberItem"
+             Width="170"
+             Height="80">
+  
+  <Border Name="CardBorder"
+          Background="#21262D"
+          BorderBrush="#30363D"
+          BorderThickness="1"
+          CornerRadius="8"
+          Padding="12">
+    <Grid RowDefinitions="Auto,*,Auto">
+      <!-- 第一行：名称和勾选框 -->
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0"
+                   Name="NameTextBlock"
+                   Text="repo-name"
+                   FontSize="13"
+                   FontWeight="SemiBold"
+                   Foreground="#E6EDF3"
+                   TextTrimming="CharacterEllipsis"/>
+        
+        <CheckBox Grid.Column="1"
+                  Name="SelectionCheckBox"
+                  Width="20"
+                  Height="20"
+                  Margin="4,0,0,0"/>
+      </Grid>
+      
+      <!-- 第二行：所有者 -->
+      <TextBlock Grid.Row="1"
+                 Name="OwnerTextBlock"
+                 Text="@owner"
+                 FontSize="11"
+                 Foreground="#8B949E"
+                 Margin="0,2,0,0"/>
+      
+      <!-- 第三行：语言和 Stars -->
+      <StackPanel Grid.Row="2" 
+                  Orientation="Horizontal" 
+                  Spacing="12"
+                  Margin="0,4,0,0">
+        <!-- 语言 -->
+        <StackPanel Orientation="Horizontal" Spacing="4">
+          <Ellipse Name="LanguageDot" Width="8" Height="8" Fill="#58A6FF"/>
+          <TextBlock Name="LanguageTextBlock"
+                     Text="Unknown"
+                     FontSize="11"
+                     Foreground="#8B949E"/>
+        </StackPanel>
+        
+        <!-- Stars -->
+        <StackPanel Orientation="Horizontal" Spacing="2">
+          <TextBlock Text="⭐" FontSize="10"/>
+          <TextBlock Name="StarsTextBlock"
+                     Text="0"
+                     FontSize="11"
+                     Foreground="#8B949E"/>
+        </StackPanel>
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>
