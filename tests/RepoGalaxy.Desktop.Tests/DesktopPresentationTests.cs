@@ -1,12 +1,16 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Chrome;
+using Avalonia.Input;
 using Avalonia.Styling;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using RepoGalaxy.Core.Models;
 using RepoGalaxy.Data.DbContexts;
+using RepoGalaxy.Data.Entities;
 using RepoGalaxy.Data.Services;
 using RepoGalaxy.Desktop.Services;
+using RepoGalaxy.Desktop.Controls;
 using RepoGalaxy.Desktop.ViewModels;
 using RepoGalaxy.Desktop.Views;
 using RepoGalaxy.Desktop.Views.Dialogs;
@@ -57,6 +61,17 @@ public sealed class DesktopPresentationTests
     }
 
     [Fact]
+    public void NavigationItem_TreatsWindowsIconFontValueAsGlyphInsteadOfPathMarkup()
+    {
+        TestAppBuilder.EnsureInitialized();
+        var item = new NavigationItemViewModel("Discover", "发现", "\uE721", "M3,5 L9,3 L7,9");
+
+        Check(item.Glyph == "\uE721", "Windows icon-font value was not retained as a glyph.");
+        Check(item.Icon is not null, "Fallback vector geometry was not parsed.");
+        Check(item.Group == "Primary", "Default navigation group changed unexpectedly.");
+    }
+
+    [Fact]
     public void CoreViews_LoadUnderHeadlessAvalonia()
     {
         TestAppBuilder.EnsureInitialized();
@@ -72,7 +87,7 @@ public sealed class DesktopPresentationTests
     }
 
     [Fact]
-    public void MainWindow_switches_shell_modes_at_the_three_responsive_widths()
+    public void MainWindow_switches_shell_modes_at_the_four_responsive_widths()
     {
         TestAppBuilder.EnsureInitialized();
         var window = new MainWindow();
@@ -83,10 +98,53 @@ public sealed class DesktopPresentationTests
 
         method.Invoke(window, [1440d]);
         Check(navigation.DisplayMode == SplitViewDisplayMode.CompactInline && details.DisplayMode == SplitViewDisplayMode.Inline, "Wide layout should keep the right rail inline.");
-        method.Invoke(window, [1100d]);
-        Check(navigation.DisplayMode == SplitViewDisplayMode.CompactInline && details.DisplayMode == SplitViewDisplayMode.Overlay, "Medium layout should use a right drawer.");
-        method.Invoke(window, [950d]);
+        method.Invoke(window, [1366d]);
+        Check(navigation.DisplayMode == SplitViewDisplayMode.CompactInline && details.DisplayMode == SplitViewDisplayMode.Inline, "Desktop layout should keep the right rail inline.");
+        method.Invoke(window, [1000d]);
+        Check(navigation.DisplayMode == SplitViewDisplayMode.CompactInline && details.DisplayMode == SplitViewDisplayMode.Overlay, "Compact layout should use a right drawer.");
+        method.Invoke(window, [900d]);
         Check(navigation.DisplayMode == SplitViewDisplayMode.Overlay && details.DisplayMode == SplitViewDisplayMode.Overlay, "Narrow layout should overlay navigation and details.");
+    }
+
+    [Fact]
+    public void Custom_window_chrome_uses_Avalonia_roles_and_keeps_caption_geometry_aligned()
+    {
+        TestAppBuilder.EnsureInitialized();
+        var window = new MainWindow();
+        var configure = typeof(MainWindow).GetMethod("ConfigureWindowChrome", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Window chrome configuration was not found.");
+        configure.Invoke(window, null);
+
+        Check(window.WindowDecorations == WindowDecorations.None, "Main window must not retain a native border/title bar.");
+        Check(window.ExtendClientAreaToDecorationsHint, "Main window client area must extend into custom decorations.");
+        var title = window.FindControl<Control>("TitleBarDragRegion") ?? throw new InvalidOperationException("Title bar was not found.");
+        var minimize = window.FindControl<Button>("MinimizeButton") ?? throw new InvalidOperationException("Minimize button was not found.");
+        var maximize = window.FindControl<Button>("MaximizeButton") ?? throw new InvalidOperationException("Maximize button was not found.");
+        var close = window.FindControl<Button>("CloseButton") ?? throw new InvalidOperationException("Close button was not found.");
+        Check(WindowDecorationProperties.GetElementRole(title) == WindowDecorationsElementRole.TitleBar, "Title bar role is incorrect.");
+        Check(WindowDecorationProperties.GetElementRole(minimize) == WindowDecorationsElementRole.MinimizeButton, "Minimize role is incorrect.");
+        Check(WindowDecorationProperties.GetElementRole(maximize) == WindowDecorationsElementRole.MaximizeButton, "Maximize role is incorrect.");
+        Check(WindowDecorationProperties.GetElementRole(close) == WindowDecorationsElementRole.CloseButton, "Close role is incorrect.");
+        Check(minimize.Width == 46 && maximize.Width == 46 && close.Width == 46, "Caption buttons must retain three fixed 46px hit targets.");
+        Check(window.FindControl<Button>("NavigationToggleButton") is not null, "Hamburger button must live in the navigation pane.");
+
+        var login = new LoginDialog();
+        var configureLogin = typeof(LoginDialog).GetMethod("ConfigureWindowChrome", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Login chrome configuration was not found.");
+        configureLogin.Invoke(login, null);
+        Check(login.WindowDecorations == WindowDecorations.None, "Login window must use the same custom chrome model.");
+        var loginTitle = login.FindControl<Control>("LoginTitleBar") ?? throw new InvalidOperationException("Login title bar was not found.");
+        Check(WindowDecorationProperties.GetElementRole(loginTitle) == WindowDecorationsElementRole.TitleBar, "Login title bar role is incorrect.");
+    }
+
+    [Fact]
+    public void Semantic_index_uses_an_unscaled_fixed_pixel_viewport()
+    {
+        TestAppBuilder.EnsureInitialized();
+        var view = new SemanticIndexView();
+        Check(SemanticMosaicItemViewModel.Unit == 88, "Semantic index unit must remain 88 screen pixels.");
+        Check(view.FindControl<SemanticMosaicViewport>("SemanticViewport") is not null,
+            "Semantic index must use the dedicated fixed-pixel pannable viewport.");
     }
 
     [Fact]
@@ -147,6 +205,46 @@ public sealed class DesktopPresentationTests
         Check(added, "Feed item was not added.");
         Check(feed.Count == 1, "Feed item was not persisted.");
         Check(feed[0].RepositoryId > 0, "Feed foreign key was not generated.");
+    }
+
+    [Fact]
+    public async Task CloneCleanup_UsesTranslatableSqliteCutoffAndOnlyFailsAbandonedOperations()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<RepoGalaxyDbContext>().UseSqlite(connection).Options;
+        var factory = new TestDbContextFactory(options);
+        await using (var database = factory.CreateDbContext())
+        {
+            await database.Database.EnsureCreatedAsync();
+            var now = DateTimeOffset.UtcNow;
+            database.CloneOperations.AddRange(
+                Operation("old", CloneOperationState.Cloning, now.AddMinutes(-20)),
+                Operation("recent", CloneOperationState.Cloning, now.AddMinutes(-2)),
+                Operation("complete", CloneOperationState.Completed, now.AddMinutes(-20)));
+            await database.SaveChangesAsync();
+        }
+
+        var service = new RepositoryCloneService(factory, new RepositoryService(factory));
+        await service.CleanupAbandonedAsync();
+
+        await using var verification = factory.CreateDbContext();
+        var states = await verification.CloneOperations.AsNoTracking().ToDictionaryAsync(x => x.Id);
+        Check(states["old"].State == (int)CloneOperationState.Failed && states["old"].ErrorCode == "abandoned_cleanup", "Old incomplete clone was not marked failed.");
+        Check(states["recent"].State == (int)CloneOperationState.Cloning, "Recent clone must not be cleaned up.");
+        Check(states["complete"].State == (int)CloneOperationState.Completed, "Completed clone must not be changed.");
+
+        static CloneOperationEntity Operation(string id, CloneOperationState state, DateTimeOffset updatedAt) => new()
+        {
+            Id = id,
+            RepositoryFullName = "owner/repository",
+            ParentDirectory = Path.GetTempPath(),
+            StagingDirectory = Path.Combine(Path.GetTempPath(), $".repository.repogalaxy-{id}.tmp"),
+            DestinationDirectory = Path.Combine(Path.GetTempPath(), $"repository-{id}"),
+            State = (int)state,
+            StartedAt = updatedAt,
+            UpdatedAt = updatedAt
+        };
     }
 
     private static void Check(bool condition, string message)

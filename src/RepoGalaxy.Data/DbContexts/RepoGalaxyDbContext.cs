@@ -32,6 +32,9 @@ public class RepoGalaxyDbContext : DbContext
     public DbSet<AuthenticationAuditEventEntity> AuthenticationAuditEvents => Set<AuthenticationAuditEventEntity>();
     public DbSet<TileBoardEntity> TileBoards => Set<TileBoardEntity>();
     public DbSet<TilePlacementEntity> TilePlacements => Set<TilePlacementEntity>();
+    public DbSet<SemanticIndexPlacementEntity> SemanticIndexPlacements => Set<SemanticIndexPlacementEntity>();
+    public DbSet<CloneOperationEntity> CloneOperations => Set<CloneOperationEntity>();
+    public DbSet<IdePreferenceEntity> IdePreferences => Set<IdePreferenceEntity>();
 
     // A single options constructor is required for IDbContextFactory. Keeping a
     // path-based constructor makes dependency injection unable to select an
@@ -86,6 +89,9 @@ public class RepoGalaxyDbContext : DbContext
         modelBuilder.Entity<AuthenticationAuditEventEntity>().HasIndex(x => x.OccurredAt);
         modelBuilder.Entity<TileBoardEntity>().HasIndex(x => new { x.ScopeKey, x.Source, x.LayoutVersion }).IsUnique();
         modelBuilder.Entity<TilePlacementEntity>().HasIndex(x => new { x.BoardId, x.ContentKind, x.ContentKey }).IsUnique();
+        modelBuilder.Entity<SemanticIndexPlacementEntity>().HasIndex(x => new { x.BoardId, x.LayoutVersion, x.ItemKey }).IsUnique();
+        modelBuilder.Entity<CloneOperationEntity>().HasIndex(x => x.UpdatedAt);
+        modelBuilder.Entity<IdePreferenceEntity>().HasIndex(x => new { x.ScopeKey, x.TechnologyKey }).IsUnique();
 
         modelBuilder.Entity<UserRepositoryRelationEntity>().HasOne(x => x.Repository).WithMany().HasForeignKey(x => x.RepositoryId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<RepositoryMetricSnapshotEntity>().HasOne<RepositoryEntity>().WithMany().HasForeignKey(x => x.RepositoryId).OnDelete(DeleteBehavior.Cascade);
@@ -97,6 +103,7 @@ public class RepoGalaxyDbContext : DbContext
         modelBuilder.Entity<LocalContributionDayEntity>().HasOne<LocalRepositoryEntity>().WithMany().HasForeignKey(x => x.LocalRepositoryId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<TilePlacementEntity>().HasOne(x => x.Board).WithMany(x => x.Placements).HasForeignKey(x => x.BoardId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<TilePlacementEntity>().HasOne(x => x.Repository).WithMany().HasForeignKey(x => x.RepositoryId).OnDelete(DeleteBehavior.SetNull);
+        modelBuilder.Entity<SemanticIndexPlacementEntity>().HasOne(x => x.Board).WithMany().HasForeignKey(x => x.BoardId).OnDelete(DeleteBehavior.Cascade);
     }
 
 }

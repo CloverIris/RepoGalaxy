@@ -125,9 +125,14 @@ public sealed class TileBoardEntity
     [Key] public long Id { get; set; }
     [Required, MaxLength(120)] public string ScopeKey { get; set; } = "guest";
     public int Source { get; set; }
-    public int LayoutVersion { get; set; } = 1;
-    public double ViewportX { get; set; }
-    public double ViewportY { get; set; }
+    public int LayoutVersion { get; set; } = 2;
+    public double CameraX { get; set; }
+    public double CameraY { get; set; }
+    public double Zoom { get; set; } = 1;
+    public int? ActiveIndexKind { get; set; }
+    [MaxLength(160)] public string ActiveIndexKey { get; set; } = string.Empty;
+    public double SemanticViewportX { get; set; } = 24;
+    public double SemanticViewportY { get; set; } = 24;
     public int ExtentColumns { get; set; } = 12;
     public int ExtentRows { get; set; } = 6;
     public DateTimeOffset UpdatedAt { get; set; }
@@ -151,8 +156,55 @@ public sealed class TilePlacementEntity
     public string Caption { get; set; } = string.Empty;
     public string AccentKey { get; set; } = string.Empty;
     public string ImageUrl { get; set; } = string.Empty;
+    public string SourceUrl { get; set; } = string.Empty;
     public bool IsPlaceholder { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     [ForeignKey(nameof(BoardId))] public TileBoardEntity Board { get; set; } = null!;
     [ForeignKey(nameof(RepositoryId))] public RepositoryEntity? Repository { get; set; }
+}
+
+[Table("SemanticIndexPlacements")]
+public sealed class SemanticIndexPlacementEntity
+{
+    [Key] public long Id { get; set; }
+    public long BoardId { get; set; }
+    [Required, MaxLength(240)] public string ItemKey { get; set; } = string.Empty;
+    [Required, MaxLength(160)] public string Title { get; set; } = string.Empty;
+    public int Kind { get; set; }
+    public int ProjectCount { get; set; }
+    [MaxLength(80)] public string AccentKey { get; set; } = string.Empty;
+    public string ContentKeysJson { get; set; } = "[]";
+    public int Column { get; set; }
+    public int Row { get; set; }
+    public int ColumnSpan { get; set; } = 1;
+    public int RowSpan { get; set; } = 1;
+    public int LayoutVersion { get; set; } = 1;
+    public DateTimeOffset UpdatedAt { get; set; }
+    [ForeignKey(nameof(BoardId))] public TileBoardEntity Board { get; set; } = null!;
+}
+
+[Table("CloneOperations")]
+public sealed class CloneOperationEntity
+{
+    [Key, MaxLength(40)] public string Id { get; set; } = string.Empty;
+    public long RepositoryId { get; set; }
+    [Required, MaxLength(200)] public string RepositoryFullName { get; set; } = string.Empty;
+    [Required] public string ParentDirectory { get; set; } = string.Empty;
+    [Required] public string StagingDirectory { get; set; } = string.Empty;
+    [Required] public string DestinationDirectory { get; set; } = string.Empty;
+    public int Mode { get; set; }
+    public int State { get; set; }
+    [MaxLength(80)] public string ErrorCode { get; set; } = string.Empty;
+    public DateTimeOffset StartedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+[Table("IdePreferences")]
+public sealed class IdePreferenceEntity
+{
+    [Key] public long Id { get; set; }
+    [Required, MaxLength(120)] public string ScopeKey { get; set; } = "guest";
+    [Required, MaxLength(120)] public string TechnologyKey { get; set; } = string.Empty;
+    [Required, MaxLength(200)] public string IdeKey { get; set; } = string.Empty;
+    public DateTimeOffset UpdatedAt { get; set; }
 }

@@ -7,17 +7,17 @@
         Width="520" Height="620"
         MinWidth="460" MinHeight="560"
         CanResize="False"
-        WindowDecorations="BorderOnly"
-        ExtendClientAreaToDecorationsHint="False"
+        WindowDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="42"
         Win32Properties.WindowCornerPreference="DoNotRound"
         WindowStartupLocation="CenterOwner">
   <Grid Background="{DynamicResource CanvasBrush}" RowDefinitions="42,*">
-    <Border Background="{DynamicResource SurfaceElevatedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
-            PointerPressed="OnTitleBarPointerPressed">
+    <Border x:Name="LoginTitleBar" Background="{DynamicResource SurfaceElevatedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,46">
         <PathIcon Data="{StaticResource IconCode}" Width="16" Height="16" Margin="14,0,9,0" Foreground="{DynamicResource AccentBrush}"/>
         <TextBlock Grid.Column="1" Text="连接 GitHub" VerticalAlignment="Center" FontWeight="SemiBold"/>
-        <Button Grid.Column="2" Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="11" Padding="0" Classes="caption-close" Click="OnCloseClicked"/>
+        <Button x:Name="LoginCloseButton" Grid.Column="2" Padding="0" Classes="caption-close" Click="OnCloseClicked"><PathIcon Data="M3,3 L17,17 M17,3 L3,17" Width="12" Height="12"/></Button>
       </Grid>
     </Border>
     <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" Margin="18" CornerRadius="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="30">

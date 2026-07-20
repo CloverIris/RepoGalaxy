@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using RepoGalaxy.Core.Models;
+using RepoGalaxy.Core.Interfaces;
 using RepoGalaxy.Data.Services;
 
 namespace RepoGalaxy.Desktop.ViewModels;
@@ -15,6 +16,7 @@ public sealed partial class LocalReposViewModel : ViewModelBase, ISearchablePage
 {
     private readonly ILogger<LocalReposViewModel> _logger;
     private readonly RepositoryService _repoService;
+    private readonly ILocalRepositoryResolver _localResolver;
     private readonly List<LocalRepoViewModel> _allRepositories = [];
     public ObservableCollection<LocalRepoViewModel> LocalRepositories { get; } = [];
     [ObservableProperty] private bool _isLoading;
@@ -23,10 +25,11 @@ public sealed partial class LocalReposViewModel : ViewModelBase, ISearchablePage
     [ObservableProperty] private string _searchText = string.Empty;
     public bool IsEmpty => !IsLoading && LocalRepositories.Count == 0;
 
-    public LocalReposViewModel(ILogger<LocalReposViewModel> logger, RepositoryService repoService)
+    public LocalReposViewModel(ILogger<LocalReposViewModel> logger, RepositoryService repoService, ILocalRepositoryResolver localResolver)
     {
         _logger = logger;
         _repoService = repoService;
+        _localResolver = localResolver;
         _scanPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Projects");
     }
 
@@ -65,8 +68,8 @@ public sealed partial class LocalReposViewModel : ViewModelBase, ISearchablePage
             {
                 var repoPath = Path.GetDirectoryName(gitDir);
                 if (string.IsNullOrEmpty(repoPath)) continue;
-                if (await _repoService.GetLocalRepositoryByPathAsync(repoPath) is null)
-                    await _repoService.AddLocalRepositoryAsync(repoPath, Path.GetFileName(repoPath));
+                var origin = await _localResolver.ReadOriginAsync(repoPath);
+                await _repoService.AddLocalRepositoryAsync(repoPath, Path.GetFileName(repoPath), origin);
             }
             IsLoading = false;
             await LoadLocalRepositoriesAsync();

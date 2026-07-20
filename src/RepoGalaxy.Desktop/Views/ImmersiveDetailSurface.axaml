@@ -1,0 +1,107 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="RepoGalaxy.Desktop.Views.ImmersiveDetailSurface"
+             x:CompileBindings="False"
+             IsHitTestVisible="{Binding IsDetailInteractive}">
+  <Grid Background="{DynamicResource CanvasBrush}" RowDefinitions="Auto,Auto,*">
+    <Border Padding="28,20" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="20">
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding ImmersiveDetail.Target.Kind}" Classes="meta"/>
+          <TextBlock Text="{Binding ImmersiveDetail.Title}" FontSize="28" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2"/>
+          <TextBlock Text="{Binding ImmersiveDetail.Description}" Classes="secondary" FontSize="14" TextWrapping="Wrap" MaxLines="2" MaxWidth="900"/>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="{Binding ImmersiveDetail.SourceName}" Classes="meta"/>
+            <TextBlock Text="{Binding ImmersiveDetail.StatusText}" Classes="meta"/>
+          </StackPanel>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7" VerticalAlignment="Top">
+          <Button Classes="subtle" Content="{Binding ImmersiveSaveText}" IsVisible="{Binding CanSaveImmersive}" Command="{Binding SaveImmersiveCommand}"/>
+          <Button Classes="subtle" Content="用本地 IDE 打开" IsVisible="{Binding CanSaveImmersive}" IsEnabled="{Binding CanOpenInIde}" Command="{Binding OpenInIdeCommand}"/>
+          <Button Classes="primary" Content="打开 GitHub" IsEnabled="{Binding CanOpenImmersiveSource}" Command="{Binding OpenImmersiveSourceCommand}"/>
+          <Button Classes="icon" Width="40" Height="40" Content="×" FontSize="22" ToolTip.Tip="关闭详情" Command="{Binding CloseImmersiveDetailCommand}"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="1" Padding="28,0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <ItemsControl ItemsSource="{Binding ImmersiveDetail.Sections}">
+        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate><DataTemplate>
+          <Button Classes="segment" Padding="16,11" Command="{Binding DataContext.SelectDetailSectionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Content="{Binding Title}"/>
+        </DataTemplate></ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Border>
+
+    <Grid Grid.Row="2" Margin="24,20" ColumnDefinitions="2.2*,*" ColumnSpacing="20">
+      <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="22">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="{Binding SelectedDetailSection.Title}" FontSize="21" FontWeight="SemiBold"/>
+            <TextBlock Grid.Column="1" Text="{Binding MarkdownPageText}" Classes="meta" VerticalAlignment="Center"/>
+          </Grid>
+
+          <Grid Grid.Row="1" Margin="0,14,0,8">
+            <TextBlock Text="{Binding SelectedDetailSection.Summary}" TextWrapping="Wrap" FontSize="14" LineHeight="22" MaxLines="17" IsVisible="{Binding !HasMarkdown}"/>
+            <ItemsControl ItemsSource="{Binding MarkdownBlocks}" IsVisible="{Binding HasMarkdown}">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="9"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate><DataTemplate>
+                <Grid>
+                  <TextBlock Text="{Binding Text}" FontSize="{Binding HeadingSize}" FontWeight="SemiBold" TextWrapping="Wrap" IsVisible="{Binding IsHeading}"/>
+                  <TextBlock Text="{Binding Text}" FontSize="14" LineHeight="21" TextWrapping="Wrap" IsVisible="{Binding IsParagraph}"/>
+                  <Grid ColumnDefinitions="22,*" IsVisible="{Binding IsList}"><TextBlock Text="{Binding Bullet}" Foreground="{DynamicResource AccentTextBrush}"/><TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap"/></Grid>
+                  <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="3,0,0,0" Padding="12,5" IsVisible="{Binding IsQuote}"><TextBlock Text="{Binding Text}" Classes="secondary" FontStyle="Italic" TextWrapping="Wrap"/></Border>
+                  <Border Background="{DynamicResource SurfaceMutedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="12" IsVisible="{Binding IsCode}"><ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"><TextBlock Text="{Binding Text}" FontFamily="Cascadia Mono,Consolas" FontSize="12" TextWrapping="NoWrap"/></ScrollViewer></Border>
+                  <Border Background="{DynamicResource SurfaceMutedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="12" IsVisible="{Binding IsTable}"><TextBlock Text="{Binding Text}" FontFamily="Cascadia Mono,Consolas" FontSize="12" TextWrapping="Wrap"/></Border>
+                  <StackPanel IsVisible="{Binding IsImage}" Spacing="4">
+                    <Image Source="{Binding Image}" MaxHeight="330" Stretch="Uniform" HorizontalAlignment="Left"/>
+                    <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsImageLoading}" Height="2"/>
+                    <TextBlock Text="{Binding ImageStatus}" Classes="meta"/>
+                  </StackPanel>
+                  <Separator IsVisible="{Binding IsRule}"/>
+                </Grid>
+              </DataTemplate></ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsDetailLoading}" Height="3" VerticalAlignment="Top"/>
+          </Grid>
+
+          <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding HasMarkdown}">
+            <Button Classes="subtle" Content="上一页" IsEnabled="{Binding CanGoPreviousMarkdownPage}" Command="{Binding PreviousMarkdownPageCommand}"/>
+            <TextBlock Grid.Column="1" Text="PageUp / PageDown 翻页，滚轮缩放退出" Classes="meta" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <Button Grid.Column="2" Classes="subtle" Content="下一页" IsEnabled="{Binding CanGoNextMarkdownPage}" Command="{Binding NextMarkdownPageCommand}"/>
+          </Grid>
+        </Grid>
+      </Border>
+
+      <StackPanel Grid.Column="1" Spacing="10">
+        <TextBlock Text="结构化字段" Classes="meta"/>
+        <ItemsControl ItemsSource="{Binding SelectedDetailSection.Facts}" MaxHeight="230">
+          <ItemsControl.ItemTemplate><DataTemplate>
+            <Border Background="{DynamicResource SurfaceMutedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="11,8" Margin="0,0,0,4">
+              <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Label}" Classes="secondary"/><TextBlock Grid.Column="1" Text="{Binding Value}" FontWeight="SemiBold"/></Grid>
+            </Border>
+          </DataTemplate></ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Border IsVisible="{Binding CanSaveImmersive}" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="14">
+          <StackPanel Spacing="9">
+            <TextBlock Text="本地工作区" FontSize="15" FontWeight="SemiBold"/>
+            <ComboBox ItemsSource="{Binding AvailableIdes}" SelectedItem="{Binding SelectedIde}" PlaceholderText="首次使用时自动检测 IDE"/>
+            <Button Classes="primary" Content="检测并打开" Command="{Binding OpenInIdeCommand}" IsEnabled="{Binding CanOpenInIde}"/>
+            <StackPanel IsVisible="{Binding IsClonePanelOpen}" Spacing="8">
+              <TextBlock Text="本地尚无该仓库。选择父目录后，RepoGalaxy 会在其中创建仓库文件夹。" Classes="secondary" TextWrapping="Wrap"/>
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                <TextBox Text="{Binding CloneParentDirectory}" IsReadOnly="True"/>
+                <Button Grid.Column="1" Classes="subtle" Content="选择目录" Click="OnChooseCloneFolder"/>
+              </Grid>
+              <ComboBox ItemsSource="{Binding CloneModeOptions}" SelectedItem="{Binding SelectedCloneOption}"/>
+              <ProgressBar Minimum="0" Maximum="1" Value="{Binding CloneProgress}" IsIndeterminate="{Binding IsCloneProgressIndeterminate}" IsVisible="{Binding IsCloning}" Height="5"/>
+              <Button Classes="primary" Content="开始克隆并打开" Command="{Binding StartCloneCommand}" IsEnabled="{Binding !IsCloning}"/>
+            </StackPanel>
+            <TextBlock Text="{Binding WorkspaceStatus}" Classes="meta" TextWrapping="Wrap"/>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Grid>
+  </Grid>
+</UserControl>

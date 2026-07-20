@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using RepoGalaxy.Core.Interfaces;
 using RepoGalaxy.Data.DbContexts;
 using RepoGalaxy.Data.Services;
 using RepoGalaxy.Desktop.ViewModels;
@@ -112,6 +113,16 @@ public partial class App : Application
                 if (!result.Success) { error = result.Message; return false; }
                 using var dbContext = _serviceProvider.GetRequiredService<IDbContextFactory<RepoGalaxyDbContext>>().CreateDbContext();
                 DatabaseSeeder.Seed(dbContext);
+                try
+                {
+                    _serviceProvider.GetRequiredService<IRepositoryCloneService>().CleanupAbandonedAsync().GetAwaiter().GetResult();
+                }
+                catch (Exception cleanupError)
+                {
+                    // Abandoned clone cleanup is recoverable and must never make a
+                    // healthy database look corrupt or prevent the main window opening.
+                    Log.Warning(cleanupError, "未完成的克隆工作区清理失败，将在下次启动重试");
+                }
                 Log.Information("数据库初始化完成");
             }
             return true;

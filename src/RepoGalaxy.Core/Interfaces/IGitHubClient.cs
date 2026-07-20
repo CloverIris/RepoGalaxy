@@ -14,7 +14,7 @@ public interface IGitHubClient
     Task<GitHubRateLimit?> GetRateLimitAsync();
     
     // 仓库查询
-    Task<Repository?> GetRepositoryAsync(string owner, string name);
+    Task<Repository?> GetRepositoryAsync(string owner, string name, CancellationToken cancellationToken = default);
     Task<IEnumerable<Repository>> SearchRepositoriesAsync(string query, string? language = null, string? sort = null);
     Task<GitHubPage<Repository>> SearchRepositoriesPageAsync(string query, string? language = null, string? sort = null, string? nextPageUrl = null, CancellationToken cancellationToken = default);
     Task<IEnumerable<Repository>> GetTrendingAsync(string? language = null, string since = "daily", CancellationToken cancellationToken = default);
@@ -24,7 +24,8 @@ public interface IGitHubClient
     Task<ReleaseInfo?> GetLatestReleaseAsync(string owner, string name, CancellationToken cancellationToken = default);
     
     // 语言统计
-    Task<List<LanguageInfo>> GetLanguagesAsync(string owner, string name);
+    Task<List<LanguageInfo>> GetLanguagesAsync(string owner, string name, CancellationToken cancellationToken = default);
+    Task<string?> GetReadmeAsync(string owner, string name, CancellationToken cancellationToken = default);
     
     // 社交操作
     Task<bool> StarRepositoryAsync(string owner, string name);

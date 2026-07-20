@@ -1,25 +1,25 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Chrome;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
-using RepoGalaxy.Desktop.Services;
 
 namespace RepoGalaxy.Desktop.Views.Dialogs;
 
 public partial class LoginDialog : Window
 {
-    private WindowsMetroChrome? _nativeChrome;
-
     public LoginDialog()
     {
         InitializeComponent();
-        Opened += (_, _) => _nativeChrome = WindowsMetroChrome.Attach(this, 42);
-        Closed += (_, _) => _nativeChrome?.Dispose();
+        Opened += (_, _) => ConfigureWindowChrome();
     }
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
-    private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
+    private void ConfigureWindowChrome()
     {
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) BeginMoveDrag(e);
+        if (this.FindControl<Control>("LoginTitleBar") is { } title)
+            WindowDecorationProperties.SetElementRole(title, WindowDecorationsElementRole.TitleBar);
+        if (this.FindControl<Control>("LoginCloseButton") is { } close)
+            WindowDecorationProperties.SetElementRole(close, WindowDecorationsElementRole.CloseButton);
     }
 
     private void OnCloseClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => Close(false);

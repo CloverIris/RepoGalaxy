@@ -12,6 +12,7 @@ public sealed partial class MetroTileViewModel : ObservableObject
     public const double Unit = 96;
     public const double Gap = 4;
     private double _edgeOpacity = 1;
+    private double _focusOpacity = 1;
     private bool _matchesFilter = true;
 
     public MetroTileViewModel(TilePlacement placement, TilePalette palette, FeedItemViewModel? repository = null, DashboardListViewModel? ranking = null)
@@ -52,7 +53,10 @@ public sealed partial class MetroTileViewModel : ObservableObject
     public IBrush SecondaryForeground { get; private set; }
     public IBrush Scrim { get; private set; }
     [ObservableProperty] private Bitmap? _backgroundImage;
-    public double DisplayOpacity => _matchesFilter ? _edgeOpacity : .15;
+    [ObservableProperty] private bool _isInRenderWindow = true;
+    [ObservableProperty] private bool _isFocused;
+    public int ZIndex => IsFocused ? 1000 : 0;
+    public double DisplayOpacity => (_matchesFilter ? 1 : .15) * _edgeOpacity * _focusOpacity;
 
     public void SetFilter(string value)
     {
@@ -70,6 +74,14 @@ public sealed partial class MetroTileViewModel : ObservableObject
     {
         _edgeOpacity = Math.Clamp(value, .3, 1);
         OnPropertyChanged(nameof(DisplayOpacity));
+    }
+
+    public void SetFocus(bool focused, double detailProgress)
+    {
+        IsFocused = focused;
+        _focusOpacity = focused ? 1 : Math.Clamp(1 - detailProgress * .78, .22, 1);
+        OnPropertyChanged(nameof(DisplayOpacity));
+        OnPropertyChanged(nameof(ZIndex));
     }
 
     public void ApplyImageAsset(TileImageAsset asset, ITilePaletteService palettes)

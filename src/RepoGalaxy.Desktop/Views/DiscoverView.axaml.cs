@@ -1,100 +1,94 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.GestureRecognizers;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using RepoGalaxy.Desktop.ViewModels;
+using RepoGalaxy.Desktop.Services;
 
 namespace RepoGalaxy.Desktop.Views;
 
 public partial class DiscoverView : UserControl
 {
-    private ScrollViewer? _scrollViewer;
-    private Point _pressPoint;
-    private Vector _pressOffset;
-    private bool _pressed;
-    private bool _dragging;
+    private Control? _worldHost;
+    private double _lastPinchScale = 1;
 
     public DiscoverView()
     {
-        AvaloniaXamlLoader.Load(this);
+        InitializeComponent();
         Loaded += OnLoaded;
         SizeChanged += OnSizeChanged;
-        AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
-        AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel);
-        AddHandler(PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel);
         AddHandler(PointerWheelChangedEvent, OnPointerWheelChanged, RoutingStrategies.Tunnel);
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        _scrollViewer = this.FindControl<ScrollViewer>("TileScrollViewer");
-        Dispatcher.UIThread.Post(async () =>
+        _worldHost = this.FindControl<Control>("WorldHost");
+        if (_worldHost is not null && !_worldHost.GestureRecognizers.OfType<PinchGestureRecognizer>().Any())
         {
-            if (DataContext is not DiscoverViewModel vm || _scrollViewer is null) return;
-            await vm.EnsureTileExtentAsync(_scrollViewer.Viewport.Width, _scrollViewer.Viewport.Height);
-            _scrollViewer.Offset = new Vector(vm.TileViewportX, vm.TileViewportY);
-            UpdateOpacity(vm);
-        }, DispatcherPriority.Loaded);
+            _worldHost.GestureRecognizers.Add(new PinchGestureRecognizer());
+            _worldHost.AddHandler(InputElement.PinchEvent, OnPinch);
+            _worldHost.AddHandler(InputElement.PinchEndedEvent, OnPinchEnded);
+            _worldHost.AddHandler(InputElement.PointerTouchPadGestureMagnifyEvent, OnTouchPadMagnify);
+        }
+        Dispatcher.UIThread.Post(UpdateViewport, DispatcherPriority.Loaded);
     }
 
-    private void OnSizeChanged(object? sender, SizeChangedEventArgs e)
-    {
-        if (_scrollViewer is null || DataContext is not DiscoverViewModel vm) return;
-        _ = vm.EnsureTileExtentAsync(_scrollViewer.Viewport.Width, _scrollViewer.Viewport.Height);
-        UpdateOpacity(vm);
-    }
+    private void OnSizeChanged(object? sender, SizeChangedEventArgs e) => UpdateViewport();
 
-    private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    private void UpdateViewport()
     {
-        if (_scrollViewer is null || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || IsInteractive(e.Source)) return;
-        _pressPoint = e.GetPosition(this); _pressOffset = _scrollViewer.Offset; _pressed = true; _dragging = false;
-        e.Pointer.Capture(this);
-    }
-
-    private void OnPointerMoved(object? sender, PointerEventArgs e)
-    {
-        if (!_pressed || _scrollViewer is null) return;
-        var delta = e.GetPosition(this) - _pressPoint;
-        if (!_dragging && Math.Sqrt(delta.X * delta.X + delta.Y * delta.Y) < 6) return;
-        _dragging = true;
-        _scrollViewer.Offset = new Vector(Math.Max(0, _pressOffset.X - delta.X), Math.Max(0, _pressOffset.Y - delta.Y));
-        if (DataContext is DiscoverViewModel vm) UpdateOpacity(vm);
-        e.Handled = true;
-    }
-
-    private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        if (!_pressed) return;
-        _pressed = false; e.Pointer.Capture(null);
-        if (_scrollViewer is not null && DataContext is DiscoverViewModel vm) _ = vm.SaveTileViewportAsync(_scrollViewer.Offset.X, _scrollViewer.Offset.Y);
-        if (_dragging) e.Handled = true;
-        _dragging = false;
+        if (_worldHost is null || DataContext is not DiscoverViewModel vm || _worldHost.Bounds.Width <= 0 || _worldHost.Bounds.Height <= 0) return;
+        _ = vm.SetViewportAsync(_worldHost.Bounds.Width, _worldHost.Bounds.Height);
     }
 
     private void OnPointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
-        if (_scrollViewer is null) return;
-        var horizontal = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        var delta = e.Delta.Y * 72;
-        _scrollViewer.Offset = horizontal
-            ? new Vector(Math.Max(0, _scrollViewer.Offset.X - delta), _scrollViewer.Offset.Y)
-            : new Vector(_scrollViewer.Offset.X, Math.Max(0, _scrollViewer.Offset.Y - delta));
-        if (DataContext is DiscoverViewModel vm) { UpdateOpacity(vm); _ = vm.SaveTileViewportAsync(_scrollViewer.Offset.X, _scrollViewer.Offset.Y); }
+        if (_worldHost is null || DataContext is not DiscoverViewModel vm || !IsInsideWorld(e.Source)) return;
+        var point = e.GetPosition(_worldHost);
+        if (TileInputClassifier.Classify(e.Delta.X, e.Delta.Y) == TileWheelIntent.Pan)
+            vm.PanBy(-e.Delta.X * 72, -e.Delta.Y * 72);
+        else
+            vm.ZoomBy(e.Delta.Y, point.X, point.Y, FindTile(e.Source));
+        vm.CommitCamera();
         e.Handled = true;
     }
 
-    private void UpdateOpacity(DiscoverViewModel vm)
+    private void OnPinch(object? sender, PinchEventArgs e)
     {
-        if (_scrollViewer is null) return;
-        vm.UpdateTileEdgeOpacity(_scrollViewer.Offset.X, _scrollViewer.Offset.Y, _scrollViewer.Viewport.Width, _scrollViewer.Viewport.Height);
+        if (DataContext is not DiscoverViewModel vm) return;
+        var incremental = e.Scale / Math.Max(.001, _lastPinchScale);
+        _lastPinchScale = e.Scale;
+        vm.ZoomByFactor(incremental, e.ScaleOrigin.X, e.ScaleOrigin.Y, FindTile(e.Source));
+        e.Handled = true;
     }
 
-    private static bool IsInteractive(object? source)
+    private void OnPinchEnded(object? sender, PinchEndedEventArgs e)
+    {
+        _lastPinchScale = 1;
+        if (DataContext is DiscoverViewModel vm) vm.CommitCamera();
+    }
+
+    private void OnTouchPadMagnify(object? sender, PointerDeltaEventArgs e)
+    {
+        if (_worldHost is null || DataContext is not DiscoverViewModel vm) return;
+        var point = e.GetPosition(_worldHost);
+        vm.ZoomByFactor(Math.Exp(Math.Clamp(e.Delta.Y, -.35, .35)), point.X, point.Y, FindTile(e.Source));
+        vm.CommitCamera();
+        e.Handled = true;
+    }
+
+    private bool IsInsideWorld(object? source)
     {
         for (var control = source as Control; control is not null; control = control.Parent as Control)
-            if (control is Button or TextBox or ComboBox) return true;
+            if (ReferenceEquals(control, _worldHost)) return true;
         return false;
+    }
+
+    private static MetroTileViewModel? FindTile(object? source)
+    {
+        for (var control = source as Control; control is not null; control = control.Parent as Control)
+            if (control.DataContext is MetroTileViewModel tile) return tile;
+        return null;
     }
 }

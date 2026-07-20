@@ -57,7 +57,19 @@ public sealed class RepositoryService : IRepositoryService
 
     public async Task<IEnumerable<LocalRepository>> GetLocalRepositoriesAsync() { await using var db = await _factory.CreateDbContextAsync(); return (await db.LocalRepositories.AsNoTracking().OrderByDescending(x => x.AddedAt).ToListAsync()).Select(MapLocal).ToList(); }
     public async Task<LocalRepository?> GetLocalRepositoryByPathAsync(string path) { await using var db = await _factory.CreateDbContextAsync(); var entity = await db.LocalRepositories.AsNoTracking().FirstOrDefaultAsync(x => x.LocalPath == path); return entity is null ? null : MapLocal(entity); }
-    public async Task AddLocalRepositoryAsync(string path, string name) { await using var db = await _factory.CreateDbContextAsync(); if (!await db.LocalRepositories.AnyAsync(x => x.LocalPath == path)) { db.Add(new LocalRepositoryEntity { Name = name, LocalPath = path, AddedAt = DateTimeOffset.UtcNow, IsTracked = true }); await db.SaveChangesWithRetryAsync(); } }
+    public Task AddLocalRepositoryAsync(string path, string name) => AddLocalRepositoryAsync(path, name, null);
+    public async Task AddLocalRepositoryAsync(string path, string name, string? githubUrl)
+    {
+        path = Path.GetFullPath(path);
+        await using var db = await _factory.CreateDbContextAsync();
+        var existing = await db.LocalRepositories.FirstOrDefaultAsync(x => x.LocalPath == path);
+        if (existing is null)
+        {
+            db.Add(new LocalRepositoryEntity { Name = name, LocalPath = path, GitHubUrl = githubUrl, AddedAt = DateTimeOffset.UtcNow, IsTracked = true });
+        }
+        else if (!string.IsNullOrWhiteSpace(githubUrl)) existing.GitHubUrl = githubUrl;
+        await db.SaveChangesWithRetryAsync();
+    }
     public async Task RemoveLocalRepositoryAsync(long id) { await using var db = await _factory.CreateDbContextAsync(); await db.LocalRepositories.Where(x => x.Id == id).ExecuteDeleteAsync(); }
 
     private static void Copy(Repository m, RepositoryEntity e) { e.GitHubId = m.GitHubId; e.Owner = m.Owner; e.Name = m.Name; e.HtmlUrl = m.HtmlUrl; e.OwnerAvatarUrl = m.OwnerAvatarUrl; e.Description = m.Description; e.PrimaryLanguage = m.PrimaryLanguage; e.IsPrivate = m.IsPrivate; e.IsArchived = m.IsArchived; e.TopicsJson = JsonSerializer.Serialize(m.Topics); e.LanguagesJson = JsonSerializer.Serialize(m.Languages); e.Stars = m.Stars; e.Forks = m.Forks; e.Watchers = m.Watchers; e.OpenIssues = m.OpenIssues; e.CreatedAt = m.CreatedAt; e.UpdatedAt = m.UpdatedAt; e.LastPushedAt = m.LastPushedAt; e.DiscoveryScore = m.DiscoveryScore; e.CachedAt = DateTimeOffset.UtcNow; }

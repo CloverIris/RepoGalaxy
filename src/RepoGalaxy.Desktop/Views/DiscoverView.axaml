@@ -1,5 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:RepoGalaxy.Desktop.Controls"
+             xmlns:views="clr-namespace:RepoGalaxy.Desktop.Views"
              x:Class="RepoGalaxy.Desktop.Views.DiscoverView"
              x:CompileBindings="False">
   <UserControl.Styles>
@@ -11,7 +13,7 @@
   </UserControl.Styles>
 
   <Grid RowDefinitions="Auto,*" Background="{DynamicResource CanvasBrush}">
-    <Border Padding="20,12" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <Border Padding="20,10" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
         <Border Background="{DynamicResource SurfaceMutedBrush}" Padding="2">
           <ItemsControl ItemsSource="{Binding Sources}">
@@ -19,30 +21,39 @@
             <ItemsControl.ItemTemplate><DataTemplate><Button Classes="segment" Classes.selected="{Binding IsSelected}" Command="{Binding DataContext.SelectSourceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"><StackPanel Orientation="Horizontal" Spacing="7"><TextBlock Text="{Binding Title}" FontWeight="SemiBold"/><TextBlock Text="{Binding Count}" Opacity=".72"/></StackPanel></Button></DataTemplate></ItemsControl.ItemTemplate>
           </ItemsControl>
         </Border>
+
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <TextBlock Text="METRO FEED" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource AccentTextBrush}"/>
+          <TextBlock Text="二维 Tile 世界" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource AccentTextBrush}"/>
           <TextBlock Text="{Binding ResultSummary}" Classes="meta"/>
           <Border IsVisible="{Binding HasActiveTileFilter}" Background="{DynamicResource AccentBrush}" Padding="8,3">
             <StackPanel Orientation="Horizontal" Spacing="7"><TextBlock Text="{Binding ActiveTileFilter}" Foreground="White"/><Button Classes="ghost" Content="×" Foreground="White" Padding="2,0" MinHeight="20" Command="{Binding ClearTileFilterCommand}"/></StackPanel>
           </Border>
         </StackPanel>
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-          <TextBlock Text="拖动画布浏览" Classes="meta" VerticalAlignment="Center"/>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+          <Border Background="{DynamicResource SurfaceMutedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="9,6"><TextBlock Text="{Binding ZoomText}" FontWeight="SemiBold"/></Border>
+          <Button Classes="subtle" Content="回到中景" ToolTip.Tip="恢复 100% 视图 (Home)" Command="{Binding ReturnToMiddleCommand}"/>
+          <Button Classes="subtle" Content="查看索引" ToolTip.Tip="缩放到语言与框架索引" Command="{Binding ShowSemanticIndexCommand}"/>
           <Button Classes="primary" Command="{Binding SyncCommand}"><StackPanel Orientation="Horizontal" Spacing="7"><PathIcon Data="{StaticResource IconRefresh}" Width="15" Height="15"/><TextBlock Text="同步"/></StackPanel></Button>
         </StackPanel>
       </Grid>
     </Border>
 
-    <Grid Grid.Row="1">
-      <ScrollViewer x:Name="TileScrollViewer" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" Background="{DynamicResource CanvasBrush}">
-        <ItemsControl x:Name="TileItems" ItemsSource="{Binding Tiles}" Width="{Binding TileCanvasWidth}" Height="{Binding TileCanvasHeight}" HorizontalAlignment="Left" VerticalAlignment="Top">
+    <Grid Grid.Row="1" x:Name="WorldHost" ClipToBounds="True">
+      <controls:ZoomableTileCanvas x:Name="TileWorld"
+                                   CameraX="{Binding CameraX}"
+                                   CameraY="{Binding CameraY}"
+                                   Zoom="{Binding Zoom}"
+                                   Opacity="{Binding TileBoardOpacity}"
+                                   Background="{DynamicResource CanvasBrush}">
+        <ItemsControl ItemsSource="{Binding Tiles}" Width="{Binding TileCanvasWidth}" Height="{Binding TileCanvasHeight}" HorizontalAlignment="Left" VerticalAlignment="Top">
           <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas Width="{Binding DataContext.TileCanvasWidth, RelativeSource={RelativeSource AncestorType=UserControl}}" Height="{Binding DataContext.TileCanvasHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
           <ItemsControl.Styles>
-            <Style Selector="ContentPresenter"><Setter Property="Canvas.Left" Value="{Binding Left}"/><Setter Property="Canvas.Top" Value="{Binding Top}"/><Setter Property="Width" Value="{Binding Width}"/><Setter Property="Height" Value="{Binding Height}"/></Style>
+            <Style Selector="ContentPresenter"><Setter Property="Canvas.Left" Value="{Binding Left}"/><Setter Property="Canvas.Top" Value="{Binding Top}"/><Setter Property="Width" Value="{Binding Width}"/><Setter Property="Height" Value="{Binding Height}"/><Setter Property="Panel.ZIndex" Value="{Binding ZIndex}"/></Style>
           </ItemsControl.Styles>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Classes="metro-tile" Background="{Binding Background}" Opacity="{Binding DisplayOpacity}">
+              <Border Classes="metro-tile" Background="{Binding Background}" Opacity="{Binding DisplayOpacity}" IsVisible="{Binding IsInRenderWindow}">
                 <Grid>
                   <Image Source="{Binding BackgroundImage}" Stretch="UniformToFill" Opacity=".28" IsVisible="{Binding !!BackgroundImage}"/>
                   <PathIcon Data="{Binding IconGeometry}" Width="76" Height="76" Opacity=".14" Foreground="{Binding Foreground}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,4" IsVisible="{Binding HasIcon}" IsHitTestVisible="False"/>
@@ -50,24 +61,10 @@
 
                   <Button Classes="tile-hit" Command="{Binding DataContext.ActivateTileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}">
                     <Grid Margin="13" RowDefinitions="Auto,*,Auto">
-                      <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Text="{Binding KindLabel}" FontSize="10" FontWeight="Bold" Foreground="{Binding SecondaryForeground}"/>
-                        <TextBlock Grid.Column="1" Text="{Binding Language}" FontSize="10" Foreground="{Binding SecondaryForeground}" TextTrimming="CharacterEllipsis" MaxWidth="100"/>
-                      </Grid>
-
-                      <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="4" IsVisible="{Binding !IsRanking}">
-                        <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" Foreground="{Binding Foreground}" TextTrimming="CharacterEllipsis" MaxLines="1"/>
-                        <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{Binding SecondaryForeground}" TextTrimming="CharacterEllipsis" MaxLines="1"/>
-                      </StackPanel>
-
-                      <ItemsControl Grid.Row="1" ItemsSource="{Binding Ranking.Items}" IsVisible="{Binding IsRanking}">
-                        <ItemsControl.ItemTemplate><DataTemplate><Button Classes="ghost" Padding="1,3" HorizontalContentAlignment="Stretch" Command="{Binding DataContext.OpenTopItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"><Grid ColumnDefinitions="18,*"><TextBlock Text="{Binding Rank}" Foreground="White" FontWeight="Bold"/><TextBlock Grid.Column="1" Text="{Binding FullName}" Foreground="White" TextTrimming="CharacterEllipsis"/></Grid></Button></DataTemplate></ItemsControl.ItemTemplate>
-                      </ItemsControl>
-
-                      <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
-                        <TextBlock Text="{Binding Caption}" FontSize="11" Foreground="{Binding SecondaryForeground}" TextTrimming="CharacterEllipsis"/>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsRepository}"><TextBlock Text="{Binding Stars}" Foreground="{Binding SecondaryForeground}" FontSize="11"/><TextBlock Text="{Binding Forks}" Foreground="{Binding SecondaryForeground}" FontSize="11"/></StackPanel>
-                      </Grid>
+                      <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding KindLabel}" FontSize="10" FontWeight="Bold" Foreground="{Binding SecondaryForeground}"/><TextBlock Grid.Column="1" Text="{Binding Language}" FontSize="10" Foreground="{Binding SecondaryForeground}" TextTrimming="CharacterEllipsis" MaxWidth="100"/></Grid>
+                      <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="4" IsVisible="{Binding !IsRanking}"><TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" Foreground="{Binding Foreground}" TextTrimming="CharacterEllipsis" MaxLines="1"/><TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{Binding SecondaryForeground}" TextTrimming="CharacterEllipsis" MaxLines="1"/></StackPanel>
+                      <ItemsControl Grid.Row="1" ItemsSource="{Binding Ranking.Items}" IsVisible="{Binding IsRanking}"><ItemsControl.ItemTemplate><DataTemplate><Button Classes="ghost" Padding="1,3" HorizontalContentAlignment="Stretch" Command="{Binding DataContext.OpenTopItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"><Grid ColumnDefinitions="18,*"><TextBlock Text="{Binding Rank}" Foreground="White" FontWeight="Bold"/><TextBlock Grid.Column="1" Text="{Binding FullName}" Foreground="White" TextTrimming="CharacterEllipsis"/></Grid></Button></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                      <Grid Grid.Row="2" ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Caption}" FontSize="11" Foreground="{Binding SecondaryForeground}" TextTrimming="CharacterEllipsis"/><StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsRepository}"><TextBlock Text="{Binding Stars}" Foreground="{Binding SecondaryForeground}" FontSize="11"/><TextBlock Text="{Binding Forks}" Foreground="{Binding SecondaryForeground}" FontSize="11"/></StackPanel></Grid>
                     </Grid>
                   </Button>
 
@@ -80,7 +77,23 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
-      </ScrollViewer>
+      </controls:ZoomableTileCanvas>
+
+      <Canvas IsVisible="{Binding IsPortalVisible}" IsHitTestVisible="{Binding IsDetailInteractive}">
+        <Border Canvas.Left="{Binding PortalX}" Canvas.Top="{Binding PortalY}"
+                Width="{Binding PortalWidth}" Height="{Binding PortalHeight}"
+                ClipToBounds="True" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1"
+                Background="{DynamicResource CanvasBrush}">
+          <views:ImmersiveDetailSurface Width="{Binding DetailViewportWidth}" Height="{Binding DetailViewportHeight}"
+                                        Opacity="{Binding PortalContentOpacity}"
+                                        HorizontalAlignment="Left" VerticalAlignment="Top">
+            <views:ImmersiveDetailSurface.RenderTransform>
+              <TranslateTransform X="{Binding PortalInnerOffsetX}" Y="{Binding PortalInnerOffsetY}"/>
+            </views:ImmersiveDetailSurface.RenderTransform>
+          </views:ImmersiveDetailSurface>
+        </Border>
+      </Canvas>
+      <views:SemanticIndexView Opacity="{Binding SemanticIndexOpacity}"/>
       <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoading}" Height="3" VerticalAlignment="Top"/>
     </Grid>
   </Grid>

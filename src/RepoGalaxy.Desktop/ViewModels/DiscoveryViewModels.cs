@@ -24,7 +24,7 @@ public sealed partial class FeedSourceViewModel : ObservableObject
     [ObservableProperty] private bool _isSelected;
 }
 
-public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
+public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, IDisposable
 {
     private readonly DiscoveryStore _store;
     private readonly DiscoverySyncService _sync;
@@ -38,6 +38,19 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
     private readonly ITileImageService _tileImages;
     private readonly ITipCatalog _tips;
     private readonly IAuthenticationSessionService _session;
+    private readonly IZoomableTileLayoutService _zoomLayout;
+    private readonly IDetailContentService _detailContent;
+    private readonly IExternalLinkService _externalLinks;
+    private readonly ISemanticMosaicLayoutService _semanticLayout;
+    private readonly ISemanticIndexCatalogService _semanticCatalog;
+    private readonly IMarkdownDocumentService _markdown;
+    private readonly ISafeMarkdownImageService _markdownImages;
+    private readonly ILocalIdeDiscoveryService _ideDiscovery;
+    private readonly ILocalRepositoryResolver _localResolver;
+    private readonly IRepositoryCloneService _cloneService;
+    private readonly IIdeLauncher _ideLauncher;
+    private readonly IDetailPortalCoordinator _detailPortal;
+    private readonly IIdePreferenceService _idePreferences;
     private readonly List<FeedItemViewModel> _allItems = [];
 
     public ObservableCollection<FeedItemViewModel> Items { get; } = [];
@@ -59,8 +72,9 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
     [ObservableProperty] private string _statusDescription = "从热门项目开始，或创建订阅来建立你的长期关注列表。";
     [ObservableProperty] private double _tileCanvasWidth = 1796;
     [ObservableProperty] private double _tileCanvasHeight = 596;
-    [ObservableProperty] private double _tileViewportX;
-    [ObservableProperty] private double _tileViewportY;
+    [ObservableProperty] private double _cameraX;
+    [ObservableProperty] private double _cameraY;
+    [ObservableProperty] private double _zoom = 1;
     [ObservableProperty] private string _activeTileFilter = string.Empty;
     private TileBoardState? _tileBoard;
     public bool HasActiveTileFilter => !string.IsNullOrWhiteSpace(ActiveTileFilter);
@@ -72,7 +86,7 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
     public event EventHandler? LoginRequested;
     public event EventHandler<string>? SubscriptionRequested;
 
-    public DiscoverViewModel(DiscoveryStore store, DiscoverySyncService sync, RepositoryDetailsViewModel details, ILogger<DiscoverViewModel> logger, DashboardRailViewModel dashboard, RepositoryService repositories, IRecommendationEngine recommendations, IMetroTileLayoutService tileLayout, ITilePaletteService tilePalette, ITileImageService tileImages, ITipCatalog tips, IAuthenticationSessionService session)
+    public DiscoverViewModel(DiscoveryStore store, DiscoverySyncService sync, RepositoryDetailsViewModel details, ILogger<DiscoverViewModel> logger, DashboardRailViewModel dashboard, RepositoryService repositories, IRecommendationEngine recommendations, IMetroTileLayoutService tileLayout, ITilePaletteService tilePalette, ITileImageService tileImages, ITipCatalog tips, IAuthenticationSessionService session, IZoomableTileLayoutService zoomLayout, IDetailContentService detailContent, IExternalLinkService externalLinks, ISemanticMosaicLayoutService semanticLayout, ISemanticIndexCatalogService semanticCatalog, IMarkdownDocumentService markdown, ISafeMarkdownImageService markdownImages, ILocalIdeDiscoveryService ideDiscovery, ILocalRepositoryResolver localResolver, IRepositoryCloneService cloneService, IIdeLauncher ideLauncher, IDetailPortalCoordinator detailPortal, IIdePreferenceService idePreferences)
     {
         _store = store;
         _sync = sync;
@@ -86,12 +100,26 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
         _tileImages = tileImages;
         _tips = tips;
         _session = session;
+        _zoomLayout = zoomLayout;
+        _detailContent = detailContent;
+        _externalLinks = externalLinks;
+        _semanticLayout = semanticLayout;
+        _semanticCatalog = semanticCatalog;
+        _markdown = markdown;
+        _markdownImages = markdownImages;
+        _ideDiscovery = ideDiscovery;
+        _localResolver = localResolver;
+        _cloneService = cloneService;
+        _ideLauncher = ideLauncher;
+        _detailPortal = detailPortal;
+        _idePreferences = idePreferences;
         _selectedSource = Sources[0];
         _selectedSource.IsSelected = true;
     }
 
     public async Task LoadAsync()
     {
+        SetFocusedTile(null);
         IsLoading = true;
         try
         {
@@ -100,6 +128,7 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
             ApplyFilter();
             await RefreshCountsAsync();
             await _dashboard.LoadAsync();
+            SetFocusedTile(null);
             await BuildTileBoardAsync();
             StatusTitle = SelectedSource.Source == FeedSource.Subscription ? "订阅 Feed 还是空的" : "还没有发现内容";
             StatusDescription = SelectedSource.Source == FeedSource.Subscription
@@ -179,6 +208,7 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
     [RelayCommand]
     private void ActivateTile(MetroTileViewModel tile)
     {
+        SetFocusedTile(tile);
         if (tile.RepositoryItem is not null) { SelectedItem = tile.RepositoryItem; return; }
         if (!tile.IsLanguage && !tile.IsTechnology) return;
         ActiveTileFilter = ActiveTileFilter.Equals(tile.Title, StringComparison.OrdinalIgnoreCase) ? string.Empty : tile.Title;
@@ -186,11 +216,18 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
     }
 
     [RelayCommand]
-    private void ClearTileFilter() { ActiveTileFilter = string.Empty; ApplyTileFilter(); }
+    private void ClearTileFilter()
+    {
+        ActiveTileFilter = string.Empty;
+        ApplyTileFilter();
+        DebounceCameraSave();
+    }
 
     [RelayCommand]
     private void SelectSource(FeedSourceViewModel source)
     {
+        _ = SaveViewStateAsync();
+        SetFocusedTile(null);
         foreach (var item in Sources) item.IsSelected = item == source;
         SelectedSource = source;
     }
@@ -240,42 +277,31 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
     public async Task EnsureTileExtentAsync(double viewportWidth, double viewportHeight)
     {
         if (_tileBoard is null || viewportWidth <= 0 || viewportHeight <= 0) return;
-        var columns = Math.Max(12, (int)Math.Ceiling(viewportWidth / 100d) + 6);
-        var rows = Math.Max(6, (int)Math.Ceiling(viewportHeight / 100d) + 2);
+        var columns = Math.Max(12, (int)Math.Ceiling(viewportWidth / Math.Max(_zoomLayout.ScaleProfile.MinimumZoom, Zoom) / 100d) + 6);
+        var rows = Math.Max(8, (int)Math.Ceiling(viewportHeight / Math.Max(_zoomLayout.ScaleProfile.MinimumZoom, Zoom) / 100d) + 4);
         if (columns <= _tileBoard.ExtentColumns && rows <= _tileBoard.ExtentRows) return;
         await BuildTileBoardAsync(columns, rows);
     }
 
-    public void UpdateTileEdgeOpacity(double viewportX, double viewportY, double viewportWidth, double viewportHeight)
+    private async Task BuildTileBoardAsync(int minimumColumns = 18, int minimumRows = 10)
     {
-        TileViewportX = Math.Max(0, viewportX); TileViewportY = Math.Max(0, viewportY);
-        foreach (var tile in Tiles)
-        {
-            var visibleWidth = Math.Max(0, Math.Min(tile.Left + tile.Width, viewportX + viewportWidth) - Math.Max(tile.Left, viewportX));
-            var visibleHeight = Math.Max(0, Math.Min(tile.Top + tile.Height, viewportY + viewportHeight) - Math.Max(tile.Top, viewportY));
-            var ratio = tile.Width <= 0 || tile.Height <= 0 ? 0 : visibleWidth * visibleHeight / (tile.Width * tile.Height);
-            tile.SetEdgeOpacity(ratio >= .999 ? 1 : .3 + .7 * ratio);
-        }
-    }
-
-    public Task SaveTileViewportAsync(double x, double y) => _tileBoard is null ? Task.CompletedTask : _tileLayout.SaveViewportAsync(_tileBoard.Id, x, y);
-
-    private async Task BuildTileBoardAsync(int minimumColumns = 18, int minimumRows = 6)
-    {
+        var previousBoardId = _tileBoard?.Id;
+        var liveCamera = Camera;
+        var liveSemanticViewport = new SemanticViewportState(SemanticViewportX, SemanticViewportY);
         var content = new List<TileContent>();
         foreach (var list in TopLists)
             content.Add(new($"ranking:{list.Title}", MetroTileKind.RankingList, list.Title, list.Subtitle, "TOP 5", "TypeScript"));
 
         foreach (var group in _allItems.Where(x => !string.IsNullOrWhiteSpace(x.Repository.PrimaryLanguage)).GroupBy(x => x.Repository.PrimaryLanguage, StringComparer.OrdinalIgnoreCase).OrderByDescending(x => x.Count()).Take(10))
-            content.Add(new($"language:{group.Key.ToLowerInvariant()}", MetroTileKind.Language, group.Key, $"{group.Count()} 个关联仓库", "点击筛选", group.Key));
+            content.Add(new($"language:{group.Key.ToLowerInvariant()}", MetroTileKind.Language, group.Key, $"{group.Count()} 个关联仓库", "点击筛选", group.Key, SourceUrl: OfficialTechnologyLinks.Get(group.Key)));
 
         foreach (var group in _allItems.SelectMany(x => x.Repository.Topics.Select(topic => (Topic: topic, Item: x))).Where(x => !string.IsNullOrWhiteSpace(x.Topic)).GroupBy(x => x.Topic, StringComparer.OrdinalIgnoreCase).OrderByDescending(x => x.Count()).Take(10))
-            content.Add(new($"stack:{group.Key.ToLowerInvariant()}", MetroTileKind.Technology, group.Key, $"关联 {group.Select(x => x.Item.Id).Distinct().Count()} 个项目", "技术栈", group.Key));
+            content.Add(new($"stack:{group.Key.ToLowerInvariant()}", MetroTileKind.Technology, group.Key, $"关联 {group.Select(x => x.Item.Id).Distinct().Count()} 个项目", "技术栈", group.Key, SourceUrl: OfficialTechnologyLinks.Get(group.Key)));
 
         foreach (var item in _allItems)
         {
             var kind = item.Repository.Stars >= 100_000 ? MetroTileKind.FeaturedRepository : MetroTileKind.Repository;
-            content.Add(new($"repository:{item.Repository.Id}", kind, item.Repository.FullName, item.Repository.Description, item.ReasonText, item.Repository.PrimaryLanguage, item.Repository.Id, item.Repository.OwnerAvatarUrl));
+            content.Add(new($"repository:{item.Repository.Id}", kind, item.Repository.FullName, item.Repository.Description, item.ReasonText, item.Repository.PrimaryLanguage, item.Repository.Id, item.Repository.OwnerAvatarUrl, SourceUrl: item.Repository.Repository.HtmlUrl));
         }
 
         var catalog = _tips.GetTips(DateOnly.FromDateTime(DateTime.Today));
@@ -283,7 +309,7 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
         {
             var tip = catalog[index % catalog.Count];
             var sizeMarker = tip.ColumnSpan == 2 && tip.RowSpan == 2 ? ":large:" : tip.ColumnSpan == 2 ? ":wide:" : ":small:";
-            content.Add(new($"tip{sizeMarker}{index}:{tip.Key}", MetroTileKind.Tip, tip.Title, tip.Body, string.Join(" · ", new[] { tip.Category, tip.Attribution }.Where(x => !string.IsNullOrWhiteSpace(x))), tip.AccentKey, IsPlaceholder: true));
+            content.Add(new($"tip{sizeMarker}{index}:{tip.Key}", MetroTileKind.Tip, tip.Title, tip.Body, string.Join(" · ", new[] { tip.Category, tip.Attribution }.Where(x => !string.IsNullOrWhiteSpace(x))), tip.AccentKey, IsPlaceholder: true, SourceUrl: tip.SourceUrl));
         }
 
         var scope = _session.Current.User?.GitHubId ?? "guest";
@@ -301,8 +327,15 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
         }
         TileCanvasWidth = Math.Max(1, _tileBoard.ExtentColumns * 100 - 4);
         TileCanvasHeight = Math.Max(1, _tileBoard.ExtentRows * 100 - 4);
-        TileViewportX = _tileBoard.ViewportX; TileViewportY = _tileBoard.ViewportY;
+        var camera = previousBoardId == _tileBoard.Id ? liveCamera : new CameraState(_tileBoard.CameraX, _tileBoard.CameraY, _tileBoard.Zoom, ActiveIndexKind: _tileBoard.ActiveIndexKind, ActiveIndexKey: _tileBoard.ActiveIndexKey);
+        CameraX = camera.X; CameraY = camera.Y; Zoom = camera.Zoom;
+        var semanticViewport = previousBoardId == _tileBoard.Id ? liveSemanticViewport : new(_tileBoard.SemanticViewportX, _tileBoard.SemanticViewportY);
+        SemanticViewportX = semanticViewport.X;
+        SemanticViewportY = semanticViewport.Y;
+        ActiveTileFilter = camera.ActiveIndexKey ?? string.Empty;
+        await BuildSemanticIndexAsync();
         ApplyTileFilter();
+        UpdateCameraPresentation();
     }
 
     private async Task LoadTileImageAsync(MetroTileViewModel tile, string url)

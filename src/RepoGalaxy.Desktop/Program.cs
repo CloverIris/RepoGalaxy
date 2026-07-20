@@ -93,9 +93,24 @@ class Program
         services.AddSingleton<ICacheService, LayeredCacheService>();
         services.AddSingleton<ILazyRefreshCoordinator, LazyRefreshCoordinator>();
         services.AddSingleton<IMetroTileLayoutService, MetroTileLayoutService>();
+        services.AddSingleton<ISemanticMosaicLayoutService, SemanticMosaicLayoutService>();
+        services.AddSingleton<ISemanticIndexCatalogService, SemanticIndexCatalogService>();
+        services.AddSingleton<IZoomableTileLayoutService, ZoomableTileLayoutService>();
+        services.AddSingleton<IDetailPortalCoordinator, DetailPortalCoordinator>();
         services.AddSingleton<ITilePaletteService, TilePaletteService>();
         services.AddSingleton<ITipCatalog, TipCatalog>();
         services.AddSingleton<ITileImageService, TileImageService>();
+        services.AddSingleton<IDetailContentService, DetailContentService>();
+        services.AddSingleton<IExternalMetadataExtractor, ExternalMetadataExtractor>();
+        services.AddSingleton<IMarkdownDocumentService, MarkdownDocumentService>();
+        services.AddSingleton<ISafeMarkdownImageService, SafeMarkdownImageService>();
+        services.AddSingleton<ILocalIdeDiscoveryService, LocalIdeDiscoveryService>();
+        services.AddSingleton<ILocalRepositoryResolver, LocalRepositoryResolver>();
+        services.AddSingleton<IRepositoryCloneService, RepositoryCloneService>();
+        services.AddSingleton<IIdeLauncher, IdeLauncher>();
+        services.AddSingleton<IIdePreferenceService, IdePreferenceService>();
+        services.AddHttpClient("external-metadata").ConfigurePrimaryHttpMessageHandler(ExternalMetadataSecurity.CreateHandler);
+        services.AddHttpClient("markdown-images").ConfigurePrimaryHttpMessageHandler(ExternalMetadataSecurity.CreateHandler);
 
         // GitHub 服务 - 使用扩展方法注册
         services.AddGitHubServices(options =>

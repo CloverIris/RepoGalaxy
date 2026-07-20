@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RepoGalaxy.Data.DbContexts;
 
@@ -10,9 +11,11 @@ using RepoGalaxy.Data.DbContexts;
 namespace RepoGalaxy.Data.Migrations
 {
     [DbContext(typeof(RepoGalaxyDbContext))]
-    partial class RepoGalaxyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260720173843_SemanticMosaicAndLocalWorkspace")]
+    partial class SemanticMosaicAndLocalWorkspace
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
@@ -343,38 +346,6 @@ namespace RepoGalaxy.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("GitIdentityAliases");
-                });
-
-            modelBuilder.Entity("RepoGalaxy.Data.Entities.IdePreferenceEntity", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("IdeKey")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ScopeKey")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("TechnologyKey")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("UpdatedAt")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ScopeKey", "TechnologyKey")
-                        .IsUnique();
-
-                    b.ToTable("IdePreferences");
                 });
 
             modelBuilder.Entity("RepoGalaxy.Data.Entities.LocalContributionDayEntity", b =>
@@ -913,12 +884,6 @@ namespace RepoGalaxy.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("TEXT");
-
-                    b.Property<double>("SemanticViewportX")
-                        .HasColumnType("REAL");
-
-                    b.Property<double>("SemanticViewportY")
-                        .HasColumnType("REAL");
 
                     b.Property<int>("Source")
                         .HasColumnType("INTEGER");

@@ -31,7 +31,8 @@ public sealed record TileContent(
     string AccentKey = "",
     long? RepositoryId = null,
     string ImageUrl = "",
-    bool IsPlaceholder = false);
+    bool IsPlaceholder = false,
+    string SourceUrl = "");
 
 public sealed record TilePlacement(
     long Id,
@@ -46,11 +47,104 @@ public sealed record TileBoardState(
     string ScopeKey,
     FeedSource Source,
     int LayoutVersion,
-    double ViewportX,
-    double ViewportY,
+    double CameraX,
+    double CameraY,
+    double Zoom,
+    SemanticIndexKind? ActiveIndexKind,
+    string ActiveIndexKey,
+    double SemanticViewportX,
+    double SemanticViewportY,
     int ExtentColumns,
     int ExtentRows,
     IReadOnlyList<TilePlacement> Placements);
+
+public enum SemanticIndexKind { Language, Framework }
+
+public enum SemanticIndexSignalOrigin { Feed, DedicatedTile, Subscription, LocalRepository }
+
+public sealed record SemanticIndexSignal(
+    SemanticIndexKind Kind,
+    string Title,
+    string ContentKey,
+    string AssociatedLanguage = "",
+    SemanticIndexSignalOrigin Origin = SemanticIndexSignalOrigin.Feed,
+    bool HasOfficialLink = false);
+
+public sealed record SemanticIndexPolicy(
+    int MaximumLanguages = 16,
+    int MaximumFrameworks = 32,
+    int MinimumFrameworkRepositories = 2,
+    int MaximumTitleLength = 32);
+
+public sealed record SemanticIndexCatalogResult(
+    IReadOnlyList<SemanticIndexItem> Items,
+    int RejectedSignalCount);
+
+public readonly record struct SemanticViewportState(double X, double Y);
+
+public sealed record SemanticIndexItem(
+    string Key,
+    string Title,
+    SemanticIndexKind Kind,
+    int ProjectCount,
+    string AccentKey,
+    IReadOnlyList<string> ContentKeys);
+
+public sealed record SemanticMosaicPlacement(
+    long Id,
+    SemanticIndexItem Item,
+    int Column,
+    int Row,
+    int ColumnSpan,
+    int RowSpan);
+
+public sealed record SemanticMosaicState(
+    long BoardId,
+    int LayoutVersion,
+    int ExtentColumns,
+    int ExtentRows,
+    IReadOnlyList<SemanticMosaicPlacement> Placements);
+
+public readonly record struct CameraState(
+    double X,
+    double Y,
+    double Zoom,
+    string FocusedContentKey = "",
+    SemanticIndexKind? ActiveIndexKind = null,
+    string ActiveIndexKey = "");
+
+public readonly record struct ZoomScaleProfile(
+    double MinimumZoom,
+    double SemanticFullyVisibleZoom,
+    double SemanticFadeEndZoom,
+    double DefaultZoom,
+    double MaximumZoom);
+
+public readonly record struct TileWorldRect(double X, double Y, double Width, double Height)
+{
+    public double CenterX => X + Width / 2;
+    public double CenterY => Y + Height / 2;
+}
+
+public enum ZoomVisualMode { SemanticIndex, TileBoard, DetailTransition, Detail }
+
+public enum DetailPresentationState { Board, Portal, Snapping, Full, Exiting }
+
+public readonly record struct DetailPortalGeometry(double X, double Y, double Width, double Height)
+{
+    public static DetailPortalGeometry Empty => new(0, 0, 0, 0);
+    public bool IsVisible => Width > 0 && Height > 0;
+}
+
+public readonly record struct DetailPortalDecision(DetailPresentationState State, bool StartSnap, bool ExitFull, bool SuppressRightRail);
+
+public readonly record struct ZoomTransitionState(
+    ZoomVisualMode Mode,
+    double SemanticIndexOpacity,
+    double TileBoardOpacity,
+    double DetailProgress,
+    double FitScale,
+    bool ShouldPrefetch);
 
 public sealed record TilePalette(string Background, string Foreground, string SecondaryForeground, string Scrim);
 
@@ -64,5 +158,5 @@ public sealed record TipDefinition(
     int RowSpan = 1,
     int? Month = null,
     int? Day = null,
-    string Attribution = "");
-
+    string Attribution = "",
+    string SourceUrl = "");

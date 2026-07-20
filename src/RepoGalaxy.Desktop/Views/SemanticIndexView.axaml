@@ -1,0 +1,64 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:RepoGalaxy.Desktop.Controls"
+             x:Class="RepoGalaxy.Desktop.Views.SemanticIndexView"
+             x:CompileBindings="False"
+             IsHitTestVisible="{Binding IsSemanticIndexInteractive}">
+  <UserControl.Styles>
+    <Style Selector="Button.index-item">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="CornerRadius" Value="0"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="10"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+    </Style>
+    <Style Selector="Button.index-item:pointerover"><Setter Property="BorderThickness" Value="2"/></Style>
+    <Style Selector="Button.index-item:focus-visible"><Setter Property="BorderThickness" Value="2"/></Style>
+  </UserControl.Styles>
+
+  <Grid Background="{DynamicResource CanvasBrush}" RowDefinitions="Auto,*">
+    <Grid Margin="28,22,28,10" ColumnDefinitions="*,Auto">
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <TextBlock Text="技术索引" FontSize="24" FontWeight="SemiBold"/>
+        <TextBlock Text="语言与技术栈组成同一个稳定拼贴" Classes="secondary" VerticalAlignment="Center"/>
+      </StackPanel>
+      <TextBlock Grid.Column="1" Text="选择后回到中景并定位相关项目" Classes="meta" VerticalAlignment="Center"/>
+    </Grid>
+
+    <controls:SemanticMosaicViewport x:Name="SemanticViewport"
+                                     Grid.Row="1" Margin="24,8,24,24"
+                                     OffsetX="{Binding SemanticViewportX}"
+                                     OffsetY="{Binding SemanticViewportY}">
+      <ItemsControl ItemsSource="{Binding SemanticMosaicItems}" Width="{Binding SemanticCanvasWidth}" Height="{Binding SemanticCanvasHeight}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><Canvas Width="{Binding DataContext.SemanticCanvasWidth, RelativeSource={RelativeSource AncestorType=UserControl}}" Height="{Binding DataContext.SemanticCanvasHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"/></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.Styles>
+          <Style Selector="ContentPresenter">
+            <Setter Property="Canvas.Left" Value="{Binding Left}"/>
+            <Setter Property="Canvas.Top" Value="{Binding Top}"/>
+            <Setter Property="Width" Value="{Binding Width}"/>
+            <Setter Property="Height" Value="{Binding Height}"/>
+          </Style>
+        </ItemsControl.Styles>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Button Classes="index-item" BorderBrush="{Binding Border}">
+              <Grid RowDefinitions="Auto,*,Auto">
+                <TextBlock Text="{Binding KindLabel}" FontSize="10" Classes="meta"/>
+                <TextBlock Grid.Row="1" Text="{Binding Title}" Foreground="{Binding Accent}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Text="{Binding CountText}" FontSize="11" Classes="secondary"/>
+              </Grid>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </controls:SemanticMosaicViewport>
+
+    <StackPanel Grid.Row="1" IsVisible="{Binding !HasSemanticIndex}" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="440" Spacing="8">
+      <TextBlock Text="暂无可用索引" FontSize="22" HorizontalAlignment="Center"/>
+      <TextBlock Text="{Binding SemanticIndexEmptyText}" Classes="secondary" TextWrapping="Wrap" TextAlignment="Center"/>
+    </StackPanel>
+  </Grid>
+</UserControl>

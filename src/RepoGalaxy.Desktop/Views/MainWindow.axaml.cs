@@ -1,9 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Chrome;
 using Avalonia.Interactivity;
 using Avalonia.Input;
+using Avalonia.Media;
 using RepoGalaxy.Desktop.ViewModels;
-using RepoGalaxy.Desktop.Services;
 
 namespace RepoGalaxy.Desktop.Views;
 
@@ -12,7 +13,8 @@ public partial class MainWindow : Window
     private SplitView? _navigationSplit;
     private SplitView? _detailsSplit;
     private int _layoutMode = -1;
-    private WindowsMetroChrome? _nativeChrome;
+    private static readonly Geometry MaximizeGeometry = Geometry.Parse("M3,3 L17,3 L17,17 L3,17 Z");
+    private static readonly Geometry RestoreGeometry = Geometry.Parse("M5,3 L17,3 L17,15 M3,5 L15,5 L15,17 L3,17 Z");
 
     public MainWindow()
     {
@@ -21,16 +23,15 @@ public partial class MainWindow : Window
         _detailsSplit = this.FindControl<SplitView>("DetailsSplit");
         SizeChanged += OnWindowSizeChanged;
         Opened += OnWindowOpened;
-        Closed += (_, _) => _nativeChrome?.Dispose();
         PropertyChanged += (_, args) =>
         {
-            if (args.Property == WindowStateProperty) UpdateMaximizeIcon();
+            if (args.Property == WindowStateProperty) { UpdateMaximizeIcon(); UpdateResizeChrome(); }
         };
     }
 
     private void OnWindowOpened(object? sender, EventArgs e)
     {
-        _nativeChrome = WindowsMetroChrome.Attach(this, 48);
+        ConfigureWindowChrome();
         ApplyResponsiveLayout(ClientSize.Width);
     }
 
@@ -67,14 +68,8 @@ public partial class MainWindow : Window
             if (DataContext is MainWindowViewModel vm) vm.IsNavigationOpen = false;
         }
         if (DataContext is MainWindowViewModel viewModel) viewModel.SetDashboardRailInline(mode >= 2);
-    }
-
-    private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || IsInteractive(e.Source)) return;
-        if (e.ClickCount == 2) ToggleMaximize();
-        else BeginMoveDrag(e);
-        e.Handled = true;
+        if (this.FindControl<TextBlock>("ConnectionStatusText") is { } connection) connection.IsVisible = width >= 1150;
+        if (this.FindControl<TextBlock>("AccountNameText") is { } account) account.IsVisible = width >= 1150;
     }
 
     private void OnMinimizeClick(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -89,14 +84,36 @@ public partial class MainWindow : Window
 
     private void UpdateMaximizeIcon()
     {
-        if (this.FindControl<TextBlock>("MaximizeIcon") is not { } icon) return;
-        icon.Text = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+        if (this.FindControl<PathIcon>("MaximizeIcon") is not { } icon) return;
+        icon.Data = WindowState == WindowState.Maximized ? RestoreGeometry : MaximizeGeometry;
     }
 
-    private static bool IsInteractive(object? source)
+    private void ConfigureWindowChrome()
     {
-        for (var control = source as Control; control is not null; control = control.Parent as Control)
-            if (control is Button or TextBox or ComboBox) return true;
-        return false;
+        SetRole("TitleBarDragRegion", WindowDecorationsElementRole.TitleBar);
+        SetRole("SearchRegion", WindowDecorationsElementRole.User);
+        SetRole("AccountRegion", WindowDecorationsElementRole.User);
+        SetRole("MinimizeButton", WindowDecorationsElementRole.MinimizeButton);
+        SetRole("MaximizeButton", WindowDecorationsElementRole.MaximizeButton);
+        SetRole("CloseButton", WindowDecorationsElementRole.CloseButton);
+        SetRole("ResizeNorth", WindowDecorationsElementRole.ResizeN);
+        SetRole("ResizeSouth", WindowDecorationsElementRole.ResizeS);
+        SetRole("ResizeWest", WindowDecorationsElementRole.ResizeW);
+        SetRole("ResizeEast", WindowDecorationsElementRole.ResizeE);
+        SetRole("ResizeNorthWest", WindowDecorationsElementRole.ResizeNW);
+        SetRole("ResizeNorthEast", WindowDecorationsElementRole.ResizeNE);
+        SetRole("ResizeSouthWest", WindowDecorationsElementRole.ResizeSW);
+        SetRole("ResizeSouthEast", WindowDecorationsElementRole.ResizeSE);
+        UpdateResizeChrome();
+    }
+
+    private void SetRole(string name, WindowDecorationsElementRole role)
+    {
+        if (this.FindControl<Control>(name) is { } control) WindowDecorationProperties.SetElementRole(control, role);
+    }
+
+    private void UpdateResizeChrome()
+    {
+        if (this.FindControl<Grid>("ResizeChrome") is { } chrome) chrome.IsVisible = WindowState == WindowState.Normal;
     }
 }
