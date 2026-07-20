@@ -16,14 +16,30 @@ The product intentionally uses Avalonia's official Fluent theme only. It follows
 
 Requirements: .NET SDK 10 and the .NET 10 desktop runtime.
 
+For Visual Studio debugging, use **Visual Studio 2026 18.8 or later** with the
+**.NET desktop development** workload. The repository is pinned to SDK
+`10.0.302` in `global.json`; Visual Studio 2022 must not be used for this
+solution because it cannot reliably load the .NET 10 SDK.
+
+Open `RepoGalaxy.slnx` with the Visual Studio 2026 instance. If Windows has
+associated solution files with Visual Studio 2022, use **Open with** and select:
+`C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe`.
+Set `RepoGalaxy.Desktop` as the startup project and press F5.
+
 ```powershell
 dotnet restore
-dotnet build RepoGalaxy.sln
-dotnet test RepoGalaxy.sln
+dotnet build RepoGalaxy.slnx
+dotnet test RepoGalaxy.slnx
 dotnet run --project src/RepoGalaxy.Desktop
 ```
 
 The application creates a fresh `repogalaxy-v2.db` under the platform local application-data directory. It does not read or migrate the former local database.
+
+## GitHub sign-in
+
+Device Flow is the default sign-in method. On Windows, credentials are encrypted with the current user's DPAPI. The optional browser loopback flow is shown only when `REP0GALAXY_GITHUB_CLIENT_SECRET` is configured on the local machine (`REPOGALAXY_GITHUB_CLIENT_SECRET` is also accepted for compatibility); never embed that secret in source code or distribution artifacts.
+
+When signed out, RepoGalaxy makes one automatic Trending search per application session, then serves its local cache until the user explicitly refreshes.
 
 ## Synchronization
 

@@ -1,1 +1,22 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="RepoGalaxy.Desktop.Views.NotificationsView" x:CompileBindings="False"><Grid Margin="24" RowDefinitions="Auto,*"><TextBlock Text="Notifications" FontSize="28" FontWeight="SemiBold"/><ListBox Grid.Row="1" ItemsSource="{Binding Items}" Margin="0,16,0,0"><ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto" Margin="12"><StackPanel><TextBlock Text="{Binding Repository.FullName}" FontWeight="SemiBold"/><TextBlock Text="{Binding Reason.Summary}" Opacity="0.7"/></StackPanel><Button Grid.Column="1" Content="Mark read" Command="{Binding DataContext.ReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Id}"/></Grid></DataTemplate></ListBox.ItemTemplate></ListBox></Grid></UserControl>
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="RepoGalaxy.Desktop.Views.NotificationsView" x:CompileBindings="False">
+  <Grid Margin="28,22,28,26" RowDefinitions="Auto,Auto,*">
+    <Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="5"><TextBlock Text="通知" Classes="h1"/><TextBlock Text="高匹配发现和收藏仓库正式版本的更新记录。" Classes="muted"/></StackPanel><Button Grid.Column="1" Classes="subtle" Content="全部标为已读" Command="{Binding MarkAllReadCommand}" VerticalAlignment="Center"/></Grid>
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="0,20,0,14"><ComboBox ItemsSource="{Binding Filters}" SelectedItem="{Binding SelectedFilter}" Width="150"/><TextBlock Grid.Column="1" Text="{Binding UnreadCount, StringFormat='未读 {0} 条'}" Classes="meta" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
+    <Grid Grid.Row="2">
+      <ProgressBar Height="3" IsIndeterminate="True" IsVisible="{Binding IsLoading}" VerticalAlignment="Top"/>
+      <ListBox Classes="clean" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}">
+        <ListBox.ItemTemplate><DataTemplate>
+          <Border Classes="card" Margin="0,0,0,9" Padding="18,14">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+              <Border Width="38" Height="38" CornerRadius="19" Background="{DynamicResource AccentSoftBrush}"><PathIcon Data="{StaticResource IconNotification}" Width="18" Height="18" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+              <StackPanel Grid.Column="1" Spacing="5"><StackPanel Orientation="Horizontal" Spacing="8"><TextBlock Text="{Binding Repository.FullName}" FontWeight="SemiBold" FontSize="15"/><Border Classes="badge"><TextBlock Text="{Binding SourceText}"/></Border></StackPanel><TextBlock Text="{Binding ReasonText}" Classes="muted" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding DiscoveredText}" Classes="meta"/></StackPanel>
+              <Button Grid.Column="2" Classes="subtle" Content="标为已读" Command="{Binding DataContext.ReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Id}" IsVisible="{Binding IsUnread}" VerticalAlignment="Center"/>
+            </Grid>
+          </Border>
+        </DataTemplate></ListBox.ItemTemplate>
+      </ListBox>
+      <Border IsVisible="{Binding IsEmpty}" Classes="card" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="34"><StackPanel Spacing="10" HorizontalAlignment="Center"><PathIcon Data="{StaticResource IconNotification}" Width="32" Height="32" Foreground="{DynamicResource AccentBrush}"/><TextBlock Text="这里很安静" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="新的高匹配发现和正式版本更新会出现在这里。" Classes="muted"/></StackPanel></Border>
+    </Grid>
+  </Grid>
+</UserControl>
+

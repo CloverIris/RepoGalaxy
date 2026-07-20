@@ -3,225 +3,63 @@
         xmlns:vm="using:RepoGalaxy.Desktop.ViewModels.Dialogs"
         x:Class="RepoGalaxy.Desktop.Views.Dialogs.LoginDialog"
         x:DataType="vm:LoginDialogViewModel"
-        Title="登录 GitHub"
-        Width="420"
-        Height="520"
+        Title="连接 GitHub"
+        Width="520" Height="620"
+        MinWidth="460" MinHeight="560"
         CanResize="False"
-        WindowStartupLocation="CenterOwner"
-        SystemDecorations="BorderOnly"
-        Background="Transparent">
+        WindowStartupLocation="CenterOwner">
+  <Grid Background="{DynamicResource CanvasBrush}">
+    <Border Background="{DynamicResource SurfaceBrush}" Margin="18" CornerRadius="16" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="30">
+      <Grid RowDefinitions="Auto,*,Auto">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+          <Border Width="46" Height="46" CornerRadius="13" Background="{DynamicResource AccentBrush}"><TextBlock Text="G" Foreground="White" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+          <StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="连接 GitHub" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="登录后获得完整发现 Feed 与持续同步。" Classes="muted"/></StackPanel>
+        </Grid>
 
-  <!-- Fluent Design 2 风格 -->
-  <Border Background="#202020"
-          BorderBrush="#333333"
-          BorderThickness="1"
-          CornerRadius="8"
-          BoxShadow="0 8 32 0 #00000060"
-          Margin="10">
-    
-    <Grid RowDefinitions="Auto,*,Auto">
-      
-      <!-- 标题栏 -->
-      <Grid Grid.Row="0" Height="48" Background="#2D2D2D">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto"/>
-          <ColumnDefinition Width="*"/>
-          <ColumnDefinition Width="Auto"/>
-        </Grid.ColumnDefinitions>
-        
-        <TextBlock Grid.Column="0" Text="🔐" FontSize="16" 
-                   VerticalAlignment="Center" Margin="16,0,0,0"/>
-        <TextBlock Grid.Column="1" Text="登录 GitHub" 
-                   FontSize="14" FontWeight="SemiBold"
-                   VerticalAlignment="Center" Margin="12,0,0,0"/>
-        
-        <Button Grid.Column="2" Command="{Binding CancelCommand}"
-                Width="46" Height="32"
-                Background="Transparent"
-                BorderThickness="0"
-                Content="✕" FontSize="12">
-          <Button.Styles>
-            <Style Selector="Button:pointerover">
-              <Setter Property="Background" Value="#E81123"/>
-              <Setter Property="Foreground" Value="White"/>
-            </Style>
-          </Button.Styles>
-        </Button>
-      </Grid>
-
-      <!-- 内容区 -->
-      <ScrollViewer Grid.Row="1" Margin="24,20">
-        <StackPanel Spacing="16">
-          
-          <!-- ===== 初始状态：选择登录方式 ===== -->
-          <StackPanel IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Idle}">
-            
-            <TextBlock Text="连接到 GitHub" 
-                       FontSize="20" FontWeight="SemiBold"
-                       Margin="0,0,0,8"/>
-            <TextBlock Text="选择一种方式登录您的账户" 
-                       Opacity="0.6" FontSize="13"
-                       Margin="0,0,0,24"/>
-            
-            <!-- Device Flow（推荐） -->
-            <Button Command="{Binding StartDeviceLoginCommand}"
-                    HorizontalAlignment="Stretch" Height="64"
-                    Background="#238636" BorderThickness="0"
-                    CornerRadius="6" Padding="16,0"
-                    Margin="0,0,0,12">
-              <Grid ColumnDefinitions="Auto,*,Auto">
-                <Border Grid.Column="0" Width="36" Height="36"
-                        Background="#ffffff20" CornerRadius="6">
-                  <TextBlock Text="📱" FontSize="18" 
-                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
-                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-                  <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="设备码登录" FontSize="14" 
-                               FontWeight="SemiBold" Foreground="White"/>
-                    <Border Background="#ffffff30" CornerRadius="4" Padding="4,2">
-                      <TextBlock Text="推荐" FontSize="10" 
-                                 Foreground="White" FontWeight="Bold"/>
-                    </Border>
-                  </StackPanel>
-                  <TextBlock Text="最安全便捷，无需配置" FontSize="12" 
-                             Opacity="0.8" Foreground="White"/>
-                </StackPanel>
-                <TextBlock Grid.Column="2" Text="›" FontSize="20" 
-                           Opacity="0.6" Foreground="White"/>
-              </Grid>
+        <Grid Grid.Row="1" Margin="0,28,0,18">
+          <StackPanel IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Idle}" Spacing="13">
+            <Button Command="{Binding StartDeviceLoginCommand}" HorizontalAlignment="Stretch" Padding="18" Classes="primary">
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14"><Border Width="38" Height="38" CornerRadius="10" Background="#28FFFFFF"><TextBlock Text="01" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="使用设备码登录" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="推荐方式 · 在浏览器确认，无需在应用内输入密码" Foreground="#E8F2FF" FontSize="12"/></StackPanel></Grid>
             </Button>
-
-            <!-- Personal Access Token -->
-            <Expander Header="使用 Personal Access Token" CornerRadius="6">
-              <Expander.Styles>
-                <Style Selector="Expander">
-                  <Setter Property="Background" Value="#252525"/>
-                  <Setter Property="BorderBrush" Value="#333333"/>
-                  <Setter Property="BorderThickness" Value="1"/>
-                </Style>
-              </Expander.Styles>
-              <StackPanel Spacing="12" Margin="0,12,0,4">
-                <TextBox Text="{Binding PatToken}" 
-                         Watermark="ghp_xxxxxxxxxxxxxxxxxxxx"
-                         PasswordChar="●" Height="40"/>
-                <Button Content="验证并登录" 
-                        Command="{Binding LoginWithPatCommand}"
-                        HorizontalAlignment="Stretch" Height="36"
-                        Background="#2B2B2B"/>
-              </StackPanel>
+            <Button Command="{Binding StartBrowserLoginCommand}" IsVisible="{Binding CanUseBrowserLogin}" HorizontalAlignment="Stretch" Padding="18" Classes="subtle">
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14"><Border Width="38" Height="38" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}"><PathIcon Data="{StaticResource IconExternal}" Width="18" Height="18" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="浏览器本地回环" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="仅在本机安全配置 OAuth Secret 后可用" Classes="meta"/></StackPanel></Grid>
+            </Button>
+            <Expander Header="使用 Personal Access Token" Margin="0,4,0,0">
+              <StackPanel Margin="0,12,0,0" Spacing="9"><TextBox Text="{Binding PatToken}" PlaceholderText="github_pat_…" PasswordChar="●"/><Button Content="验证并登录" Command="{Binding LoginWithPatCommand}" Classes="subtle" HorizontalAlignment="Right"/></StackPanel>
             </Expander>
-
-            <!-- 说明 -->
-            <Border Background="#1a2f1a" BorderBrush="#238636" 
-                    BorderThickness="1" CornerRadius="6" Padding="12">
-              <StackPanel Spacing="4">
-                <TextBlock Text="💡 为什么推荐设备码登录？" 
-                           FontSize="12" FontWeight="SemiBold" Foreground="#3fb950"/>
-                <TextBlock Text="开箱即用，无需配置任何密钥，所有用户都能安全使用。" 
-                           FontSize="11" Opacity="0.8"/>
-              </StackPanel>
-            </Border>
+            <Border Classes="soft-card" Margin="0,8,0,0"><TextBlock Text="凭证仅使用当前 Windows 用户的 DPAPI 加密保存，RepoGalaxy 不会记录或显示 Token。" Classes="meta" TextWrapping="Wrap" LineHeight="19"/></Border>
           </StackPanel>
 
-          <!-- ===== Device Code 显示状态 ===== -->
-          <StackPanel IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=DeviceCode}"
-                      Spacing="16">
-            
-            <TextBlock Text="👇 复制下方代码" 
-                       FontSize="18" FontWeight="SemiBold"
-                       HorizontalAlignment="Center"/>
-            <TextBlock Text="粘贴到浏览器中完成授权" 
-                       FontSize="13" Opacity="0.6"
-                       HorizontalAlignment="Center"/>
-            
-            <!-- 设备码 -->
-            <Border Background="#0D1117" BorderBrush="#58A6FF"
-                    BorderThickness="2" CornerRadius="8"
-                    Padding="28,20" Margin="0,8">
-              <TextBlock Text="{Binding UserCodeDisplay}" 
-                         FontSize="40" FontWeight="Bold"
-                         FontFamily="Consolas,Monospace"
-                         Foreground="#58A6FF"
-                         LetterSpacing="4"
-                         HorizontalAlignment="Center"/>
-            </Border>
-
-            <!-- 操作按钮 -->
-            <Button Command="{Binding CopyAndOpenBrowserCommand}"
-                    HorizontalAlignment="Stretch" Height="48"
-                    Background="#238636" BorderThickness="0"
-                    CornerRadius="6">
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="📋" FontSize="18"/>
-                <TextBlock Text="复制代码并打开浏览器" 
-                           FontSize="14" FontWeight="SemiBold" Foreground="White"/>
-              </StackPanel>
-            </Button>
-
-            <!-- 进度 -->
-            <ProgressBar Value="{Binding ProgressPercent}" Maximum="100"
-                         Height="3" Margin="0,8"/>
-            <TextBlock Text="{Binding StatusText}" 
-                       FontSize="12" Opacity="0.5"
-                       HorizontalAlignment="Center"/>
+          <StackPanel IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=DeviceCode}" Spacing="18" VerticalAlignment="Center">
+            <TextBlock Text="在浏览器中确认授权" FontSize="21" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+            <TextBlock Text="复制下面的设备码，然后前往 GitHub 授权页面。" Classes="muted" HorizontalAlignment="Center"/>
+            <Border Classes="soft-card" Padding="22"><TextBlock Text="{Binding UserCodeDisplay}" FontSize="36" FontWeight="Bold" LetterSpacing="3" Foreground="{DynamicResource AccentTextBrush}" HorizontalAlignment="Center"/></Border>
+            <Button Content="打开 GitHub 授权页面" Command="{Binding OpenVerificationPageCommand}" Classes="primary" HorizontalAlignment="Stretch"/>
+            <TextBlock Text="{Binding StatusText}" Classes="meta" HorizontalAlignment="Center" TextWrapping="Wrap"/>
           </StackPanel>
 
-          <!-- ===== 轮询中状态 ===== -->
-          <StackPanel IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Polling}"
-                      VerticalAlignment="Center" Spacing="16">
-            <Border Width="48" Height="48" Background="#23863620" CornerRadius="24">
-              <TextBlock Text="⏳" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <TextBlock Text="{Binding StatusText}" FontSize="14" Opacity="0.8"
-                       HorizontalAlignment="Center"/>
-            <ProgressBar IsIndeterminate="True" Width="120" Height="3"/>
+          <StackPanel IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Polling}" Spacing="18" VerticalAlignment="Center">
+            <Border Width="58" Height="58" CornerRadius="29" Background="{DynamicResource AccentSoftBrush}"><ProgressBar IsIndeterminate="True" Width="34" Height="4" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            <TextBlock Text="正在等待 GitHub" FontSize="21" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+            <TextBlock Text="{Binding StatusText}" Classes="muted" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="360"/>
           </StackPanel>
 
-          <!-- ===== 成功状态 ===== -->
-          <StackPanel IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Success}"
-                      VerticalAlignment="Center" Spacing="16">
-            <Border Width="56" Height="56" Background="#23863630" CornerRadius="28">
-              <TextBlock Text="✓" FontSize="28" Foreground="#3fb950"
-                         FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <TextBlock Text="登录成功" FontSize="18" FontWeight="SemiBold"
-                       Foreground="#3fb950" HorizontalAlignment="Center"/>
-            <TextBlock Text="正在同步您的数据..." FontSize="13" Opacity="0.5"
-                       HorizontalAlignment="Center"/>
+          <StackPanel IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Success}" Spacing="14" VerticalAlignment="Center">
+            <Border Width="62" Height="62" CornerRadius="31" Background="{DynamicResource SuccessSoftBrush}"><TextBlock Text="✓" FontSize="28" Foreground="{DynamicResource SuccessBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            <TextBlock Text="登录成功" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+            <TextBlock Text="凭证已安全保存，正在返回 RepoGalaxy。" Classes="muted" HorizontalAlignment="Center"/>
           </StackPanel>
 
-          <!-- ===== 错误状态 ===== -->
-          <StackPanel IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Error}"
-                      Spacing="16">
-            <Border Width="48" Height="48" Background="#f8514920" CornerRadius="24">
-              <TextBlock Text="⚠️" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <TextBlock Text="登录失败" FontSize="16" FontWeight="SemiBold"
-                       Foreground="#f85149" HorizontalAlignment="Center"/>
-            <TextBlock Text="{Binding ErrorText}" TextWrapping="Wrap"
-                       FontSize="13" Opacity="0.9" HorizontalAlignment="Center"/>
-            <Button Content="重试" Command="{Binding RetryCommand}"
-                    HorizontalAlignment="Center" Width="80" Height="32"
-                    Background="#f8514940" BorderBrush="#f85149"/>
+          <StackPanel IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Error}" Spacing="14" VerticalAlignment="Center">
+            <Border Width="62" Height="62" CornerRadius="31" Background="{DynamicResource DangerSoftBrush}"><TextBlock Text="!" FontSize="28" Foreground="{DynamicResource DangerBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            <TextBlock Text="登录没有完成" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+            <TextBlock Text="{Binding ErrorText}" Classes="muted" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" MaxWidth="360"/>
+            <Button Content="重新尝试" Command="{Binding RetryCommand}" Classes="primary" HorizontalAlignment="Center"/>
           </StackPanel>
+        </Grid>
 
-        </StackPanel>
-      </ScrollViewer>
-
-      <!-- 底部按钮 -->
-      <Border Grid.Row="2" Background="#252525" 
-              BorderBrush="#333333" BorderThickness="0,1,0,0"
-              Padding="20,16" CornerRadius="0,0,8,8">
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-          <Button Content="取消" Command="{Binding CancelCommand}"
-                  IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Idle}"
-                  Width="80" Height="32" Background="Transparent"/>
-          <Button Content="关闭" Command="{Binding CancelCommand}"
-                  IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Success}"
-                  Width="80" Height="32" Background="#238636" Foreground="White"/>
-        </StackPanel>
-      </Border>
-    </Grid>
-  </Border>
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto"><TextBlock Text="不会新增 GitHub OAuth 权限" Classes="meta" VerticalAlignment="Center"/><Button Grid.Column="1" Content="取消" Classes="ghost" Command="{Binding CancelCommand}"/></Grid>
+      </Grid>
+    </Border>
+  </Grid>
 </Window>

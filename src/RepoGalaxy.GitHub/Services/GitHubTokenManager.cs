@@ -1,4 +1,5 @@
 using RepoGalaxy.Core.Interfaces;
+using System.Text.Json;
 
 namespace RepoGalaxy.GitHub.Services;
 
@@ -12,6 +13,7 @@ public class GitHubTokenManager
     private const string TokenKey = "github_access_token";
     private const string TokenExpiryKey = "github_token_expires_at";
     private const string RefreshTokenKey = "github_refresh_token";
+    private const string SessionMetadataKey = "github_session_metadata";
     
     public GitHubTokenManager(ISecureStorage secureStorage)
     {
@@ -99,10 +101,13 @@ public class GitHubTokenManager
     {
         try
         {
-            await _secureStorage.SetAsync(TokenKey, "");
-            await _secureStorage.SetAsync(TokenExpiryKey, "");
-            await _secureStorage.SetAsync(RefreshTokenKey, "");
-            return true;
+            // Clearing to an encrypted empty value keeps compatibility with secure
+            // stores that do not support deletion; no credential material remains.
+            var tokenCleared = await _secureStorage.SetAsync(TokenKey, "");
+            var expiryCleared = await _secureStorage.SetAsync(TokenExpiryKey, "");
+            var refreshCleared = await _secureStorage.SetAsync(RefreshTokenKey, "");
+            await _secureStorage.RemoveAsync(SessionMetadataKey);
+            return tokenCleared && expiryCleared && refreshCleared;
         }
         catch
         {
@@ -179,6 +184,30 @@ public class GitHubTokenManager
             CanRefresh = !string.IsNullOrEmpty(refreshToken)
         };
     }
+
+    public Task<bool> SaveSessionMetadataAsync(string authenticationMethod, string accountLogin, string scope) =>
+        _secureStorage.SetAsync(SessionMetadataKey, JsonSerializer.Serialize(new TokenSessionMetadata
+        {
+            AuthenticationMethod = authenticationMethod,
+            AccountLogin = accountLogin,
+            Scope = scope,
+            VerifiedAt = DateTimeOffset.UtcNow
+        }));
+
+    public async Task<TokenSessionMetadata?> GetSessionMetadataAsync()
+    {
+        var json = await _secureStorage.GetAsync(SessionMetadataKey);
+        try { return string.IsNullOrWhiteSpace(json) ? null : JsonSerializer.Deserialize<TokenSessionMetadata>(json); }
+        catch { return null; }
+    }
+}
+
+public sealed class TokenSessionMetadata
+{
+    public string AuthenticationMethod { get; init; } = string.Empty;
+    public string AccountLogin { get; init; } = string.Empty;
+    public string Scope { get; init; } = string.Empty;
+    public DateTimeOffset VerifiedAt { get; init; }
 }
 
 /// <summary>

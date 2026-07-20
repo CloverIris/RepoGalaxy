@@ -33,6 +33,7 @@ public static class GitHubServiceExtensions
             var options = sp.GetRequiredService<GitHubOptions>();
             return new RateLimiter(options.RateLimitPerSecond);
         });
+        services.AddSingleton<GitHubRequestBudget>();
         
         // 注册 Token 管理器
         services.AddSingleton<GitHubTokenManager>();
@@ -49,8 +50,7 @@ public static class GitHubServiceExtensions
         services.AddSingleton<OAuthCodeFlowService>(sp =>
         {
             var options = sp.GetRequiredService<GitHubOptions>();
-            var logger = sp.GetService<ILogger<OAuthCodeFlowService>>();
-            return new OAuthCodeFlowService(options, logger);
+            return new OAuthCodeFlowService(options);
         });
         
         // 注册 API 客户端

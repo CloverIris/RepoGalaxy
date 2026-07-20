@@ -16,15 +16,10 @@ public class RepoGalaxyDbContext : DbContext
     public DbSet<LocalRepositoryEntity> LocalRepositories => Set<LocalRepositoryEntity>();
     public DbSet<UserPreferenceEntity> UserPreferences => Set<UserPreferenceEntity>();
 
-    private readonly string? _dbPath;
-    public RepoGalaxyDbContext() => _dbPath = GetDefaultDatabasePath();
-    public RepoGalaxyDbContext(string dbPath) => _dbPath = dbPath;
+    // A single options constructor is required for IDbContextFactory. Keeping a
+    // path-based constructor makes dependency injection unable to select an
+    // activator while the desktop app is starting.
     public RepoGalaxyDbContext(DbContextOptions<RepoGalaxyDbContext> options) : base(options) { }
-
-    protected override void OnConfiguring(DbContextOptionsBuilder options)
-    {
-        if (!options.IsConfigured) options.UseSqlite($"Data Source={_dbPath}");
-    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,10 +36,4 @@ public class RepoGalaxyDbContext : DbContext
         modelBuilder.Entity<UserPreferenceEntity>().HasIndex(p => p.UserId).IsUnique();
     }
 
-    private static string GetDefaultDatabasePath()
-    {
-        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RepoGalaxy");
-        Directory.CreateDirectory(folder);
-        return Path.Combine(folder, "repogalaxy-v2.db");
-    }
 }

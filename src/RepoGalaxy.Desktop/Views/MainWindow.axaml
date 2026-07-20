@@ -3,26 +3,159 @@
         xmlns:vm="using:RepoGalaxy.Desktop.ViewModels"
         x:Class="RepoGalaxy.Desktop.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="RepoGalaxy" Width="1360" Height="860" MinWidth="980" MinHeight="640">
-  <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,*">
-    <Border Grid.RowSpan="2" Padding="12" BorderBrush="{DynamicResource SystemControlForegroundBaseMediumBrush}" BorderThickness="0,0,1,0">
-      <Grid RowDefinitions="Auto,*,Auto">
-        <StackPanel Spacing="4" Margin="8,8,8,20"><TextBlock Text="RepoGalaxy" FontSize="22" FontWeight="SemiBold"/><TextBlock Text="GitHub discovery and subscriptions" Opacity="0.65" FontSize="12"/></StackPanel>
-        <StackPanel Grid.Row="1" Spacing="4">
-          <Button Content="Discover" Command="{Binding NavigateCommand}" CommandParameter="Discover" HorizontalContentAlignment="Left"/>
-          <Button Content="Subscriptions" Command="{Binding NavigateCommand}" CommandParameter="Subscriptions" HorizontalContentAlignment="Left"/>
-          <Button Content="Library" Command="{Binding NavigateCommand}" CommandParameter="Library" HorizontalContentAlignment="Left"/>
-          <Button Content="Notifications" Command="{Binding NavigateCommand}" CommandParameter="Notifications" HorizontalContentAlignment="Left"/>
-          <Separator Margin="0,8"/>
-          <Button Content="My repositories" Command="{Binding NavigateCommand}" CommandParameter="MyRepos" HorizontalContentAlignment="Left"/>
-          <Button Content="Local repositories" Command="{Binding NavigateCommand}" CommandParameter="LocalRepos" HorizontalContentAlignment="Left"/>
+        Title=""
+        Width="1440" Height="900"
+        MinWidth="900" MinHeight="640"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="52">
+  <Window.Styles>
+    <Style Selector="Button.nav">
+      <Setter Property="Height" Value="42"/>
+      <Setter Property="Margin" Value="8,2"/>
+      <Setter Property="Padding" Value="14,0"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+    </Style>
+    <Style Selector="Button.nav:pointerover">
+      <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+    </Style>
+    <Style Selector="Button.nav.selected">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}"/>
+    </Style>
+    <Style Selector="Button.nav PathIcon">
+      <Setter Property="Width" Value="19"/>
+      <Setter Property="Height" Value="19"/>
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="52,*" Background="{DynamicResource CanvasBrush}">
+    <Border Grid.Row="0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="216,*,Auto" Margin="0,0,142,0">
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="14,0,8,0">
+          <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource AccentBrush}" VerticalAlignment="Center">
+            <TextBlock Text="R" Foreground="White" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <TextBlock Grid.Column="1" Text="RepoGalaxy" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0,0,0"/>
+          <Button Grid.Column="2" Classes="icon" Command="{Binding ToggleNavigationCommand}" ToolTip.Tip="展开或收起导航">
+            <PathIcon Data="{StaticResource IconChevronLeft}" Width="17" Height="17"/>
+          </Button>
+        </Grid>
+
+        <Grid Grid.Column="1" MaxWidth="650" HorizontalAlignment="Center" VerticalAlignment="Center" Width="560">
+          <TextBox Classes="search" Text="{Binding SearchText}" PlaceholderText="{Binding SearchPlaceholder}" IsEnabled="{Binding CanSearch}" Padding="38,8,12,8"/>
+          <PathIcon Data="{StaticResource IconSearch}" Width="17" Height="17" Margin="13,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" Foreground="{DynamicResource SecondaryTextBrush}" IsHitTestVisible="False"/>
+        </Grid>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="16,0,0,0">
+          <Border Classes="badge" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Ellipse Width="6" Height="6" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center"/>
+              <TextBlock Text="{Binding ConnectionStatus}"/>
+            </StackPanel>
+          </Border>
+          <Button Classes="icon" Command="{Binding SyncCommand}" ToolTip.Tip="同步">
+            <PathIcon Data="{StaticResource IconRefresh}" Width="18" Height="18"/>
+          </Button>
+          <Button Classes="subtle" Command="{Binding LoginCommand}" IsVisible="{Binding !IsAuthenticated}">
+            <StackPanel Orientation="Horizontal" Spacing="7"><TextBlock Text="G" FontWeight="Bold"/><TextBlock Text="登录 GitHub"/></StackPanel>
+          </Button>
+          <Border IsVisible="{Binding IsAuthenticated}" Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="18" Padding="4,3,9,3">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AccentSoftBrush}">
+                <TextBlock Text="{Binding AccountInitial}" Foreground="{DynamicResource AccentTextBrush}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+              <TextBlock Text="{Binding CurrentUserLogin}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              <Button Classes="ghost" Content="退出" Command="{Binding LogoutCommand}" Padding="6,2" MinHeight="28"/>
+            </StackPanel>
+          </Border>
         </StackPanel>
-        <Button Grid.Row="2" Content="Settings" Command="{Binding NavigateCommand}" CommandParameter="Settings" HorizontalContentAlignment="Left"/>
       </Grid>
     </Border>
-    <Border Grid.Column="1" Padding="16,10" BorderBrush="{DynamicResource SystemControlForegroundBaseMediumBrush}" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12"><TextBlock Text="{Binding CurrentViewName}" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/><StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10"><Button Content="Sync" Command="{Binding SyncCommand}"/><Button Content="Sign in to GitHub" Command="{Binding LoginCommand}" IsVisible="{Binding !IsAuthenticated}"/><TextBlock Text="{Binding CurrentUserLogin}" IsVisible="{Binding IsAuthenticated}" VerticalAlignment="Center"/><Button Content="Sign out" Command="{Binding LogoutCommand}" IsVisible="{Binding IsAuthenticated}"/></StackPanel></Grid>
-    </Border>
-    <Grid Grid.Row="1" Grid.Column="1"><ContentControl Content="{Binding CurrentView}"/><TextBlock Text="{Binding SyncStatus}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" Opacity="0.6" FontSize="12"/></Grid>
+
+    <SplitView x:Name="NavigationSplit"
+               Grid.Row="1"
+               DisplayMode="CompactInline"
+               IsPaneOpen="{Binding IsNavigationOpen}"
+               OpenPaneLength="216"
+               CompactPaneLength="68"
+               PaneBackground="{DynamicResource SurfaceBrush}">
+      <SplitView.Pane>
+        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+          <Grid RowDefinitions="Auto,*,Auto" Margin="0,14,0,12">
+            <TextBlock Text="工作台" Classes="meta" Margin="22,5,0,9"/>
+            <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+              <StackPanel>
+                <ItemsControl ItemsSource="{Binding PrimaryNavigation}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:NavigationItemViewModel">
+                      <Button Classes="nav" Classes.selected="{Binding IsSelected}"
+                              Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).NavigateCommand}"
+                              CommandParameter="{Binding}" ToolTip.Tip="{Binding Title}">
+                        <Grid ColumnDefinitions="28,*,Auto">
+                          <PathIcon Data="{Binding Icon}" VerticalAlignment="Center"/>
+                          <TextBlock Grid.Column="1" Text="{Binding Title}" Margin="10,0,0,0" VerticalAlignment="Center" FontWeight="Medium"/>
+                          <Border Grid.Column="2" Classes="badge" IsVisible="{Binding BadgeCount}"><TextBlock Text="{Binding BadgeCount}"/></Border>
+                        </Grid>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Separator Margin="16,14,16,12"/>
+                <TextBlock Text="仓库" Classes="meta" Margin="22,0,0,7"/>
+                <ItemsControl ItemsSource="{Binding WorkspaceNavigation}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:NavigationItemViewModel">
+                      <Button Classes="nav" Classes.selected="{Binding IsSelected}"
+                              Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).NavigateCommand}"
+                              CommandParameter="{Binding}" ToolTip.Tip="{Binding Title}">
+                        <Grid ColumnDefinitions="28,*">
+                          <PathIcon Data="{Binding Icon}" VerticalAlignment="Center"/>
+                          <TextBlock Grid.Column="1" Text="{Binding Title}" Margin="10,0,0,0" VerticalAlignment="Center" FontWeight="Medium"/>
+                        </Grid>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </ScrollViewer>
+
+            <Button Grid.Row="2" Classes="nav" Classes.selected="{Binding SettingsNavigation.IsSelected}"
+                    Command="{Binding NavigateCommand}" CommandParameter="{Binding SettingsNavigation}" ToolTip.Tip="设置">
+              <Grid ColumnDefinitions="28,*">
+                <PathIcon Data="{Binding SettingsNavigation.Icon}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="设置" Margin="10,0,0,0" VerticalAlignment="Center" FontWeight="Medium"/>
+              </Grid>
+            </Button>
+          </Grid>
+        </Border>
+      </SplitView.Pane>
+
+      <SplitView x:Name="DetailsSplit"
+                 PanePlacement="Right"
+                 DisplayMode="Inline"
+                 IsPaneOpen="{Binding Details.IsOpen}"
+                 OpenPaneLength="380"
+                 CompactPaneLength="0">
+        <SplitView.Pane>
+          <ContentControl Content="{Binding Details}" Width="380"/>
+        </SplitView.Pane>
+        <Grid RowDefinitions="Auto,*">
+          <Border Padding="28,13" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Background="{DynamicResource CanvasBrush}">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBlock Text="{Binding CurrentViewName}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding SyncStatus}" Classes="meta" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="460"/>
+              </StackPanel>
+            </Grid>
+          </Border>
+          <ContentControl Grid.Row="1" Content="{Binding CurrentView}"/>
+        </Grid>
+      </SplitView>
+    </SplitView>
   </Grid>
 </Window>

@@ -1,5 +1,6 @@
 using Avalonia;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using RepoGalaxy.Core.Interfaces;
 using RepoGalaxy.Data.DbContexts;
@@ -76,8 +77,9 @@ class Program
         {
             var dbPath = GetDatabasePath();
             Log.Information("数据库路径: {DbPath}", dbPath);
-            return new RepoGalaxyDbContext(dbPath);
+            return sp.GetRequiredService<IDbContextFactory<RepoGalaxyDbContext>>().CreateDbContext();
         });
+        services.AddDbContextFactory<RepoGalaxyDbContext>(options => options.UseSqlite($"Data Source={GetDatabasePath()}"));
 
         // 安全存储
         services.AddSingleton<ISecureStorage, SecureStorage>();
@@ -132,7 +134,8 @@ class Program
             }
             
             // Device Flow 不需要 Client Secret
-            options.ClientSecret = null;
+            options.ClientSecret = Environment.GetEnvironmentVariable("REP0GALAXY_GITHUB_CLIENT_SECRET")
+                ?? Environment.GetEnvironmentVariable("REPOGALAXY_GITHUB_CLIENT_SECRET");
             options.Scope = "repo read:user";
             options.TimeoutSeconds = 30;
             options.RateLimitPerSecond = 10;
@@ -155,9 +158,12 @@ class Program
         services.AddScoped<RepositorySyncService>();
         services.AddSingleton<INotificationService>(_ => new ToastNotificationService(null));
         services.AddSingleton<IDesktopNotificationService, DesktopNotificationService>();
+        services.AddSingleton<IAuthenticationAuditService, AuthenticationAuditService>();
+        services.AddSingleton<IExternalLinkService, ExternalLinkService>();
 
         // ViewModels
         services.AddSingleton<MainWindowViewModel>();
+        services.AddSingleton<RepositoryDetailsViewModel>();
         services.AddSingleton<DiscoverViewModel>();
         services.AddSingleton<SubscriptionsViewModel>();
         services.AddSingleton<LibraryViewModel>();

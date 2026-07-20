@@ -464,10 +464,10 @@ public class RecommendationEngine : IRecommendationEngine
     {
         var distribution = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         
-        var histories = await _dbContext.ViewHistories
+        var histories = (await _dbContext.ViewHistories.AsNoTracking().ToListAsync())
             .OrderByDescending(v => v.ViewedAt)
             .Take(100)
-            .ToListAsync();
+            .ToList();
         
         foreach (var history in histories)
         {
@@ -506,10 +506,10 @@ public class RecommendationEngine : IRecommendationEngine
     {
         var distribution = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         
-        var histories = await _dbContext.ViewHistories
+        var histories = (await _dbContext.ViewHistories.AsNoTracking().ToListAsync())
             .OrderByDescending(v => v.ViewedAt)
             .Take(100)
-            .ToListAsync();
+            .ToList();
         
         foreach (var history in histories)
         {

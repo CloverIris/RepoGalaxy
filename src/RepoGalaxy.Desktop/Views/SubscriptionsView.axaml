@@ -1,1 +1,45 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="RepoGalaxy.Desktop.Views.SubscriptionsView" x:CompileBindings="False"><Grid Margin="24" RowDefinitions="Auto,*"><Border Padding="16"><Grid ColumnDefinitions="160,*,*,*,Auto" ColumnSpacing="10"><TextBox Text="{Binding Name}" PlaceholderText="Subscription name"/><TextBox Grid.Column="1" Text="{Binding Topics}" PlaceholderText="Topics, comma separated"/><TextBox Grid.Column="2" Text="{Binding Languages}" PlaceholderText="Languages, comma separated"/><TextBox Grid.Column="3" Text="{Binding Keywords}" PlaceholderText="Keywords, comma separated"/><Button Grid.Column="4" Content="Add subscription" Command="{Binding AddCommand}"/></Grid></Border><ListBox Grid.Row="1" ItemsSource="{Binding Items}" Margin="0,16,0,0"><ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto" Margin="12"><StackPanel><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Text="{Binding Topics}" Opacity="0.65"/></StackPanel><Button Grid.Column="1" Content="Delete" Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Id}"/></Grid></DataTemplate></ListBox.ItemTemplate></ListBox></Grid></UserControl>
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="RepoGalaxy.Desktop.Views.SubscriptionsView" x:CompileBindings="False">
+  <Grid Margin="28,22,28,26" RowDefinitions="Auto,Auto,*">
+    <StackPanel Spacing="5"><TextBlock Text="订阅规则" Classes="h1"/><TextBlock Text="用主题、语言和关键词建立持续更新的项目发现入口。" Classes="muted"/></StackPanel>
+    <Border Grid.Row="1" Classes="card" Margin="0,22,0,16">
+      <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="新建订阅" Classes="h2"/><TextBlock Grid.Column="1" Text="至少填写一项匹配规则" Classes="meta" VerticalAlignment="Center"/></Grid>
+        <Grid Grid.Row="1" ColumnDefinitions="1.1*,*,*,*" ColumnSpacing="10">
+          <TextBox Text="{Binding Name}" PlaceholderText="订阅名称，例如：现代 .NET 工具"/>
+          <TextBox Grid.Column="1" Text="{Binding Topics}" PlaceholderText="主题，逗号分隔"/>
+          <TextBox Grid.Column="2" Text="{Binding Languages}" PlaceholderText="语言，逗号分隔"/>
+          <TextBox Grid.Column="3" Text="{Binding Keywords}" PlaceholderText="关键词，逗号分隔"/>
+        </Grid>
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+          <TextBlock Text="{Binding ValidationMessage}" Foreground="{DynamicResource DangerBrush}" Classes="meta" VerticalAlignment="Center"/>
+          <Button Grid.Column="1" Classes="primary" Content="添加订阅" Command="{Binding AddCommand}"/>
+        </Grid>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="2">
+      <ProgressBar Height="3" IsIndeterminate="True" IsVisible="{Binding IsLoading}" VerticalAlignment="Top"/>
+      <ListBox Classes="clean" ItemsSource="{Binding Items}">
+        <ListBox.ItemTemplate><DataTemplate>
+          <Border Classes="card" Margin="0,0,0,9" Padding="18,15">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+              <Border Width="42" Height="42" CornerRadius="11" Background="{DynamicResource AccentSoftBrush}"><PathIcon Data="{StaticResource IconSubscription}" Width="20" Height="20" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+              <StackPanel Grid.Column="1" Spacing="6">
+                <StackPanel Orientation="Horizontal" Spacing="9"><TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold"/><Border Classes="badge"><TextBlock Text="{Binding StateText}"/></Border></StackPanel>
+                <TextBlock Text="{Binding RulesText}" Classes="muted" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding LastSyncText}" Classes="meta"/>
+              </StackPanel>
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Button Classes="subtle" Content="{Binding StateText}" Command="{Binding DataContext.ToggleCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                <Button Classes="danger" Content="删除" Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Id}"/>
+              </StackPanel>
+            </Grid>
+          </Border>
+        </DataTemplate></ListBox.ItemTemplate>
+      </ListBox>
+      <Border IsVisible="{Binding IsEmpty}" Classes="card" MaxWidth="600" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="34">
+        <StackPanel Spacing="10" HorizontalAlignment="Center"><PathIcon Data="{StaticResource IconSubscription}" Width="32" Height="32" Foreground="{DynamicResource AccentBrush}"/><TextBlock Text="还没有订阅规则" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="在上方输入主题、语言或关键词，创建第一条长期关注。" Classes="muted" TextAlignment="Center"/></StackPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

@@ -6,94 +6,108 @@ using RepoGalaxy.Data.Entities;
 
 namespace RepoGalaxy.Data.Services;
 
+/// <summary>Discovery persistence. Every operation owns a short-lived DbContext.</summary>
 public sealed class DiscoveryStore
 {
-    private readonly RepoGalaxyDbContext _db;
-    public DiscoveryStore(RepoGalaxyDbContext db) => _db = db;
+    private readonly IDbContextFactory<RepoGalaxyDbContext> _factory;
+    public DiscoveryStore(IDbContextFactory<RepoGalaxyDbContext> factory) => _factory = factory;
 
-    public async Task<IReadOnlyList<DiscoverySubscription>> GetSubscriptionsAsync() =>
-        (await _db.DiscoverySubscriptions.OrderBy(s => s.Name).ToListAsync()).Select(Map).ToList();
+    public async Task<IReadOnlyList<DiscoverySubscription>> GetSubscriptionsAsync()
+    {
+        await using var db = await _factory.CreateDbContextAsync();
+        return (await db.DiscoverySubscriptions.AsNoTracking().OrderBy(s => s.Name).ToListAsync()).Select(Map).ToList();
+    }
 
     public async Task SaveSubscriptionAsync(DiscoverySubscription subscription)
     {
-        var entity = subscription.Id == 0 ? new DiscoverySubscriptionEntity() : await _db.DiscoverySubscriptions.FindAsync(subscription.Id) ?? new DiscoverySubscriptionEntity();
-        entity.Name = subscription.Name.Trim();
-        entity.TopicsJson = JsonSerializer.Serialize(subscription.Topics.Distinct(StringComparer.OrdinalIgnoreCase));
-        entity.LanguagesJson = JsonSerializer.Serialize(subscription.Languages.Distinct(StringComparer.OrdinalIgnoreCase));
-        entity.KeywordsJson = JsonSerializer.Serialize(subscription.Keywords.Distinct(StringComparer.OrdinalIgnoreCase));
-        entity.IsEnabled = subscription.IsEnabled;
-        entity.NotificationThreshold = subscription.NotificationThreshold;
-        entity.LastSyncedAt = subscription.LastSyncedAt;
-        if (entity.Id == 0) _db.DiscoverySubscriptions.Add(entity);
-        await _db.SaveChangesAsync();
+        await using var db = await _factory.CreateDbContextAsync();
+        var entity = subscription.Id == 0 ? new DiscoverySubscriptionEntity() : await db.DiscoverySubscriptions.FindAsync(subscription.Id) ?? new DiscoverySubscriptionEntity();
+        entity.Name = subscription.Name.Trim(); entity.TopicsJson = JsonSerializer.Serialize(subscription.Topics.Distinct(StringComparer.OrdinalIgnoreCase)); entity.LanguagesJson = JsonSerializer.Serialize(subscription.Languages.Distinct(StringComparer.OrdinalIgnoreCase)); entity.KeywordsJson = JsonSerializer.Serialize(subscription.Keywords.Distinct(StringComparer.OrdinalIgnoreCase)); entity.IsEnabled = subscription.IsEnabled; entity.NotificationThreshold = subscription.NotificationThreshold; entity.LastSyncedAt = subscription.LastSyncedAt;
+        if (entity.Id == 0) db.DiscoverySubscriptions.Add(entity);
+        await db.SaveChangesAsync();
     }
 
     public async Task DeleteSubscriptionAsync(long id)
     {
-        var item = await _db.DiscoverySubscriptions.FindAsync(id);
-        if (item != null) { _db.DiscoverySubscriptions.Remove(item); await _db.SaveChangesAsync(); }
+        await using var db = await _factory.CreateDbContextAsync();
+        var item = await db.DiscoverySubscriptions.FindAsync(id);
+        if (item != null) { db.DiscoverySubscriptions.Remove(item); await db.SaveChangesAsync(); }
     }
 
     public async Task<IReadOnlyList<FeedItem>> GetFeedAsync(FeedSource source, bool unreadOnly = false)
     {
-        var query = _db.FeedItems.Include(f => f.Repository).Where(f => f.Source == (int)source && !f.IsDismissed);
+        await using var db = await _factory.CreateDbContextAsync();
+        var query = db.FeedItems.AsNoTracking().Include(f => f.Repository).Where(f => f.Source == (int)source && !f.IsDismissed);
         if (unreadOnly) query = query.Where(f => !f.IsRead);
-        return (await query.OrderByDescending(f => f.DiscoveredAt).Take(100).ToListAsync()).Select(Map).ToList();
+        var rows = await query.ToListAsync();
+        return rows.OrderByDescending(f => f.DiscoveredAt).Take(100).Select(Map).ToList();
     }
 
-    public async Task<IReadOnlyList<FeedItem>> GetNotificationsAsync() =>
-        (await _db.FeedItems.Include(f => f.Repository).Where(f => !f.IsDismissed && (!f.IsRead || f.NotificationDelivered)).OrderByDescending(f => f.DiscoveredAt).Take(100).ToListAsync()).Select(Map).ToList();
+    public async Task<IReadOnlyList<FeedItem>> GetNotificationsAsync()
+    {
+        await using var db = await _factory.CreateDbContextAsync();
+        var rows = await db.FeedItems.AsNoTracking().Include(f => f.Repository)
+            .Where(f => !f.IsDismissed && (!f.IsRead || f.NotificationDelivered)).ToListAsync();
+        return rows.OrderByDescending(f => f.DiscoveredAt).Take(100).Select(Map).ToList();
+    }
 
     public async Task<bool> AddFeedItemAsync(Repository repository, FeedSource source, FeedReason reason)
     {
-        var repo = await UpsertRepositoryAsync(repository);
-        var existing = await _db.FeedItems.FirstOrDefaultAsync(f => f.RepositoryId == repo.Id && f.Source == (int)source);
-        if (existing != null) return false;
-        _db.FeedItems.Add(new FeedItemEntity { RepositoryId = repo.Id, Source = (int)source, Reason = reason.Summary, MatchedRule = reason.MatchedRule, Score = reason.Score, DiscoveredAt = DateTimeOffset.UtcNow });
-        await _db.SaveChangesAsync();
-        return true;
+        await using var db = await _factory.CreateDbContextAsync();
+        var repo = await UpsertRepositoryAsync(db, repository);
+        // Persist a newly discovered repository before using its generated key
+        // as the feed foreign key. Assigning only RepositoryId while the entity
+        // still has its temporary zero key causes SQLite FK failures.
+        await db.SaveChangesAsync();
+        if (await db.FeedItems.AnyAsync(f => f.RepositoryId == repo.Id && f.Source == (int)source)) return false;
+        db.FeedItems.Add(new FeedItemEntity { RepositoryId = repo.Id, Source = (int)source, Reason = reason.Summary, MatchedRule = reason.MatchedRule, Score = reason.Score, DiscoveredAt = DateTimeOffset.UtcNow });
+        await db.SaveChangesAsync(); return true;
     }
 
     public async Task MarkReadAsync(long id, bool dismissed = false)
     {
-        var item = await _db.FeedItems.FindAsync(id);
-        if (item != null) { item.IsRead = true; item.IsDismissed = dismissed; await _db.SaveChangesAsync(); }
+        await using var db = await _factory.CreateDbContextAsync();
+        var item = await db.FeedItems.FindAsync(id);
+        if (item != null) { item.IsRead = true; item.IsDismissed = dismissed; await db.SaveChangesAsync(); }
     }
 
     public async Task<IReadOnlyList<Repository>> GetSavedRepositoriesAsync()
     {
-        var rows = await _db.Bookmarks.Include(b => b.Repository).Include(b => b.Tags).OrderByDescending(b => b.BookmarkedAt).ToListAsync();
-        return rows.Select(b => MapRepository(b.Repository)).ToList();
+        await using var db = await _factory.CreateDbContextAsync();
+        var rows = await db.Bookmarks.AsNoTracking().Include(b => b.Repository).ToListAsync();
+        return rows.OrderByDescending(b => b.BookmarkedAt).Select(b => MapRepository(b.Repository)).ToList();
     }
 
     public async Task ToggleSavedAsync(long repositoryId, string collection = "Library", string? note = null, IEnumerable<string>? tags = null)
     {
-        var saved = await _db.Bookmarks.Include(b => b.Tags).FirstOrDefaultAsync(b => b.RepositoryId == repositoryId);
-        if (saved != null) { _db.Bookmarks.Remove(saved); await _db.SaveChangesAsync(); return; }
+        await using var db = await _factory.CreateDbContextAsync();
+        var saved = await db.Bookmarks.Include(b => b.Tags).FirstOrDefaultAsync(b => b.RepositoryId == repositoryId);
+        if (saved != null) { db.Bookmarks.Remove(saved); var old = await db.Repositories.FindAsync(repositoryId); if (old != null) old.IsBookmarked = false; await db.SaveChangesAsync(); return; }
         saved = new BookmarkEntity { RepositoryId = repositoryId, BookmarkedAt = DateTimeOffset.UtcNow, CollectionName = collection, Notes = note };
         foreach (var tag in tags?.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.OrdinalIgnoreCase) ?? []) saved.Tags.Add(new BookmarkTagEntity { Name = tag.Trim() });
-        _db.Bookmarks.Add(saved);
-        var repository = await _db.Repositories.FindAsync(repositoryId);
-        if (repository != null) repository.IsBookmarked = true;
-        await _db.SaveChangesAsync();
+        db.Bookmarks.Add(saved); var repository = await db.Repositories.FindAsync(repositoryId); if (repository != null) repository.IsBookmarked = true; await db.SaveChangesAsync();
     }
 
-    public async Task<IReadOnlyList<Repository>> GetRepositoryCandidatesAsync() => (await _db.Repositories.Where(r => !r.IsIgnored).OrderByDescending(r => r.DiscoveryScore).Take(100).ToListAsync()).Select(MapRepository).ToList();
+    public async Task<IReadOnlyList<Repository>> GetRepositoryCandidatesAsync()
+    {
+        await using var db = await _factory.CreateDbContextAsync();
+        return (await db.Repositories.AsNoTracking().Where(r => !r.IsIgnored).OrderByDescending(r => r.DiscoveryScore).Take(100).ToListAsync()).Select(MapRepository).ToList();
+    }
+    public Task<IReadOnlyList<Repository>> GetSavedForReleaseChecksAsync() => GetSavedRepositoriesAsync();
 
-    public async Task<IReadOnlyList<Repository>> GetSavedForReleaseChecksAsync() => await GetSavedRepositoriesAsync();
     public async Task<bool> TryRecordReleaseAsync(long repositoryId, ReleaseInfo release)
     {
-        if (await _db.ReleaseNotifications.AnyAsync(r => r.RepositoryId == repositoryId && r.ReleaseId == release.Id)) return false;
-        _db.ReleaseNotifications.Add(new ReleaseNotificationEntity { RepositoryId = repositoryId, ReleaseId = release.Id, PublishedAt = release.PublishedAt });
-        await _db.SaveChangesAsync(); return true;
+        await using var db = await _factory.CreateDbContextAsync();
+        if (await db.ReleaseNotifications.AnyAsync(r => r.RepositoryId == repositoryId && r.ReleaseId == release.Id)) return false;
+        db.ReleaseNotifications.Add(new ReleaseNotificationEntity { RepositoryId = repositoryId, ReleaseId = release.Id, PublishedAt = release.PublishedAt }); await db.SaveChangesAsync(); return true;
     }
 
-    private async Task<RepositoryEntity> UpsertRepositoryAsync(Repository model)
+    private static async Task<RepositoryEntity> UpsertRepositoryAsync(RepoGalaxyDbContext db, Repository model)
     {
-        var entity = await _db.Repositories.FirstOrDefaultAsync(r => r.Owner == model.Owner && r.Name == model.Name);
-        if (entity == null) { entity = new RepositoryEntity { Owner = model.Owner, Name = model.Name }; _db.Repositories.Add(entity); }
+        var entity = await db.Repositories.FirstOrDefaultAsync(r => r.Owner == model.Owner && r.Name == model.Name);
+        if (entity == null) { entity = new RepositoryEntity { Owner = model.Owner, Name = model.Name }; db.Repositories.Add(entity); }
         entity.GitHubId = model.GitHubId; entity.Description = model.Description; entity.PrimaryLanguage = model.PrimaryLanguage; entity.HtmlUrl = model.HtmlUrl; entity.Stars = model.Stars; entity.Forks = model.Forks; entity.Watchers = model.Watchers; entity.OpenIssues = model.OpenIssues; entity.CreatedAt = model.CreatedAt; entity.UpdatedAt = model.UpdatedAt; entity.LastPushedAt = model.LastPushedAt; entity.DiscoveryScore = model.DiscoveryScore; entity.TopicsJson = JsonSerializer.Serialize(model.Topics); entity.LanguagesJson = JsonSerializer.Serialize(model.Languages); entity.CachedAt = DateTimeOffset.UtcNow;
-        await _db.SaveChangesAsync(); return entity;
+        return entity;
     }
 
     private static DiscoverySubscription Map(DiscoverySubscriptionEntity x) => new() { Id = x.Id, Name = x.Name, Topics = Read(x.TopicsJson), Languages = Read(x.LanguagesJson), Keywords = Read(x.KeywordsJson), IsEnabled = x.IsEnabled, NotificationThreshold = x.NotificationThreshold, LastSyncedAt = x.LastSyncedAt };

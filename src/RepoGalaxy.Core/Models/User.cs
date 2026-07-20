@@ -65,7 +65,10 @@ public class UserPreference
     
     // UI 偏好
     public bool DarkMode { get; set; } = true;
+    public bool UseSystemTheme { get; set; } = true;
     public int FeedPageSize { get; set; } = 50;
+    public int SyncIntervalMinutes { get; set; } = 30;
+    public double NotificationThreshold { get; set; } = .75;
     
     // 缓存设置
     public int MaxCacheSizeGB { get; set; } = 2;

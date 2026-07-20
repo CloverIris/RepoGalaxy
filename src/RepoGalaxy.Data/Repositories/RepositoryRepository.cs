@@ -61,7 +61,7 @@ public class RepositoryRepository
         var lowerKeyword = keyword.ToLower();
         return await _context.Repositories
             .Where(r => r.Name.ToLower().Contains(lowerKeyword) ||
-                       r.Description.ToLower().Contains(lowerKeyword) ||
+                       (r.Description != null && r.Description.ToLower().Contains(lowerKeyword)) ||
                        r.Owner.ToLower().Contains(lowerKeyword))
             .OrderByDescending(r => r.Stars)
             .ToListAsync();

@@ -1,259 +1,62 @@
 using System.Net;
 using System.Text;
-using System.Text.RegularExpressions;
-using Microsoft.Extensions.Logging;
 
 namespace RepoGalaxy.GitHub.Services;
 
-/// <summary>
-/// 本地 OAuth 回调服务器
-/// 监听浏览器重定向，获取授权码
-/// </summary>
-public class LocalCallbackServer : IDisposable
+public sealed record OAuthCallback(string? Code, string? State, string? Error);
+
+/// <summary>One-shot loopback listener for an OAuth callback registered with GitHub.</summary>
+public sealed class LocalCallbackServer : IDisposable
 {
-    private HttpListener? _listener;
     private readonly int _port;
-    private readonly string _callbackPath;
-    private readonly ILogger<LocalCallbackServer>? _logger;
-    private TaskCompletionSource<string>? _codeTcs;
-    
-    public string CallbackUrl => $"http://localhost:{_port}{_callbackPath}";
-    
-    public LocalCallbackServer(int port = 5000, string callbackPath = "/callback", ILogger<LocalCallbackServer>? logger = null)
+    private readonly string _path;
+    private HttpListener? _listener;
+    public string CallbackUrl => $"http://localhost:{_port}{_path}";
+
+    public LocalCallbackServer(int port = 5000, string callbackPath = "/callback")
     {
         _port = port;
-        _callbackPath = callbackPath;
-        _logger = logger;
+        _path = callbackPath.StartsWith('/') ? callbackPath : "/" + callbackPath;
     }
-    
-    /// <summary>
-    /// 启动服务器并等待授权码
-    /// </summary>
-    public async Task<string?> WaitForCallbackAsync(TimeSpan timeout, CancellationToken ct = default)
+
+    public async Task<OAuthCallback?> WaitForCallbackAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
     {
-        _codeTcs = new TaskCompletionSource<string>();
-        
-        try
-        {
-            Start();
-            _logger?.LogInformation("等待 OAuth 回调: {CallbackUrl}", CallbackUrl);
-            
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(timeout);
-            
-            try
-            {
-                var code = await _codeTcs.Task.WaitAsync(cts.Token);
-                return code;
-            }
-            catch (OperationCanceledException)
-            {
-                _logger?.LogWarning("等待 OAuth 回调超时");
-                return null;
-            }
-        }
-        finally
-        {
-            Stop();
-        }
-    }
-    
-    private void Start()
-    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
         _listener = new HttpListener();
         _listener.Prefixes.Add($"http://localhost:{_port}/");
         _listener.Start();
-        
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                while (_listener.IsListening)
-                {
-                    var context = await _listener.GetContextAsync();
-                    _ = HandleRequestAsync(context);
-                }
-            }
-            catch (ObjectDisposedException)
-            {
-                // 正常关闭
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "回调服务器错误");
-            }
-        });
-    }
-    
-    private void Stop()
-    {
         try
         {
-            _listener?.Stop();
-            _listener?.Close();
-        }
-        catch { }
-    }
-    
-    private async Task HandleRequestAsync(HttpListenerContext context)
-    {
-        var request = context.Request;
-        var response = context.Response;
-        
-        try
-        {
-            var url = request.Url?.ToString() ?? "";
-            _logger?.LogDebug("收到请求: {Url}", url);
-            
-            // 检查是否是回调路径
-            if (request.Url?.AbsolutePath == _callbackPath)
+            while (!timeoutCts.IsCancellationRequested)
             {
-                var query = request.Url.Query;
-                var code = ExtractCode(query);
-                var error = ExtractError(query);
-                
-                if (!string.IsNullOrEmpty(code))
+                var context = await _listener.GetContextAsync().WaitAsync(timeoutCts.Token);
+                if (!string.Equals(context.Request.Url?.AbsolutePath, _path, StringComparison.Ordinal))
                 {
-                    _logger?.LogInformation("收到授权码");
-                    _codeTcs?.TrySetResult(code);
-                    
-                    // 返回成功页面
-                    await SendResponseAsync(response, GetSuccessHtml(), 200);
+                    await WritePageAsync(context.Response, 404, "页面不存在", "请返回 RepoGalaxy 完成登录。");
+                    continue;
                 }
-                else if (!string.IsNullOrEmpty(error))
-                {
-                    _logger?.LogWarning("授权失败: {Error}", error);
-                    _codeTcs?.TrySetException(new InvalidOperationException($"OAuth error: {error}"));
-                    await SendResponseAsync(response, GetErrorHtml(error), 400);
-                }
-                else
-                {
-                    await SendResponseAsync(response, GetErrorHtml("No code received"), 400);
-                }
-            }
-            else
-            {
-                // 返回等待页面
-                await SendResponseAsync(response, GetWaitingHtml(), 200);
+                var query = System.Web.HttpUtility.ParseQueryString(context.Request.Url?.Query ?? string.Empty);
+                var callback = new OAuthCallback(query["code"], query["state"], query["error"]);
+                await WritePageAsync(context.Response, callback.Error == null && callback.Code != null ? 200 : 400,
+                    callback.Error == null && callback.Code != null ? "登录已完成" : "登录未完成",
+                    callback.Error == null && callback.Code != null ? "你可以关闭此页面并返回 RepoGalaxy。" : "授权被取消或未能完成，请回到应用重试。");
+                return callback;
             }
         }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "处理请求失败");
-            try
-            {
-                await SendResponseAsync(response, GetErrorHtml(ex.Message), 500);
-            }
-            catch { }
-        }
+        catch (OperationCanceledException) { }
+        finally { Stop(); }
+        return null;
     }
-    
-    private static string ExtractCode(string query)
+
+    private static async Task WritePageAsync(HttpListenerResponse response, int status, string title, string body)
     {
-        var match = Regex.Match(query, @"[?&]code=([^&]+)");
-        return match.Success ? Uri.UnescapeDataString(match.Groups[1].Value) : "";
+        var html = $"<!doctype html><html lang='zh-CN'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>RepoGalaxy · {title}</title><style>body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#f7f7f8;color:#1f2329;font:16px/1.6 'Segoe UI',sans-serif}}main{{max-width:420px;padding:42px;text-align:center;background:#fff;border:1px solid #e5e6eb;border-radius:18px;box-shadow:0 16px 48px #00000012}}h1{{font-size:24px;margin:0 0 12px}}p{{color:#6b7280;margin:0}}</style><main><h1>{WebUtility.HtmlEncode(title)}</h1><p>{WebUtility.HtmlEncode(body)}</p></main></html>";
+        var bytes = Encoding.UTF8.GetBytes(html);
+        response.StatusCode = status; response.ContentType = "text/html; charset=utf-8"; response.ContentLength64 = bytes.Length;
+        await response.OutputStream.WriteAsync(bytes); response.Close();
     }
-    
-    private static string ExtractError(string query)
-    {
-        var match = Regex.Match(query, @"[?&]error=([^&]+)");
-        return match.Success ? Uri.UnescapeDataString(match.Groups[1].Value) : "";
-    }
-    
-    private static async Task SendResponseAsync(HttpListenerResponse response, string html, int statusCode)
-    {
-        response.StatusCode = statusCode;
-        response.ContentType = "text/html; charset=utf-8";
-        
-        var buffer = Encoding.UTF8.GetBytes(html);
-        response.ContentLength64 = buffer.Length;
-        
-        await response.OutputStream.WriteAsync(buffer);
-        response.OutputStream.Close();
-    }
-    
-    private static string GetWaitingHtml() => @"<!DOCTYPE html>
-<html>
-<head>
-    <meta charset='utf-8'>
-    <title>RepoGalaxy - 等待授权</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-               background: #0b0e14; color: #fff; display: flex; align-items: center; 
-               justify-content: center; height: 100vh; margin: 0; }
-        .container { text-align: center; }
-        .spinner { width: 40px; height: 40px; border: 3px solid #30363d; 
-                   border-top-color: #58a6ff; border-radius: 50%; 
-                   animation: spin 1s linear infinite; margin: 0 auto 20px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        h1 { font-size: 24px; margin-bottom: 10px; }
-        p { color: #8b949e; }
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='spinner'></div>
-        <h1>等待 GitHub 授权...</h1>
-        <p>请在浏览器中完成授权，此页面将自动关闭</p>
-    </div>
-</body>
-</html>";
-    
-    private static string GetSuccessHtml() => @"<!DOCTYPE html>
-<html>
-<head>
-    <meta charset='utf-8'>
-    <title>RepoGalaxy - 授权成功</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-               background: #0b0e14; color: #fff; display: flex; align-items: center; 
-               justify-content: center; height: 100vh; margin: 0; }
-        .container { text-align: center; }
-        .icon { font-size: 48px; margin-bottom: 20px; }
-        h1 { font-size: 24px; margin-bottom: 10px; color: #238636; }
-        p { color: #8b949e; }
-        .btn { background: #238636; color: white; padding: 10px 20px; 
-               text-decoration: none; border-radius: 6px; display: inline-block; 
-               margin-top: 20px; }
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='icon'>✅</div>
-        <h1>授权成功！</h1>
-        <p>GitHub 授权已完成，您可以关闭此页面</p>
-        <a href='repogalaxy://auth/success' class='btn'>返回 RepoGalaxy</a>
-    </div>
-</body>
-</html>";
-    
-    private static string GetErrorHtml(string error) => $@"<!DOCTYPE html>
-<html>
-<head>
-    <meta charset='utf-8'>
-    <title>RepoGalaxy - 授权失败</title>
-    <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-               background: #0b0e14; color: #fff; display: flex; align-items: center; 
-               justify-content: center; height: 100vh; margin: 0; }}
-        .container {{ text-align: center; padding: 20px; }}
-        .icon {{ font-size: 48px; margin-bottom: 20px; }}
-        h1 {{ font-size: 24px; margin-bottom: 10px; color: #f85149; }}
-        .error {{ color: #f85149; background: #da36331a; padding: 10px; 
-                  border-radius: 6px; margin-top: 10px; }}
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='icon'>❌</div>
-        <h1>授权失败</h1>
-        <p class='error'>{error}</p>
-    </div>
-</body>
-</html>";
-    
-    public void Dispose()
-    {
-        Stop();
-    }
+
+    private void Stop() { try { _listener?.Stop(); _listener?.Close(); } catch { } }
+    public void Dispose() => Stop();
 }

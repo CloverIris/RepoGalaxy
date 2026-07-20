@@ -251,37 +251,7 @@ public class GitHubAuthService
     {
         var targetUri = uri ?? "https://github.com/login/device";
         
-        try
-        {
-            if (OperatingSystem.IsWindows())
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "cmd",
-                    Arguments = $"/c start \"\" \"{targetUri}\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                });
-            }
-            else if (OperatingSystem.IsMacOS())
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "open",
-                    Arguments = $"\"{targetUri}\"",
-                    UseShellExecute = false
-                });
-            }
-            else
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "xdg-open",
-                    Arguments = targetUri,
-                    UseShellExecute = false
-                });
-            }
-        }
+        try { Process.Start(new ProcessStartInfo { FileName = targetUri, UseShellExecute = true }); }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Failed to open browser");

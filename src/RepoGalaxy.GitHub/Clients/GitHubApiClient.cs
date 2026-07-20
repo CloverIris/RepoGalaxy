@@ -57,6 +57,24 @@ public class GitHubApiClient : Core.Interfaces.IGitHubClient, IDisposable
         }
     }
     
+    public async Task<GitHubRateLimit?> GetRateLimitAsync()
+    {
+        try
+        {
+            var overview = await _client.RateLimit.GetRateLimits();
+            return new GitHubRateLimit
+            {
+                CoreRemaining = overview.Resources.Core.Remaining,
+                CoreLimit = overview.Resources.Core.Limit,
+                CoreResetAt = overview.Resources.Core.Reset,
+                SearchRemaining = overview.Resources.Search.Remaining,
+                SearchLimit = overview.Resources.Search.Limit,
+                SearchResetAt = overview.Resources.Search.Reset
+            };
+        }
+        catch { return null; }
+    }
+
     public async Task<Core.Models.Repository?> GetRepositoryAsync(string owner, string name)
     {
         try
@@ -94,7 +112,7 @@ public class GitHubApiClient : Core.Interfaces.IGitHubClient, IDisposable
         
         foreach (var repo in result.Items.Take(30))
         {
-            repositories.Add(await EnrichAndMapAsync(repo));
+            repositories.Add(MapToCoreRepository(repo));
         }
         
         return repositories;
@@ -244,7 +262,7 @@ public class GitHubApiClient : Core.Interfaces.IGitHubClient, IDisposable
             IsArchived = repo.Archived,
             Stars = repo.StargazersCount,
             Forks = repo.ForksCount,
-            Watchers = repo.WatchersCount,
+            Watchers = repo.SubscribersCount,
             OpenIssues = repo.OpenIssuesCount,
             CreatedAt = repo.CreatedAt,
             UpdatedAt = repo.UpdatedAt,

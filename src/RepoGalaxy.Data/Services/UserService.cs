@@ -142,7 +142,10 @@ public class UserService : IUserService
                 existing.IncludeTrending = preferences.IncludeTrending;
                 existing.PreferSmallProjects = preferences.PreferSmallProjects;
                 existing.DarkMode = preferences.DarkMode;
+                existing.UseSystemTheme = preferences.UseSystemTheme;
                 existing.FeedPageSize = preferences.FeedPageSize;
+                existing.SyncIntervalMinutes = preferences.SyncIntervalMinutes;
+                existing.NotificationThreshold = preferences.NotificationThreshold;
                 existing.MaxCacheSizeGB = preferences.MaxCacheSizeGB;
                 existing.AutoCleanCache = preferences.AutoCleanCache;
                 existing.LastUpdatedAt = DateTimeOffset.Now;
@@ -164,7 +167,10 @@ public class UserService : IUserService
                     IncludeTrending = preferences.IncludeTrending,
                     PreferSmallProjects = preferences.PreferSmallProjects,
                     DarkMode = preferences.DarkMode,
+                    UseSystemTheme = preferences.UseSystemTheme,
                     FeedPageSize = preferences.FeedPageSize,
+                    SyncIntervalMinutes = preferences.SyncIntervalMinutes,
+                    NotificationThreshold = preferences.NotificationThreshold,
                     MaxCacheSizeGB = preferences.MaxCacheSizeGB,
                     AutoCleanCache = preferences.AutoCleanCache,
                     LastUpdatedAt = DateTimeOffset.Now
@@ -194,11 +200,11 @@ public class UserService : IUserService
     public async Task UpdateInterestedTopicsFromHistoryAsync()
     {
         // 获取最近浏览的仓库
-        var recentViews = await _context.ViewHistories
+        var recentViews = (await _context.ViewHistories.AsNoTracking().ToListAsync())
             .OrderByDescending(v => v.ViewedAt)
             .Take(50)
             .Select(v => v.RepositoryId)
-            .ToListAsync();
+            .ToList();
         
         if (!recentViews.Any()) return;
         
@@ -349,7 +355,10 @@ public class UserService : IUserService
             IncludeTrending = entity.IncludeTrending,
             PreferSmallProjects = entity.PreferSmallProjects,
             DarkMode = entity.DarkMode,
+            UseSystemTheme = entity.UseSystemTheme ?? true,
             FeedPageSize = entity.FeedPageSize,
+            SyncIntervalMinutes = entity.SyncIntervalMinutes,
+            NotificationThreshold = entity.NotificationThreshold,
             MaxCacheSizeGB = entity.MaxCacheSizeGB,
             AutoCleanCache = entity.AutoCleanCache
         };
@@ -368,7 +377,10 @@ public class UserService : IUserService
             IncludeTrending = true,
             PreferSmallProjects = false,
             DarkMode = true,
+            UseSystemTheme = true,
             FeedPageSize = 50,
+            SyncIntervalMinutes = 30,
+            NotificationThreshold = .75,
             MaxCacheSizeGB = 2,
             AutoCleanCache = true
         };

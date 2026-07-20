@@ -10,6 +10,7 @@ public interface IGitHubClient
     // 认证
     Task<bool> IsAuthenticatedAsync();
     Task<User?> GetCurrentUserAsync();
+    Task<GitHubRateLimit?> GetRateLimitAsync();
     
     // 仓库查询
     Task<Repository?> GetRepositoryAsync(string owner, string name);

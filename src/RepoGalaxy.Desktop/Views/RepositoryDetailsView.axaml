@@ -1,0 +1,65 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RepoGalaxy.Desktop.ViewModels"
+             x:Class="RepoGalaxy.Desktop.Views.RepositoryDetailsView"
+             x:DataType="vm:RepositoryDetailsViewModel">
+  <Border Background="{DynamicResource SurfaceBrush}"
+          BorderBrush="{DynamicResource BorderBrush}"
+          BorderThickness="1,0,0,0">
+    <Grid RowDefinitions="Auto,*">
+      <Grid Margin="22,18,14,14" ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="3">
+          <TextBlock Text="仓库详情" Classes="h2"/>
+          <TextBlock Text="选择、判断，再决定是否持续关注" Classes="meta"/>
+        </StackPanel>
+        <Button Grid.Column="1" Classes="icon" Command="{Binding CloseCommand}" ToolTip.Tip="关闭详情">
+          <PathIcon Data="{StaticResource IconClose}" Width="18" Height="18"/>
+        </Button>
+      </Grid>
+
+      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="22,8,22,28" Spacing="18">
+          <Border Width="46" Height="46" CornerRadius="12" Background="{DynamicResource AccentSoftBrush}" HorizontalAlignment="Left">
+            <TextBlock Text="&lt;/&gt;" Foreground="{DynamicResource AccentTextBrush}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <StackPanel Spacing="7">
+            <TextBlock Text="{Binding Repository.FullName}" FontSize="21" FontWeight="SemiBold" TextWrapping="Wrap"/>
+            <TextBlock Text="{Binding Repository.Description}" Classes="muted" TextWrapping="Wrap" LineHeight="22"/>
+          </StackPanel>
+
+          <WrapPanel ItemSpacing="8" LineSpacing="8">
+            <Border Classes="badge"><TextBlock Text="{Binding Repository.PrimaryLanguage}"/></Border>
+            <Border Classes="badge"><TextBlock Text="{Binding UpdatedText}"/></Border>
+          </WrapPanel>
+
+          <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+            <Border Classes="soft-card">
+              <StackPanel Spacing="4"><TextBlock Text="Stars" Classes="meta"/><TextBlock Text="{Binding StarsText}" FontSize="18" FontWeight="SemiBold"/></StackPanel>
+            </Border>
+            <Border Grid.Column="1" Classes="soft-card">
+              <StackPanel Spacing="4"><TextBlock Text="Forks" Classes="meta"/><TextBlock Text="{Binding ForksText}" FontSize="18" FontWeight="SemiBold"/></StackPanel>
+            </Border>
+            <Border Grid.Column="2" Classes="soft-card">
+              <StackPanel Spacing="4"><TextBlock Text="Issues" Classes="meta"/><TextBlock Text="{Binding IssuesText}" FontSize="18" FontWeight="SemiBold"/></StackPanel>
+            </Border>
+          </Grid>
+
+          <StackPanel Spacing="8" IsVisible="{Binding HasReason}">
+            <TextBlock Text="推荐依据" FontWeight="SemiBold"/>
+            <Border Classes="soft-card">
+              <TextBlock Text="{Binding Reason.Summary}" TextWrapping="Wrap" LineHeight="21"/>
+            </Border>
+          </StackPanel>
+
+          <StackPanel Spacing="9">
+            <Button Classes="primary" Command="{Binding OpenOnGitHubCommand}" HorizontalContentAlignment="Center">
+              <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IconExternal}" Width="16" Height="16"/><TextBlock Text="在 GitHub 打开"/></StackPanel>
+            </Button>
+            <Button Classes="subtle" Command="{Binding ToggleSavedCommand}" Content="{Binding SaveText}" HorizontalContentAlignment="Center"/>
+          </StackPanel>
+          <TextBlock Text="{Binding Feedback}" Classes="meta" Foreground="{DynamicResource AccentTextBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </Border>
+</UserControl>

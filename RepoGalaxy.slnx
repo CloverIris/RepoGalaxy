@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RepoGalaxy.Core/RepoGalaxy.Core.csproj" />
+    <Project Path="src/RepoGalaxy.Data/RepoGalaxy.Data.csproj" />
+    <Project Path="src/RepoGalaxy.Desktop/RepoGalaxy.Desktop.csproj" />
+    <Project Path="src/RepoGalaxy.GitHub/RepoGalaxy.GitHub.csproj" />
+    <Project Path="src/RepoGalaxy.Recommendation/RepoGalaxy.Recommendation.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RepoGalaxy.Core.Tests/RepoGalaxy.Core.Tests.csproj" />
+    <Project Path="tests/RepoGalaxy.Data.Tests/RepoGalaxy.Data.Tests.csproj" />
+    <Project Path="tests/RepoGalaxy.Desktop.Tests/RepoGalaxy.Desktop.Tests.csproj" />
+    <Project Path="tests/RepoGalaxy.GitHub.Tests/RepoGalaxy.GitHub.Tests.csproj" />
+    <Project Path="tests/RepoGalaxy.Recommendation.Tests/RepoGalaxy.Recommendation.Tests.csproj" />
+  </Folder>
+</Solution>

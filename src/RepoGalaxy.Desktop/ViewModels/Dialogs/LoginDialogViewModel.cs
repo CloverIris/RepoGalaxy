@@ -1,264 +1,115 @@
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using RepoGalaxy.GitHub.Auth;
-using RepoGalaxy.GitHub.Services;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using RepoGalaxy.Desktop.Services;
+using RepoGalaxy.GitHub.Auth;
+using RepoGalaxy.GitHub.Services;
 
 namespace RepoGalaxy.Desktop.ViewModels.Dialogs;
 
-/// <summary>
-/// 登录对话框状态
-/// </summary>
-public enum LoginState
+public enum LoginState { Idle, DeviceCode, Polling, Success, Error }
+
+public sealed partial class LoginDialogViewModel : ObservableObject
 {
-    Idle,           // 初始状态，选择登录方式
-    DeviceCode,     // 显示设备码
-    Polling,        // 轮询中
-    Success,        // 登录成功
-    Error           // 出错
-}
+    private readonly GitHubAuthService _deviceFlow;
+    private readonly OAuthCodeFlowService _loopback;
+    private readonly GitHubTokenManager _tokens;
+    private readonly IAuthenticationAuditService _audit;
+    private CancellationTokenSource? _cancellation;
+    private string _deviceCode = string.Empty;
+    private int _pollInterval;
+    private DateTimeOffset _expiresAt;
 
-/// <summary>
-/// GitHub 登录对话框 ViewModel - 简化版
-/// 主要支持 Device Flow（最安全便捷）
-/// </summary>
-public partial class LoginDialogViewModel : ObservableObject
-{
-    private readonly GitHubAuthService _authService;
-    private readonly GitHubTokenManager _tokenManager;
-    private CancellationTokenSource? _cts;
-    private string _deviceCodeInternal = "";
-    private string _userCode = "";
-    private int _pollInterval = 5;
-    private DateTime _expiresAt;
-
-    [ObservableProperty]
-    private LoginState _currentState = LoginState.Idle;
-
-    [ObservableProperty]
-    private string _userCodeDisplay = "";
-
-    [ObservableProperty]
-    private string _verificationUrl = "";
-
-    [ObservableProperty]
-    private string _statusText = "";
-
-    [ObservableProperty]
-    private int _progressPercent;
-
-    [ObservableProperty]
-    private string _errorText = "";
-
-    [ObservableProperty]
-    private string _patToken = "";
-
-    // 事件
+    public bool CanUseBrowserLogin => _loopback.IsAvailable;
+    [ObservableProperty] private LoginState _currentState = LoginState.Idle;
+    [ObservableProperty] private string _userCodeDisplay = string.Empty;
+    [ObservableProperty] private string _verificationUrl = string.Empty;
+    [ObservableProperty] private string _statusText = string.Empty;
+    [ObservableProperty] private int _progressPercent;
+    [ObservableProperty] private string _errorText = string.Empty;
+    [ObservableProperty] private string _patToken = string.Empty;
     public event EventHandler? LoginSuccess;
     public event EventHandler? Cancelled;
-    public event EventHandler<string>? CopyToClipboard;
 
-    public LoginDialogViewModel(GitHubAuthService authService, GitHubTokenManager tokenManager)
+    public LoginDialogViewModel(GitHubAuthService deviceFlow, OAuthCodeFlowService loopback, GitHubTokenManager tokens, IAuthenticationAuditService audit)
     {
-        _authService = authService;
-        _tokenManager = tokenManager;
+        _deviceFlow = deviceFlow; _loopback = loopback; _tokens = tokens; _audit = audit;
     }
 
-    /// <summary>
-    /// 开始 Device Flow 登录（推荐方式）
-    /// </summary>
-    [RelayCommand]
-    private async Task StartDeviceLogin()
+    [RelayCommand] private async Task StartDeviceLoginAsync()
     {
-        Reset();
-        CurrentState = LoginState.Polling;
-        StatusText = "正在获取授权码...";
-        _cts = new CancellationTokenSource();
-
+        Reset(); _cancellation = new CancellationTokenSource(); CurrentState = LoginState.Polling; StatusText = "正在准备 GitHub 授权…"; _audit.Record("device-flow", "started");
         try
         {
-            // 1. 获取设备码
-            var response = await _authService.StartDeviceFlowAsync(_cts.Token);
-            
-            _deviceCodeInternal = response.DeviceCode;
-            _userCode = response.UserCode;
-            _pollInterval = response.Interval;
-            _expiresAt = DateTime.Now.AddSeconds(response.ExpiresIn);
-            
-            UserCodeDisplay = response.UserCode;
-            VerificationUrl = response.VerificationUriComplete ?? response.VerificationUri;
-            CurrentState = LoginState.DeviceCode;
-            StatusText = "请复制下方代码到浏览器授权";
-
-            // 2. 开始轮询
-            _ = PollForTokenAsync(_cts.Token);
+            var response = await _deviceFlow.StartDeviceFlowAsync(_cancellation.Token);
+            _deviceCode = response.DeviceCode; _pollInterval = response.Interval; _expiresAt = DateTimeOffset.UtcNow.AddSeconds(response.ExpiresIn);
+            UserCodeDisplay = response.UserCode; VerificationUrl = response.VerificationUriComplete ?? response.VerificationUri;
+            CurrentState = LoginState.DeviceCode; StatusText = "复制代码并在浏览器中确认授权。";
+            _ = PollAsync(_cancellation.Token);
         }
-        catch (Exception ex)
-        {
-            ErrorText = ex.Message;
-            CurrentState = LoginState.Error;
-        }
+        catch (Exception ex) { Fail("无法开始 GitHub 授权。", ex.GetType().Name); }
     }
 
-    /// <summary>
-    /// 复制代码并打开浏览器
-    /// </summary>
-    [RelayCommand]
-    private void CopyAndOpenBrowser()
+    [RelayCommand] private void OpenVerificationPage()
     {
-        if (!string.IsNullOrEmpty(_userCode))
-        {
-            CopyToClipboard?.Invoke(this, _userCode);
-            _authService.OpenVerificationPage(VerificationUrl);
-            StatusText = "代码已复制，请在浏览器中粘贴";
-        }
+        if (string.IsNullOrWhiteSpace(VerificationUrl)) return;
+        _deviceFlow.OpenVerificationPage(VerificationUrl);
+        _audit.Record("browser", "opened", "github.com/login/device");
     }
 
-    /// <summary>
-    /// 轮询获取 Token
-    /// </summary>
-    private async Task PollForTokenAsync(CancellationToken ct)
+    [RelayCommand] private async Task StartBrowserLoginAsync()
+    {
+        Reset(); CurrentState = LoginState.Polling; StatusText = "正在打开浏览器并等待本地回环验证…"; _audit.Record("loopback", "started");
+        try
+        {
+            var token = await _loopback.ExecuteOAuthFlowAsync();
+            if (token == null) { Fail("授权超时或被取消。", "timeout"); return; }
+            await CompleteAsync(token.AccessToken, "OAuth 回环");
+        }
+        catch (Exception ex) { Fail("浏览器登录未完成。", ex.GetType().Name); }
+    }
+
+    [RelayCommand] private async Task LoginWithPatAsync()
+    {
+        if (string.IsNullOrWhiteSpace(PatToken)) { ErrorText = "请输入 Personal Access Token。"; CurrentState = LoginState.Error; return; }
+        CurrentState = LoginState.Polling; StatusText = "正在验证凭证…"; _audit.Record("pat", "started");
+        try
+        {
+            if (!await _deviceFlow.ValidateTokenAsync(PatToken)) { Fail("该 Token 无效或无权访问。", "invalid"); return; }
+            await CompleteAsync(PatToken, "Personal Access Token");
+        }
+        catch (Exception ex) { Fail("凭证验证失败。", ex.GetType().Name); }
+    }
+
+    private async Task PollAsync(CancellationToken cancellationToken)
     {
         try
         {
-            while (DateTime.Now < _expiresAt && !ct.IsCancellationRequested)
+            while (DateTimeOffset.UtcNow < _expiresAt && !cancellationToken.IsCancellationRequested)
             {
-                // 更新进度
-                var elapsed = DateTime.Now - (_expiresAt.AddSeconds(-900)); // 15分钟总时长
-                var total = TimeSpan.FromMinutes(15);
-                ProgressPercent = Math.Min(100, (int)((DateTime.Now - _expiresAt.AddSeconds(-900)).TotalSeconds / 900 * 100));
-
-                await Task.Delay(_pollInterval * 1000, ct);
-
-                var result = await _authService.PollForTokenAsync(_deviceCodeInternal, _pollInterval, ct);
-
-                switch (result.Status)
-                {
-                    case DeviceFlowStatus.Success:
-                        if (result.Token != null)
-                        {
-                            await _tokenManager.SaveTokenAsync(result.Token.AccessToken);
-                            CurrentState = LoginState.Success;
-                            LoginSuccess?.Invoke(this, EventArgs.Empty);
-                        }
-                        return;
-
-                    case DeviceFlowStatus.Pending:
-                        StatusText = "等待授权...";
-                        break;
-
-                    case DeviceFlowStatus.SlowDown:
-                        _pollInterval = result.NextIntervalSeconds;
-                        StatusText = "请求频繁，已自动降速";
-                        break;
-
-                    case DeviceFlowStatus.Expired:
-                        ErrorText = "授权已过期，请重新尝试";
-                        CurrentState = LoginState.Error;
-                        return;
-
-                    case DeviceFlowStatus.AccessDenied:
-                        ErrorText = "用户取消了授权";
-                        CurrentState = LoginState.Error;
-                        return;
-
-                    case DeviceFlowStatus.Error:
-                        ErrorText = result.ErrorMessage ?? "授权失败";
-                        CurrentState = LoginState.Error;
-                        return;
-                }
+                ProgressPercent = Math.Clamp((int)(100 - (_expiresAt - DateTimeOffset.UtcNow).TotalSeconds / 9), 0, 100);
+                await Task.Delay(TimeSpan.FromSeconds(_pollInterval), cancellationToken);
+                var result = await _deviceFlow.PollForTokenAsync(_deviceCode, _pollInterval, cancellationToken);
+                if (result.Status == DeviceFlowStatus.Pending) continue;
+                if (result.Status == DeviceFlowStatus.SlowDown) { _pollInterval = result.NextIntervalSeconds; StatusText = "GitHub 要求降低轮询频率，正在继续等待…"; continue; }
+                if (result.Status == DeviceFlowStatus.Success && result.Token != null) { await CompleteAsync(result.Token.AccessToken, "设备码"); return; }
+                Fail(result.Status == DeviceFlowStatus.AccessDenied ? "你已取消 GitHub 授权。" : "GitHub 授权未完成，请重试。", result.Status.ToString()); return;
             }
-
-            if (!ct.IsCancellationRequested)
-            {
-                ErrorText = "授权超时（15分钟）";
-                CurrentState = LoginState.Error;
-            }
+            if (!cancellationToken.IsCancellationRequested) Fail("授权已超时，请重新发起登录。", "expired");
         }
-        catch (OperationCanceledException)
-        {
-            // 用户取消，不处理
-        }
-        catch (Exception ex)
-        {
-            ErrorText = $"登录失败: {ex.Message}";
-            CurrentState = LoginState.Error;
-        }
+        catch (OperationCanceledException) { _audit.Record("device-flow", "cancelled"); }
+        catch (Exception ex) { Fail("授权过程中发生网络错误。", ex.GetType().Name); }
     }
 
-    /// <summary>
-    /// 使用 PAT 登录
-    /// </summary>
-    [RelayCommand]
-    private async Task LoginWithPat()
+    private async Task CompleteAsync(string accessToken, string method)
     {
-        if (string.IsNullOrWhiteSpace(PatToken))
-        {
-            ErrorText = "请输入 Personal Access Token";
-            CurrentState = LoginState.Error;
-            return;
-        }
-
-        Reset();
-        CurrentState = LoginState.Polling;
-        StatusText = "正在验证 Token...";
-
-        try
-        {
-            var isValid = await _authService.ValidateTokenAsync(PatToken);
-            
-            if (isValid)
-            {
-                await _tokenManager.SaveTokenAsync(PatToken);
-                CurrentState = LoginState.Success;
-                LoginSuccess?.Invoke(this, EventArgs.Empty);
-            }
-            else
-            {
-                ErrorText = "Token 无效，请检查";
-                CurrentState = LoginState.Error;
-            }
-        }
-        catch (Exception ex)
-        {
-            ErrorText = $"验证失败: {ex.Message}";
-            CurrentState = LoginState.Error;
-        }
+        if (!await _tokens.SaveTokenAsync(accessToken)) { Fail("无法安全保存凭证。", "storage"); return; }
+        CurrentState = LoginState.Success; StatusText = "已安全保存凭证，正在验证账号…"; _audit.Record("credential", "saved", method); LoginSuccess?.Invoke(this, EventArgs.Empty);
     }
-
-    /// <summary>
-    /// 重试
-    /// </summary>
-    [RelayCommand]
-    private void Retry()
-    {
-        Reset();
-    }
-
-    /// <summary>
-    /// 取消/关闭
-    /// </summary>
-    [RelayCommand]
-    private void Cancel()
-    {
-        _cts?.Cancel();
-        Cancelled?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void Reset()
-    {
-        _cts?.Cancel();
-        _cts = null;
-        _deviceCodeInternal = "";
-        _userCode = "";
-        UserCodeDisplay = "";
-        VerificationUrl = "";
-        StatusText = "";
-        ErrorText = "";
-        ProgressPercent = 0;
-        PatToken = "";
-        CurrentState = LoginState.Idle;
-    }
+    [RelayCommand] private void Retry() => Reset();
+    [RelayCommand] private void Cancel() { _cancellation?.Cancel(); _audit.Record("login", "cancelled"); Cancelled?.Invoke(this, EventArgs.Empty); }
+    private void Fail(string message, string reason) { ErrorText = message; CurrentState = LoginState.Error; _audit.Record("login", "failed", reason); }
+    private void Reset() { _cancellation?.Cancel(); _cancellation = null; _deviceCode = string.Empty; UserCodeDisplay = VerificationUrl = StatusText = ErrorText = string.Empty; ProgressPercent = 0; PatToken = string.Empty; CurrentState = LoginState.Idle; }
 }
