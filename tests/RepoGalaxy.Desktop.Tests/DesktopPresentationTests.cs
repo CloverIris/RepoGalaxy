@@ -102,6 +102,35 @@ public sealed class DesktopPresentationTests
     }
 
     [Fact]
+    public void MetroTile_contract_uses_fixed_spans_and_accessible_palettes()
+    {
+        TestAppBuilder.EnsureInitialized();
+        Check(TileSpan.For(MetroTileKind.Language) == new TileSpan(1, 1), "Language tile span changed.");
+        Check(TileSpan.For(MetroTileKind.Technology) == new TileSpan(2, 1), "Technology tile span changed.");
+        Check(TileSpan.For(MetroTileKind.Repository) == new TileSpan(6, 1), "Repository tile must remain horizontal 6x1.");
+        Check(TileSpan.For(MetroTileKind.RankingList) == new TileSpan(2, 2), "Ranking tile span changed.");
+
+        var service = new TilePaletteService();
+        foreach (var accent in new[] { "C#", "JavaScript", "Python", "unknown-language", "#E81123" })
+        {
+            var palette = service.Create(accent);
+            Check(service.ContrastRatio(palette.Background, palette.Foreground) >= 4.5, $"{accent} palette is below 4.5:1 contrast.");
+        }
+        Check(TileIconCatalog.Get("Python") is not null, "Bundled Python SVG did not load as local geometry.");
+        Check(TileIconCatalog.Get("not-a-language") is null, "Unknown technologies should use the text fallback.");
+    }
+
+    [Fact]
+    public void TileImageService_rejects_unsafe_or_deceptive_avatar_hosts()
+    {
+        Check(TileImageService.TryValidate("https://avatars.githubusercontent.com/u/1", out _), "GitHub avatar host should be accepted.");
+        Check(TileImageService.TryValidate("https://user-images.githubusercontent.com/file.png", out _), "GitHub content subdomain should be accepted.");
+        Check(!TileImageService.TryValidate("http://avatars.githubusercontent.com/u/1", out _), "HTTP avatar must be rejected.");
+        Check(!TileImageService.TryValidate("https://avatars.githubusercontent.com.evil.example/u/1", out _), "Deceptive host must be rejected.");
+        Check(!TileImageService.TryValidate("file:///C:/secret.png", out _), "Local paths must be rejected.");
+    }
+
+    [Fact]
     public async Task DiscoveryStore_PersistsRepositoryBeforeFeedForeignKey()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

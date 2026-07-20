@@ -69,6 +69,7 @@
       <StreamGeometry x:Key="IconBookmark">M5,3 L15,3 L15,17 L10,13 L5,17 Z</StreamGeometry>
       <StreamGeometry x:Key="IconClose">M5,5 L15,15 M15,5 L5,15</StreamGeometry>
       <StreamGeometry x:Key="IconMore">M5,10 A1,1 0 1 0 5,10.1 M10,10 A1,1 0 1 0 10,10.1 M15,10 A1,1 0 1 0 15,10.1</StreamGeometry>
+      <StreamGeometry x:Key="IconCode">M7,5 L2,10 L7,15 M13,5 L18,10 L13,15 M12,3 L8,17</StreamGeometry>
     </ResourceDictionary>
   </Application.Resources>
 
@@ -105,17 +106,17 @@
       <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
       <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="CornerRadius" Value="0"/>
       <Setter Property="Padding" Value="18"/>
     </Style>
     <Style Selector="Border.soft-card">
       <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}"/>
-      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="CornerRadius" Value="0"/>
       <Setter Property="Padding" Value="14"/>
     </Style>
     <Style Selector="Border.badge">
       <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
-      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="CornerRadius" Value="0"/>
       <Setter Property="Padding" Value="8,3"/>
     </Style>
     <Style Selector="Border.badge TextBlock">
@@ -125,7 +126,7 @@
     </Style>
     <Style Selector="Button">
       <Setter Property="MinHeight" Value="36"/>
-      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="CornerRadius" Value="0"/>
       <Setter Property="Padding" Value="14,7"/>
     </Style>
     <Style Selector="Button.primary">
@@ -157,16 +158,28 @@
       <Setter Property="Background" Value="{DynamicResource DangerSoftBrush}"/>
       <Setter Property="BorderThickness" Value="0"/>
     </Style>
+    <Style Selector="Button.caption-close">
+      <Setter Property="Width" Value="46"/>
+      <Setter Property="Height" Value="42"/>
+      <Setter Property="MinHeight" Value="42"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="0"/>
+    </Style>
+    <Style Selector="Button.caption-close:pointerover">
+      <Setter Property="Background" Value="#E81123"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
     <Style Selector="TextBox.search">
       <Setter Property="MinHeight" Value="38"/>
-      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="CornerRadius" Value="0"/>
       <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
       <Setter Property="Padding" Value="12,8"/>
     </Style>
     <Style Selector="TextBox, ComboBox, NumericUpDown">
       <Setter Property="MinHeight" Value="38"/>
-      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="CornerRadius" Value="0"/>
     </Style>
     <Style Selector="ListBox.clean">
       <Setter Property="Background" Value="Transparent"/>

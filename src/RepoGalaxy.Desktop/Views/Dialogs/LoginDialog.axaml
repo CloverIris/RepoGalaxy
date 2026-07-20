@@ -7,22 +7,33 @@
         Width="520" Height="620"
         MinWidth="460" MinHeight="560"
         CanResize="False"
+        WindowDecorations="BorderOnly"
+        ExtendClientAreaToDecorationsHint="False"
+        Win32Properties.WindowCornerPreference="DoNotRound"
         WindowStartupLocation="CenterOwner">
-  <Grid Background="{DynamicResource CanvasBrush}">
-    <Border Background="{DynamicResource SurfaceBrush}" Margin="18" CornerRadius="16" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="30">
+  <Grid Background="{DynamicResource CanvasBrush}" RowDefinitions="42,*">
+    <Border Background="{DynamicResource SurfaceElevatedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+            PointerPressed="OnTitleBarPointerPressed">
+      <Grid ColumnDefinitions="Auto,*,46">
+        <PathIcon Data="{StaticResource IconCode}" Width="16" Height="16" Margin="14,0,9,0" Foreground="{DynamicResource AccentBrush}"/>
+        <TextBlock Grid.Column="1" Text="连接 GitHub" VerticalAlignment="Center" FontWeight="SemiBold"/>
+        <Button Grid.Column="2" Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="11" Padding="0" Classes="caption-close" Click="OnCloseClicked"/>
+      </Grid>
+    </Border>
+    <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" Margin="18" CornerRadius="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="30">
       <Grid RowDefinitions="Auto,*,Auto">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
-          <Border Width="46" Height="46" CornerRadius="13" Background="{DynamicResource AccentBrush}"><TextBlock Text="G" Foreground="White" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+          <Border Width="46" Height="46" CornerRadius="0" Background="{DynamicResource AccentBrush}"><TextBlock Text="G" Foreground="White" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
           <StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="连接 GitHub" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="登录后获得完整发现 Feed 与持续同步。" Classes="muted"/></StackPanel>
         </Grid>
 
         <Grid Grid.Row="1" Margin="0,28,0,18">
           <StackPanel IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Idle}" Spacing="13">
             <Button Command="{Binding StartDeviceLoginCommand}" HorizontalAlignment="Stretch" Padding="18" Classes="primary">
-              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14"><Border Width="38" Height="38" CornerRadius="10" Background="#28FFFFFF"><TextBlock Text="01" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="使用设备码登录" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="推荐方式 · 在浏览器确认，无需在应用内输入密码" Foreground="#E8F2FF" FontSize="12"/></StackPanel></Grid>
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14"><Border Width="38" Height="38" CornerRadius="0" Background="#28FFFFFF"><TextBlock Text="01" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="使用设备码登录" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="推荐方式 · 在浏览器确认，无需在应用内输入密码" Foreground="#E8F2FF" FontSize="12"/></StackPanel></Grid>
             </Button>
             <Button Command="{Binding StartBrowserLoginCommand}" IsVisible="{Binding CanUseBrowserLogin}" HorizontalAlignment="Stretch" Padding="18" Classes="subtle">
-              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14"><Border Width="38" Height="38" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}"><PathIcon Data="{StaticResource IconExternal}" Width="18" Height="18" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="浏览器本地回环" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="仅在本机安全配置 OAuth Secret 后可用" Classes="meta"/></StackPanel></Grid>
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14"><Border Width="38" Height="38" CornerRadius="0" Background="{DynamicResource AccentSoftBrush}"><PathIcon Data="{StaticResource IconExternal}" Width="18" Height="18" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="浏览器本地回环" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="仅在本机安全配置 OAuth Secret 后可用" Classes="meta"/></StackPanel></Grid>
             </Button>
             <Expander Header="使用 Personal Access Token" Margin="0,4,0,0">
               <StackPanel Margin="0,12,0,0" Spacing="9"><TextBox Text="{Binding PatToken}" PlaceholderText="github_pat_…" PasswordChar="●"/><Button Content="验证并登录" Command="{Binding LoginWithPatCommand}" Classes="subtle" HorizontalAlignment="Right"/></StackPanel>

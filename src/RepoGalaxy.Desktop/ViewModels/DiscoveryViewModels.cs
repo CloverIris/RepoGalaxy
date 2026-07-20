@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using RepoGalaxy.Data.DbContexts;
 using RepoGalaxy.Data.Entities;
+using RepoGalaxy.Desktop.Services;
 
 namespace RepoGalaxy.Desktop.ViewModels;
 
@@ -32,9 +33,15 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
     private readonly DashboardRailViewModel _dashboard;
     private readonly RepositoryService _repositories;
     private readonly IRecommendationEngine _recommendations;
+    private readonly IMetroTileLayoutService _tileLayout;
+    private readonly ITilePaletteService _tilePalette;
+    private readonly ITileImageService _tileImages;
+    private readonly ITipCatalog _tips;
+    private readonly IAuthenticationSessionService _session;
     private readonly List<FeedItemViewModel> _allItems = [];
 
     public ObservableCollection<FeedItemViewModel> Items { get; } = [];
+    public ObservableCollection<MetroTileViewModel> Tiles { get; } = [];
     public ObservableCollection<DashboardListViewModel> TopLists => _dashboard.TopLists;
     public IReadOnlyList<FeedSourceViewModel> Sources { get; } =
     [
@@ -50,6 +57,13 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
     [ObservableProperty] private string _searchText = string.Empty;
     [ObservableProperty] private string _statusTitle = "还没有发现内容";
     [ObservableProperty] private string _statusDescription = "从热门项目开始，或创建订阅来建立你的长期关注列表。";
+    [ObservableProperty] private double _tileCanvasWidth = 1796;
+    [ObservableProperty] private double _tileCanvasHeight = 596;
+    [ObservableProperty] private double _tileViewportX;
+    [ObservableProperty] private double _tileViewportY;
+    [ObservableProperty] private string _activeTileFilter = string.Empty;
+    private TileBoardState? _tileBoard;
+    public bool HasActiveTileFilter => !string.IsNullOrWhiteSpace(ActiveTileFilter);
 
     public bool IsEmpty => !IsLoading && Items.Count == 0;
     public bool HasItems => Items.Count > 0;
@@ -58,7 +72,7 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
     public event EventHandler? LoginRequested;
     public event EventHandler<string>? SubscriptionRequested;
 
-    public DiscoverViewModel(DiscoveryStore store, DiscoverySyncService sync, RepositoryDetailsViewModel details, ILogger<DiscoverViewModel> logger, DashboardRailViewModel dashboard, RepositoryService repositories, IRecommendationEngine recommendations)
+    public DiscoverViewModel(DiscoveryStore store, DiscoverySyncService sync, RepositoryDetailsViewModel details, ILogger<DiscoverViewModel> logger, DashboardRailViewModel dashboard, RepositoryService repositories, IRecommendationEngine recommendations, IMetroTileLayoutService tileLayout, ITilePaletteService tilePalette, ITileImageService tileImages, ITipCatalog tips, IAuthenticationSessionService session)
     {
         _store = store;
         _sync = sync;
@@ -67,6 +81,11 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
         _dashboard = dashboard;
         _repositories = repositories;
         _recommendations = recommendations;
+        _tileLayout = tileLayout;
+        _tilePalette = tilePalette;
+        _tileImages = tileImages;
+        _tips = tips;
+        _session = session;
         _selectedSource = Sources[0];
         _selectedSource.IsSelected = true;
     }
@@ -81,6 +100,7 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
             ApplyFilter();
             await RefreshCountsAsync();
             await _dashboard.LoadAsync();
+            await BuildTileBoardAsync();
             StatusTitle = SelectedSource.Source == FeedSource.Subscription ? "订阅 Feed 还是空的" : "还没有发现内容";
             StatusDescription = SelectedSource.Source == FeedSource.Subscription
                 ? "创建主题、语言或关键词订阅，下次同步后内容会出现在这里。"
@@ -130,6 +150,14 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
     }
 
     [RelayCommand]
+    private async Task SaveTileAsync(MetroTileViewModel tile)
+    {
+        if (tile.RepositoryItem is null) return;
+        await SaveAsync(tile.RepositoryItem.Id);
+        tile.RefreshSavedState();
+    }
+
+    [RelayCommand]
     private async Task DismissAsync(long id)
     {
         var item = _allItems.FirstOrDefault(x => x.Id == id);
@@ -139,6 +167,26 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
         ApplyFilter();
         NotifyState();
     }
+
+    [RelayCommand]
+    private async Task DismissTileAsync(MetroTileViewModel tile)
+    {
+        if (tile.RepositoryItem is null) return;
+        await DismissAsync(tile.RepositoryItem.Id);
+        await BuildTileBoardAsync();
+    }
+
+    [RelayCommand]
+    private void ActivateTile(MetroTileViewModel tile)
+    {
+        if (tile.RepositoryItem is not null) { SelectedItem = tile.RepositoryItem; return; }
+        if (!tile.IsLanguage && !tile.IsTechnology) return;
+        ActiveTileFilter = ActiveTileFilter.Equals(tile.Title, StringComparison.OrdinalIgnoreCase) ? string.Empty : tile.Title;
+        ApplyTileFilter();
+    }
+
+    [RelayCommand]
+    private void ClearTileFilter() { ActiveTileFilter = string.Empty; ApplyTileFilter(); }
 
     [RelayCommand]
     private void SelectSource(FeedSourceViewModel source)
@@ -160,7 +208,8 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
     private void CreateSubscription(string topic) => SubscriptionRequested?.Invoke(this, topic);
 
     partial void OnSelectedSourceChanged(FeedSourceViewModel value) => _ = LoadAsync();
-    partial void OnSearchTextChanged(string value) => ApplyFilter();
+    partial void OnSearchTextChanged(string value) { ApplyFilter(); ApplyTileFilter(); }
+    partial void OnActiveTileFilterChanged(string value) => OnPropertyChanged(nameof(HasActiveTileFilter));
     partial void OnSelectedItemChanged(FeedItemViewModel? value)
     {
         if (value is null) return;
@@ -186,6 +235,85 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage
         Items.Clear();
         foreach (var item in filtered) Items.Add(item);
         NotifyState();
+    }
+
+    public async Task EnsureTileExtentAsync(double viewportWidth, double viewportHeight)
+    {
+        if (_tileBoard is null || viewportWidth <= 0 || viewportHeight <= 0) return;
+        var columns = Math.Max(12, (int)Math.Ceiling(viewportWidth / 100d) + 6);
+        var rows = Math.Max(6, (int)Math.Ceiling(viewportHeight / 100d) + 2);
+        if (columns <= _tileBoard.ExtentColumns && rows <= _tileBoard.ExtentRows) return;
+        await BuildTileBoardAsync(columns, rows);
+    }
+
+    public void UpdateTileEdgeOpacity(double viewportX, double viewportY, double viewportWidth, double viewportHeight)
+    {
+        TileViewportX = Math.Max(0, viewportX); TileViewportY = Math.Max(0, viewportY);
+        foreach (var tile in Tiles)
+        {
+            var visibleWidth = Math.Max(0, Math.Min(tile.Left + tile.Width, viewportX + viewportWidth) - Math.Max(tile.Left, viewportX));
+            var visibleHeight = Math.Max(0, Math.Min(tile.Top + tile.Height, viewportY + viewportHeight) - Math.Max(tile.Top, viewportY));
+            var ratio = tile.Width <= 0 || tile.Height <= 0 ? 0 : visibleWidth * visibleHeight / (tile.Width * tile.Height);
+            tile.SetEdgeOpacity(ratio >= .999 ? 1 : .3 + .7 * ratio);
+        }
+    }
+
+    public Task SaveTileViewportAsync(double x, double y) => _tileBoard is null ? Task.CompletedTask : _tileLayout.SaveViewportAsync(_tileBoard.Id, x, y);
+
+    private async Task BuildTileBoardAsync(int minimumColumns = 18, int minimumRows = 6)
+    {
+        var content = new List<TileContent>();
+        foreach (var list in TopLists)
+            content.Add(new($"ranking:{list.Title}", MetroTileKind.RankingList, list.Title, list.Subtitle, "TOP 5", "TypeScript"));
+
+        foreach (var group in _allItems.Where(x => !string.IsNullOrWhiteSpace(x.Repository.PrimaryLanguage)).GroupBy(x => x.Repository.PrimaryLanguage, StringComparer.OrdinalIgnoreCase).OrderByDescending(x => x.Count()).Take(10))
+            content.Add(new($"language:{group.Key.ToLowerInvariant()}", MetroTileKind.Language, group.Key, $"{group.Count()} 个关联仓库", "点击筛选", group.Key));
+
+        foreach (var group in _allItems.SelectMany(x => x.Repository.Topics.Select(topic => (Topic: topic, Item: x))).Where(x => !string.IsNullOrWhiteSpace(x.Topic)).GroupBy(x => x.Topic, StringComparer.OrdinalIgnoreCase).OrderByDescending(x => x.Count()).Take(10))
+            content.Add(new($"stack:{group.Key.ToLowerInvariant()}", MetroTileKind.Technology, group.Key, $"关联 {group.Select(x => x.Item.Id).Distinct().Count()} 个项目", "技术栈", group.Key));
+
+        foreach (var item in _allItems)
+        {
+            var kind = item.Repository.Stars >= 100_000 ? MetroTileKind.FeaturedRepository : MetroTileKind.Repository;
+            content.Add(new($"repository:{item.Repository.Id}", kind, item.Repository.FullName, item.Repository.Description, item.ReasonText, item.Repository.PrimaryLanguage, item.Repository.Id, item.Repository.OwnerAvatarUrl));
+        }
+
+        var catalog = _tips.GetTips(DateOnly.FromDateTime(DateTime.Today));
+        for (var index = 0; index < 42; index++)
+        {
+            var tip = catalog[index % catalog.Count];
+            var sizeMarker = tip.ColumnSpan == 2 && tip.RowSpan == 2 ? ":large:" : tip.ColumnSpan == 2 ? ":wide:" : ":small:";
+            content.Add(new($"tip{sizeMarker}{index}:{tip.Key}", MetroTileKind.Tip, tip.Title, tip.Body, string.Join(" · ", new[] { tip.Category, tip.Attribution }.Where(x => !string.IsNullOrWhiteSpace(x))), tip.AccentKey, IsPlaceholder: true));
+        }
+
+        var scope = _session.Current.User?.GitHubId ?? "guest";
+        _tileBoard = await _tileLayout.SynchronizeAsync(scope, SelectedSource.Source, content, minimumColumns, minimumRows);
+        var repositoriesById = _allItems.GroupBy(x => x.Repository.Id).ToDictionary(x => x.Key, x => x.First());
+        var rankingsByKey = TopLists.ToDictionary(x => $"ranking:{x.Title}", StringComparer.Ordinal);
+        Tiles.Clear();
+        foreach (var placement in _tileBoard.Placements)
+        {
+            repositoriesById.TryGetValue(placement.Content.RepositoryId ?? -1, out var repository);
+            rankingsByKey.TryGetValue(placement.Content.Key, out var ranking);
+            var tile = new MetroTileViewModel(placement, _tilePalette.Create(placement.Content.AccentKey), repository, ranking);
+            Tiles.Add(tile);
+            if (tile.IsRepository && !string.IsNullOrWhiteSpace(placement.Content.ImageUrl)) _ = LoadTileImageAsync(tile, placement.Content.ImageUrl);
+        }
+        TileCanvasWidth = Math.Max(1, _tileBoard.ExtentColumns * 100 - 4);
+        TileCanvasHeight = Math.Max(1, _tileBoard.ExtentRows * 100 - 4);
+        TileViewportX = _tileBoard.ViewportX; TileViewportY = _tileBoard.ViewportY;
+        ApplyTileFilter();
+    }
+
+    private async Task LoadTileImageAsync(MetroTileViewModel tile, string url)
+    {
+        if (await _tileImages.GetAsync(url) is { } asset) tile.ApplyImageAsset(asset, _tilePalette);
+    }
+
+    private void ApplyTileFilter()
+    {
+        var filter = string.IsNullOrWhiteSpace(ActiveTileFilter) ? SearchText : ActiveTileFilter;
+        foreach (var tile in Tiles) tile.SetFilter(filter);
     }
 
     private async Task RefreshCountsAsync()
@@ -379,6 +507,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly IDbContextFactory<RepoGalaxyDbContext> _databaseFactory;
     private readonly DatabaseLifecycleService _databaseLifecycle;
     private readonly DiscoverySyncService _syncService;
+    private readonly IMetroTileLayoutService _tileLayout;
+    private readonly IAuthenticationSessionService _session;
     private UserPreference? _preferences;
     private bool _isLoaded;
     public IReadOnlyList<string> ThemeOptions { get; } = ["跟随系统", "浅色", "深色"];
@@ -399,10 +529,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _identityEmail = string.Empty;
     [ObservableProperty] private string _identityStatus = string.Empty;
     [ObservableProperty] private string _backupStatus = "正在读取备份状态";
+    [ObservableProperty] private string _tileLayoutStatus = string.Empty;
     public ObservableCollection<GitIdentityAliasItem> IdentityAliases { get; } = [];
 
     public string ThresholdText => $"匹配度达到 {NotificationThreshold:P0} 时提醒";
-    public SettingsViewModel(IUserService users, ICacheService cache, IMemoryCacheStore memoryCache, IDbContextFactory<RepoGalaxyDbContext> databaseFactory, DatabaseLifecycleService databaseLifecycle, DiscoverySyncService syncService) { _users = users; _cache = cache; _memoryCache = memoryCache; _databaseFactory = databaseFactory; _databaseLifecycle = databaseLifecycle; _syncService = syncService; _ = LoadAsync(); }
+    public SettingsViewModel(IUserService users, ICacheService cache, IMemoryCacheStore memoryCache, IDbContextFactory<RepoGalaxyDbContext> databaseFactory, DatabaseLifecycleService databaseLifecycle, DiscoverySyncService syncService, IMetroTileLayoutService tileLayout, IAuthenticationSessionService session) { _users = users; _cache = cache; _memoryCache = memoryCache; _databaseFactory = databaseFactory; _databaseLifecycle = databaseLifecycle; _syncService = syncService; _tileLayout = tileLayout; _session = session; _ = LoadAsync(); }
     public async Task LoadAsync()
     {
         _preferences = await _users.GetPreferencesAsync();
@@ -505,6 +636,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
     {
         await _syncService.StopAsync();
         BackupStatus = await _databaseLifecycle.RestoreLatestBackupAsync() ? "恢复成功，请重新启动 RepoGalaxy。" : "没有可用的完整备份。";
+    }
+
+    [RelayCommand]
+    private async Task ResetTileLayoutAsync()
+    {
+        var scope = _session.Current.User?.GitHubId ?? "guest";
+        await _tileLayout.ResetAsync(scope);
+        TileLayoutStatus = "首页 Tile 布局已重置，返回发现页后将创建新的稳定画布。";
     }
 }
 

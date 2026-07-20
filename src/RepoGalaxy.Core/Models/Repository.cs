@@ -9,6 +9,7 @@ public class Repository
     public string Name { get; set; } = string.Empty;
     public string FullName => $"{Owner}/{Name}";
     public string HtmlUrl { get; set; } = string.Empty;
+    public string OwnerAvatarUrl { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string PrimaryLanguage { get; set; } = string.Empty;
     public List<string> Topics { get; set; } = new();

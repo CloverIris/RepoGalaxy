@@ -18,6 +18,8 @@ public sealed class RepositoryViewModel
     public string ForksFormatted => Forks.ToString("N0");
     public string UpdatedText => Repository.UpdatedAt == default ? "更新时间未知" : Repository.UpdatedAt.LocalDateTime.ToString("yyyy-MM-dd");
     public string TopicsText => Repository.Topics.Count == 0 ? "暂无主题" : string.Join("  ·  ", Repository.Topics.Take(3));
+    public IReadOnlyList<string> Topics => Repository.Topics;
+    public string OwnerAvatarUrl => Repository.OwnerAvatarUrl;
 }
 
 public sealed class FeedItemViewModel : CommunityToolkit.Mvvm.ComponentModel.ObservableObject

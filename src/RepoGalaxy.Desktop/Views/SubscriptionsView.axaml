@@ -23,7 +23,7 @@
         <ListBox.ItemTemplate><DataTemplate>
           <Border Classes="card" Margin="0,0,0,9" Padding="18,15">
             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
-              <Border Width="42" Height="42" CornerRadius="11" Background="{DynamicResource AccentSoftBrush}"><PathIcon Data="{StaticResource IconSubscription}" Width="20" Height="20" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+              <Border Width="42" Height="42" CornerRadius="0" Background="{DynamicResource AccentSoftBrush}"><PathIcon Data="{StaticResource IconSubscription}" Width="20" Height="20" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
               <StackPanel Grid.Column="1" Spacing="6">
                 <StackPanel Orientation="Horizontal" Spacing="9"><TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold"/><Border Classes="badge"><TextBlock Text="{Binding StateText}"/></Border></StackPanel>
                 <TextBlock Text="{Binding RulesText}" Classes="muted" TextTrimming="CharacterEllipsis"/>

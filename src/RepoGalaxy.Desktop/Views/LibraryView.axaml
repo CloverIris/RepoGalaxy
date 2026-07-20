@@ -10,7 +10,7 @@
         <ListBox.ItemTemplate><DataTemplate>
           <Border Classes="card" Margin="0,0,0,9" Padding="18,15">
             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
-              <Border Width="42" Height="42" CornerRadius="11" Background="{DynamicResource AccentSoftBrush}"><TextBlock Text="&lt;/&gt;" FontWeight="Bold" Foreground="{DynamicResource AccentTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+              <Border Width="42" Height="42" CornerRadius="0" Background="{DynamicResource AccentSoftBrush}"><TextBlock Text="&lt;/&gt;" FontWeight="Bold" Foreground="{DynamicResource AccentTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
               <StackPanel Grid.Column="1" Spacing="6"><TextBlock Text="{Binding FullName}" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="{Binding Description}" Classes="muted" TextTrimming="CharacterEllipsis" MaxLines="1"/><StackPanel Orientation="Horizontal" Spacing="14"><TextBlock Text="{Binding PrimaryLanguage}" Classes="meta" Foreground="{DynamicResource AccentTextBrush}"/><TextBlock Text="{Binding StarsFormatted, StringFormat='★ {0}'}" Classes="meta"/><TextBlock Text="{Binding UpdatedText, StringFormat='更新 {0}'}" Classes="meta"/></StackPanel></StackPanel>
               <Button Grid.Column="2" Classes="danger" Content="移除" Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Id}" VerticalAlignment="Center"/>
             </Grid>

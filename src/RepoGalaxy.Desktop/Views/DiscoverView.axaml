@@ -1,60 +1,87 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="RepoGalaxy.Desktop.Views.DiscoverView" x:CompileBindings="False">
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="RepoGalaxy.Desktop.Views.DiscoverView"
+             x:CompileBindings="False">
   <UserControl.Styles>
-    <Style Selector="Button.segment"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="14,8"/></Style>
-    <Style Selector="Button.segment.selected"><Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}"/><Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/></Style>
-    <Style Selector="Border.feed-card"><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="12"/><Setter Property="Padding" Value="17"/><Setter Property="Margin" Value="0,0,12,12"/><Setter Property="MinHeight" Value="178"/></Style>
+    <Style Selector="Button.segment"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="14,8"/><Setter Property="CornerRadius" Value="0"/></Style>
+    <Style Selector="Button.segment.selected"><Setter Property="Foreground" Value="White"/><Setter Property="Background" Value="{DynamicResource AccentBrush}"/></Style>
+    <Style Selector="Border.metro-tile"><Setter Property="BorderBrush" Value="#40FFFFFF"/><Setter Property="BorderThickness" Value="1"/><Setter Property="ClipToBounds" Value="True"/></Style>
+    <Style Selector="Button.tile-hit"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="0"/><Setter Property="CornerRadius" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="VerticalContentAlignment" Value="Stretch"/></Style>
+    <Style Selector="Button.tile-action"><Setter Property="Background" Value="#24000000"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="#40FFFFFF"/><Setter Property="CornerRadius" Value="0"/><Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="9,3"/></Style>
   </UserControl.Styles>
-  <Grid Margin="24,20,16,24" RowDefinitions="Auto,Auto,*">
-    <Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="4"><TextBlock Text="值得投入时间的新项目" Classes="h1"/><TextBlock Text="用两阶段排序，从活跃度、兴趣和本地技术栈中发现下一份好代码。" Classes="muted"/></StackPanel><Button Grid.Column="1" Classes="primary" Command="{Binding SyncCommand}" VerticalAlignment="Center"><StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IconRefresh}" Width="16" Height="16"/><TextBlock Text="立即同步"/></StackPanel></Button></Grid>
 
-    <StackPanel Grid.Row="1" Spacing="14" Margin="0,20,0,15">
-      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-        <ItemsControl ItemsSource="{Binding TopLists}">
-          <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate><DataTemplate><Border Classes="card" Width="276" MinHeight="292" Margin="0,0,12,0" Padding="15"><StackPanel Spacing="9"><Grid ColumnDefinitions="*,Auto"><StackPanel><TextBlock Text="{Binding Title}" FontWeight="SemiBold"/><TextBlock Text="{Binding Subtitle}" Classes="meta"/></StackPanel><TextBlock Grid.Column="1" Text="TOP 5" Classes="meta"/></Grid><ItemsControl ItemsSource="{Binding Items}"><ItemsControl.ItemTemplate><DataTemplate><Button Classes="ghost" Padding="4,5" HorizontalContentAlignment="Stretch" Command="{Binding DataContext.OpenTopItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"><Grid ColumnDefinitions="24,*,Auto"><TextBlock Text="{Binding Rank}" Foreground="{DynamicResource AccentTextBrush}" FontWeight="Bold"/><StackPanel Grid.Column="1"><TextBlock Text="{Binding FullName}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Caption}" Classes="meta" TextTrimming="CharacterEllipsis"/></StackPanel></Grid></Button></DataTemplate></ItemsControl.ItemTemplate></ItemsControl><TextBlock Text="{Binding EmptyText}" Classes="muted" IsVisible="{Binding IsEmpty}" Margin="4,22,4,0" HorizontalAlignment="Center"/></StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate>
+  <Grid RowDefinitions="Auto,*" Background="{DynamicResource CanvasBrush}">
+    <Border Padding="20,12" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+        <Border Background="{DynamicResource SurfaceMutedBrush}" Padding="2">
+          <ItemsControl ItemsSource="{Binding Sources}">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate><DataTemplate><Button Classes="segment" Classes.selected="{Binding IsSelected}" Command="{Binding DataContext.SelectSourceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"><StackPanel Orientation="Horizontal" Spacing="7"><TextBlock Text="{Binding Title}" FontWeight="SemiBold"/><TextBlock Text="{Binding Count}" Opacity=".72"/></StackPanel></Button></DataTemplate></ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <TextBlock Text="METRO FEED" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource AccentTextBrush}"/>
+          <TextBlock Text="{Binding ResultSummary}" Classes="meta"/>
+          <Border IsVisible="{Binding HasActiveTileFilter}" Background="{DynamicResource AccentBrush}" Padding="8,3">
+            <StackPanel Orientation="Horizontal" Spacing="7"><TextBlock Text="{Binding ActiveTileFilter}" Foreground="White"/><Button Classes="ghost" Content="×" Foreground="White" Padding="2,0" MinHeight="20" Command="{Binding ClearTileFilterCommand}"/></StackPanel>
+          </Border>
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="拖动画布浏览" Classes="meta" VerticalAlignment="Center"/>
+          <Button Classes="primary" Command="{Binding SyncCommand}"><StackPanel Orientation="Horizontal" Spacing="7"><PathIcon Data="{StaticResource IconRefresh}" Width="15" Height="15"/><TextBlock Text="同步"/></StackPanel></Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1">
+      <ScrollViewer x:Name="TileScrollViewer" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" Background="{DynamicResource CanvasBrush}">
+        <ItemsControl x:Name="TileItems" ItemsSource="{Binding Tiles}" Width="{Binding TileCanvasWidth}" Height="{Binding TileCanvasHeight}" HorizontalAlignment="Left" VerticalAlignment="Top">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas Width="{Binding DataContext.TileCanvasWidth, RelativeSource={RelativeSource AncestorType=UserControl}}" Height="{Binding DataContext.TileCanvasHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          <ItemsControl.Styles>
+            <Style Selector="ContentPresenter"><Setter Property="Canvas.Left" Value="{Binding Left}"/><Setter Property="Canvas.Top" Value="{Binding Top}"/><Setter Property="Width" Value="{Binding Width}"/><Setter Property="Height" Value="{Binding Height}"/></Style>
+          </ItemsControl.Styles>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="metro-tile" Background="{Binding Background}" Opacity="{Binding DisplayOpacity}">
+                <Grid>
+                  <Image Source="{Binding BackgroundImage}" Stretch="UniformToFill" Opacity=".28" IsVisible="{Binding !!BackgroundImage}"/>
+                  <PathIcon Data="{Binding IconGeometry}" Width="76" Height="76" Opacity=".14" Foreground="{Binding Foreground}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,4" IsVisible="{Binding HasIcon}" IsHitTestVisible="False"/>
+                  <TextBlock Text="{Binding Glyph}" FontSize="64" FontWeight="Bold" Opacity=".12" Foreground="{Binding Foreground}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,-10" IsVisible="{Binding !HasIcon}" IsHitTestVisible="False"/>
+
+                  <Button Classes="tile-hit" Command="{Binding DataContext.ActivateTileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}">
+                    <Grid Margin="13" RowDefinitions="Auto,*,Auto">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{Binding KindLabel}" FontSize="10" FontWeight="Bold" Foreground="{Binding SecondaryForeground}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Language}" FontSize="10" Foreground="{Binding SecondaryForeground}" TextTrimming="CharacterEllipsis" MaxWidth="100"/>
+                      </Grid>
+
+                      <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="4" IsVisible="{Binding !IsRanking}">
+                        <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" Foreground="{Binding Foreground}" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                        <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{Binding SecondaryForeground}" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                      </StackPanel>
+
+                      <ItemsControl Grid.Row="1" ItemsSource="{Binding Ranking.Items}" IsVisible="{Binding IsRanking}">
+                        <ItemsControl.ItemTemplate><DataTemplate><Button Classes="ghost" Padding="1,3" HorizontalContentAlignment="Stretch" Command="{Binding DataContext.OpenTopItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"><Grid ColumnDefinitions="18,*"><TextBlock Text="{Binding Rank}" Foreground="White" FontWeight="Bold"/><TextBlock Grid.Column="1" Text="{Binding FullName}" Foreground="White" TextTrimming="CharacterEllipsis"/></Grid></Button></DataTemplate></ItemsControl.ItemTemplate>
+                      </ItemsControl>
+
+                      <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{Binding Caption}" FontSize="11" Foreground="{Binding SecondaryForeground}" TextTrimming="CharacterEllipsis"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsRepository}"><TextBlock Text="{Binding Stars}" Foreground="{Binding SecondaryForeground}" FontSize="11"/><TextBlock Text="{Binding Forks}" Foreground="{Binding SecondaryForeground}" FontSize="11"/></StackPanel>
+                      </Grid>
+                    </Grid>
+                  </Button>
+
+                  <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0" IsVisible="{Binding IsRepository}">
+                    <Button Classes="tile-action" Content="{Binding SaveText}" Command="{Binding DataContext.SaveTileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                    <Button Classes="tile-action" Content="×" ToolTip.Tip="忽略" Command="{Binding DataContext.DismissTileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
         </ItemsControl>
       </ScrollViewer>
-      <Grid ColumnDefinitions="Auto,*"><Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="10" Padding="4"><ItemsControl ItemsSource="{Binding Sources}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2"/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate><Button Classes="segment" Classes.selected="{Binding IsSelected}" Command="{Binding DataContext.SelectSourceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"><StackPanel Orientation="Horizontal" Spacing="7"><TextBlock Text="{Binding Title}" FontWeight="SemiBold"/><TextBlock Text="{Binding Count}" Classes="meta"/></StackPanel></Button></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></Border><TextBlock Grid.Column="1" Text="{Binding ResultSummary}" Classes="meta" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
-    </StackPanel>
-
-    <Grid Grid.Row="2">
       <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoading}" Height="3" VerticalAlignment="Top"/>
-      <ListBox Classes="clean" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}" IsVisible="{Binding HasItems}" ScrollViewer.VerticalScrollBarVisibility="Auto">
-        <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel ItemWidth="410" MinWidth="360"/></ItemsPanelTemplate></ListBox.ItemsPanel>
-        <ListBox.ItemTemplate>
-          <DataTemplate>
-            <Border Classes="feed-card">
-              <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                  <Grid ColumnDefinitions="28,*" ColumnSpacing="8" MinWidth="0">
-                    <Border Width="28" Height="28" CornerRadius="8" Background="{DynamicResource AccentSoftBrush}">
-                      <TextBlock Text="&lt;/&gt;" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <StackPanel Grid.Column="1" MinWidth="0">
-                      <TextBlock Text="{Binding Repository.FullName}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                      <TextBlock Text="{Binding SourceText}" Classes="meta"/>
-                    </StackPanel>
-                  </Grid>
-                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3">
-                    <Button Classes="ghost" Content="{Binding SaveText}" Command="{Binding DataContext.SaveCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Id}"/>
-                    <Button Classes="icon" Command="{Binding DataContext.DismissCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Id}" ToolTip.Tip="忽略"><PathIcon Data="{StaticResource IconClose}" Width="14" Height="14"/></Button>
-                  </StackPanel>
-                </Grid>
-                <TextBlock Grid.Row="1" Text="{Binding Repository.Description}" Classes="muted" MaxLines="3" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" LineHeight="19"/>
-                <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                  <StackPanel Orientation="Horizontal" Spacing="12">
-                    <TextBlock Text="{Binding Repository.PrimaryLanguage}" Classes="meta" Foreground="{DynamicResource AccentTextBrush}"/>
-                    <TextBlock Text="{Binding Repository.StarsFormatted, StringFormat='★ {0}'}" Classes="meta"/>
-                    <TextBlock Text="{Binding Repository.ForksFormatted, StringFormat='Fork {0}'}" Classes="meta"/>
-                  </StackPanel>
-                  <TextBlock Grid.Column="1" Text="{Binding ReasonText}" Classes="meta" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
-                </Grid>
-              </Grid>
-            </Border>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
-      <Border IsVisible="{Binding IsEmpty}" Classes="card" MaxWidth="680" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="34"><Grid ColumnDefinitions="Auto,*" ColumnSpacing="24"><Border Width="72" Height="72" CornerRadius="20" Background="{DynamicResource AccentSoftBrush}"><PathIcon Data="{StaticResource IconDiscover}" Width="32" Height="32" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><StackPanel Grid.Column="1" Spacing="12"><TextBlock Text="{Binding StatusTitle}" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="{Binding StatusDescription}" Classes="muted" TextWrapping="Wrap"/><StackPanel Orientation="Horizontal" Spacing="8"><Button Classes="primary" Content="立即发现" Command="{Binding SyncCommand}"/><Button Classes="subtle" Content="登录 GitHub" Command="{Binding RequestLoginCommand}"/></StackPanel></StackPanel></Grid></Border>
     </Grid>
   </Grid>
 </UserControl>

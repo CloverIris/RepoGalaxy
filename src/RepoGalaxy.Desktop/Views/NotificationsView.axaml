@@ -8,7 +8,7 @@
         <ListBox.ItemTemplate><DataTemplate>
           <Border Classes="card" Margin="0,0,0,9" Padding="18,14">
             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
-              <Border Width="38" Height="38" CornerRadius="19" Background="{DynamicResource AccentSoftBrush}"><PathIcon Data="{StaticResource IconNotification}" Width="18" Height="18" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+              <Border Width="38" Height="38" CornerRadius="0" Background="{DynamicResource AccentSoftBrush}"><PathIcon Data="{StaticResource IconNotification}" Width="18" Height="18" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
               <StackPanel Grid.Column="1" Spacing="5"><StackPanel Orientation="Horizontal" Spacing="8"><TextBlock Text="{Binding Repository.FullName}" FontWeight="SemiBold" FontSize="15"/><Border Classes="badge"><TextBlock Text="{Binding SourceText}"/></Border></StackPanel><TextBlock Text="{Binding ReasonText}" Classes="muted" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding DiscoveredText}" Classes="meta"/></StackPanel>
               <Button Grid.Column="2" Classes="subtle" Content="标为已读" Command="{Binding DataContext.ReadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Id}" IsVisible="{Binding IsUnread}" VerticalAlignment="Center"/>
             </Grid>

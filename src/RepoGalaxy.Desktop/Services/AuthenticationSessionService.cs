@@ -50,6 +50,7 @@ public sealed class AuthenticationSessionService : IAuthenticationSessionService
             await db.RankingBatches.Where(x => x.AccountId == accountId).ExecuteDeleteAsync(cancellationToken);
             await db.SyncCheckpoints.Where(x => x.AccountId == accountId).ExecuteDeleteAsync(cancellationToken);
             await db.SyncRuns.Where(x => x.AccountId == accountId).ExecuteDeleteAsync(cancellationToken);
+            await db.TileBoards.Where(x => x.ScopeKey == accountId.ToLower()).ExecuteDeleteAsync(cancellationToken);
             await db.ApiCacheEntries.Where(x => EF.Functions.Like(x.Tags, "%|private|%")).ExecuteDeleteAsync(cancellationToken);
             await db.Users.Where(x => x.GitHubId == accountId).ExecuteDeleteAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);

@@ -92,6 +92,10 @@ class Program
         services.AddSingleton<IPersistentCacheStore, PersistentCacheStore>();
         services.AddSingleton<ICacheService, LayeredCacheService>();
         services.AddSingleton<ILazyRefreshCoordinator, LazyRefreshCoordinator>();
+        services.AddSingleton<IMetroTileLayoutService, MetroTileLayoutService>();
+        services.AddSingleton<ITilePaletteService, TilePaletteService>();
+        services.AddSingleton<ITipCatalog, TipCatalog>();
+        services.AddSingleton<ITileImageService, TileImageService>();
 
         // GitHub 服务 - 使用扩展方法注册
         services.AddGitHubServices(options =>

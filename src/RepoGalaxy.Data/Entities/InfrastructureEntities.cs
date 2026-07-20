@@ -118,3 +118,41 @@ public sealed class GitIdentityAliasEntity { [Key] public long Id { get; set; } 
 public sealed class NewsItemEntity { [Key] public long Id { get; set; } [Required] public string ExternalId { get; set; } = string.Empty; [Required] public string Title { get; set; } = string.Empty; public string Summary { get; set; } = string.Empty; [Required] public string Url { get; set; } = string.Empty; public string Source { get; set; } = string.Empty; public DateTimeOffset PublishedAt { get; set; } public DateTimeOffset FetchedAt { get; set; } }
 [Table("AuthenticationAuditEvents")]
 public sealed class AuthenticationAuditEventEntity { [Key] public long Id { get; set; } public string CorrelationId { get; set; } = string.Empty; public string EventType { get; set; } = string.Empty; public string Outcome { get; set; } = string.Empty; public string? AccountId { get; set; } public string? OriginPath { get; set; } public string? ErrorCode { get; set; } public DateTimeOffset OccurredAt { get; set; } }
+
+[Table("TileBoards")]
+public sealed class TileBoardEntity
+{
+    [Key] public long Id { get; set; }
+    [Required, MaxLength(120)] public string ScopeKey { get; set; } = "guest";
+    public int Source { get; set; }
+    public int LayoutVersion { get; set; } = 1;
+    public double ViewportX { get; set; }
+    public double ViewportY { get; set; }
+    public int ExtentColumns { get; set; } = 12;
+    public int ExtentRows { get; set; } = 6;
+    public DateTimeOffset UpdatedAt { get; set; }
+    public ICollection<TilePlacementEntity> Placements { get; set; } = new List<TilePlacementEntity>();
+}
+
+[Table("TilePlacements")]
+public sealed class TilePlacementEntity
+{
+    [Key] public long Id { get; set; }
+    public long BoardId { get; set; }
+    [Required, MaxLength(48)] public string ContentKind { get; set; } = "Tip";
+    [Required, MaxLength(240)] public string ContentKey { get; set; } = string.Empty;
+    public long? RepositoryId { get; set; }
+    public int Column { get; set; }
+    public int Row { get; set; }
+    public int ColumnSpan { get; set; } = 1;
+    public int RowSpan { get; set; } = 1;
+    public string Title { get; set; } = string.Empty;
+    public string Subtitle { get; set; } = string.Empty;
+    public string Caption { get; set; } = string.Empty;
+    public string AccentKey { get; set; } = string.Empty;
+    public string ImageUrl { get; set; } = string.Empty;
+    public bool IsPlaceholder { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+    [ForeignKey(nameof(BoardId))] public TileBoardEntity Board { get; set; } = null!;
+    [ForeignKey(nameof(RepositoryId))] public RepositoryEntity? Repository { get; set; }
+}

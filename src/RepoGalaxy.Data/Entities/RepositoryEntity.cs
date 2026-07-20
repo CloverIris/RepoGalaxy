@@ -14,6 +14,7 @@ public class RepositoryEntity
     public string? PrimaryLanguage { get; set; }
     public string? TopicsJson { get; set; }
     public string? HtmlUrl { get; set; }
+    public string? OwnerAvatarUrl { get; set; }
     public bool IsPrivate { get; set; }
     public bool IsArchived { get; set; }
     public int Stars { get; set; }
