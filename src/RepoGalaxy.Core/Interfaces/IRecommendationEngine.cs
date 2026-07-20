@@ -20,7 +20,7 @@ public interface IRecommendationEngine
     /// <summary>
     /// 基于聚类的推荐
     /// </summary>
-    Task<IEnumerable<Repository>> GetClusterRecommendationsAsync(IEnumerable<long> seedIds, int count = 15);
+    Task<IEnumerable<Repository>> GetRelatedRecommendationsAsync(IEnumerable<long> seedIds, int count = 15);
     
     /// <summary>
     /// 更新用户画像

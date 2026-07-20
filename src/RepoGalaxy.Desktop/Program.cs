@@ -12,7 +12,6 @@ using RepoGalaxy.GitHub.DependencyInjection;
 using RepoGalaxy.GitHub.Services;
 using RepoGalaxy.Recommendation.Engine;
 using RepoGalaxy.Recommendation.Services;
-using RepoGalaxy.Desktop.Controls;
 using Serilog;
 using System;
 using System.IO;
@@ -87,6 +86,7 @@ class Program
         services.AddSingleton<IRepositoryService, RepositoryService>();
         services.AddSingleton<IUserService, UserService>();
         services.AddSingleton<RepositoryService>();
+        services.AddSingleton<DiscoveryStore>();
 
         // GitHub 服务 - 使用扩展方法注册
         services.AddGitHubServices(options =>
@@ -145,21 +145,24 @@ class Program
         services.AddSingleton<IRecommendationEngine, RecommendationEngine>();
         
         // 数据源服务
-        services.AddSingleton<DataSourceService>();
+        services.AddSingleton<DiscoverySyncService>();
         
         // 后台同步服务
-        services.AddSingleton<BackgroundSyncService>();
         
         // 聚类管理器 (拖拽摇晃聚类)
-        services.AddScoped<ClusterManager>();
         
         // 注册 RepositorySyncService
         services.AddScoped<RepositorySyncService>();
+        services.AddSingleton<INotificationService>(_ => new ToastNotificationService(null));
+        services.AddSingleton<IDesktopNotificationService, DesktopNotificationService>();
 
         // ViewModels
         services.AddSingleton<MainWindowViewModel>();
-        services.AddSingleton<ExploreViewModel>();
-        services.AddSingleton<BookmarksViewModel>();
+        services.AddSingleton<DiscoverViewModel>();
+        services.AddSingleton<SubscriptionsViewModel>();
+        services.AddSingleton<LibraryViewModel>();
+        services.AddSingleton<NotificationsViewModel>();
+        services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<MyReposViewModel>();
         services.AddSingleton<LocalReposViewModel>();
 
@@ -174,7 +177,7 @@ class Program
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var appFolder = Path.Combine(appData, "RepoGalaxy");
         Directory.CreateDirectory(appFolder);
-        return Path.Combine(appFolder, "repogalaxy.db");
+        return Path.Combine(appFolder, "repogalaxy-v2.db");
     }
 
     /// <summary>

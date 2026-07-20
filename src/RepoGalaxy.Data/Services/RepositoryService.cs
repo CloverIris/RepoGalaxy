@@ -151,7 +151,6 @@ public class RepositoryService : IRepositoryService
             UpdatedAt = entity.UpdatedAt,
             LastPushedAt = entity.LastPushedAt,
             DiscoveryScore = entity.DiscoveryScore,
-            Orbit = (OrbitCategory)entity.OrbitCategoryId,
             IsBookmarked = entity.IsBookmarked,
             IsIgnored = entity.IsIgnored,
             LastViewedAt = entity.LastViewedAt,
@@ -159,7 +158,6 @@ public class RepositoryService : IRepositoryService
             CachedAt = entity.CachedAt,
             Languages = ParseLanguages(entity.LanguagesJson)
         };
-        repo.CalculateSize();
         return repo;
     }
     
@@ -182,7 +180,6 @@ public class RepositoryService : IRepositoryService
             CreatedAt = model.CreatedAt,
             UpdatedAt = model.UpdatedAt,
             LastPushedAt = model.LastPushedAt,
-            OrbitCategoryId = (int)model.Orbit,
             DiscoveryScore = model.DiscoveryScore,
             IsBookmarked = model.IsBookmarked,
             IsIgnored = model.IsIgnored,

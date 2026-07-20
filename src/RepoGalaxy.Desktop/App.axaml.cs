@@ -5,6 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using RepoGalaxy.Data.DbContexts;
 using RepoGalaxy.Desktop.ViewModels;
 using RepoGalaxy.Desktop.Views;
+using RepoGalaxy.Desktop.Services;
+using RepoGalaxy.Recommendation.Services;
 using Serilog;
 using System;
 
@@ -41,6 +43,7 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var mainWindow = new MainWindow();
+            ToastNotificationService.Attach(mainWindow);
             
             // 使用 DI 创建 ViewModel
             if (_serviceProvider != null)
@@ -50,6 +53,7 @@ public partial class App : Application
             }
 
             desktop.MainWindow = mainWindow;
+            desktop.Exit += (_, _) => _serviceProvider?.GetService<DiscoverySyncService>()?.Dispose();
         }
 
         base.OnFrameworkInitializationCompleted();

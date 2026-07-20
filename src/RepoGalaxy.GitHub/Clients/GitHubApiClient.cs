@@ -133,6 +133,24 @@ public class GitHubApiClient : Core.Interfaces.IGitHubClient, IDisposable
         return result;
     }
 
+    public async Task<ReleaseInfo?> GetLatestReleaseAsync(string owner, string name)
+    {
+        try
+        {
+            var release = await _client.Repository.Release.GetLatest(owner, name);
+            if (release.Prerelease || release.Draft || !release.PublishedAt.HasValue) return null;
+            return new ReleaseInfo
+            {
+                Id = release.Id,
+                TagName = release.TagName,
+                Name = release.Name ?? release.TagName,
+                HtmlUrl = release.HtmlUrl,
+                PublishedAt = release.PublishedAt.Value
+            };
+        }
+        catch { return null; }
+    }
+
     // 别名方法，与ViewModel使用的一致
     public async Task<IEnumerable<Core.Models.Repository>> GetCurrentUserRepositoriesAsync()
     {
@@ -205,7 +223,6 @@ public class GitHubApiClient : Core.Interfaces.IGitHubClient, IDisposable
         var result = MapToCoreRepository(repo);
         result.Languages = await GetLanguagesAsync(repo.Owner.Login, repo.Name);
         result.PrimaryLanguage = result.Languages.FirstOrDefault()?.Name ?? "Unknown";
-        result.CalculateSize();
         result.CalculateDiscoveryScore();
         return result;
     }

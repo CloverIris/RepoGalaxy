@@ -16,6 +16,7 @@ public interface IGitHubClient
     Task<IEnumerable<Repository>> SearchRepositoriesAsync(string query, string? language = null, string? sort = null);
     Task<IEnumerable<Repository>> GetTrendingAsync(string? language = null, string since = "daily");
     Task<IEnumerable<Repository>> GetUserRepositoriesAsync();
+    Task<ReleaseInfo?> GetLatestReleaseAsync(string owner, string name);
     
     // 语言统计
     Task<List<LanguageInfo>> GetLanguagesAsync(string owner, string name);

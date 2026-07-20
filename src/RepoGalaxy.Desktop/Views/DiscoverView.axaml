@@ -1,0 +1,20 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="RepoGalaxy.Desktop.Views.DiscoverView"
+             x:CompileBindings="False">
+  <Grid Margin="24" RowDefinitions="Auto,*" ColumnDefinitions="*,360" ColumnSpacing="24">
+    <Grid ColumnSpan="2" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,16">
+      <TextBlock Text="Discover" FontSize="28" FontWeight="SemiBold" />
+      <ComboBox Grid.Column="1" ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}" Width="150" HorizontalAlignment="Left" Margin="24,0" />
+      <Button Grid.Column="2" Content="Sync now" Command="{Binding SyncCommand}" />
+    </Grid>
+    <Grid Grid.Row="1">
+      <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoading}" Height="4" VerticalAlignment="Top" />
+      <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}" Margin="0,12,0,0">
+        <ListBox.ItemTemplate><DataTemplate><Border Padding="12" Margin="0,0,0,8"><Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="4"><TextBlock Text="{Binding Repository.FullName}" FontWeight="SemiBold"/><TextBlock Text="{Binding Repository.Description}" TextTrimming="CharacterEllipsis" MaxLines="2" Opacity="0.75"/><StackPanel Orientation="Horizontal" Spacing="12"><TextBlock Text="{Binding Reason.Summary}" FontSize="12"/><TextBlock Text="{Binding Repository.PrimaryLanguage}" FontSize="12" Opacity="0.7"/><TextBlock Text="{Binding Repository.Stars, StringFormat='★ {0:N0}'}" FontSize="12" Opacity="0.7"/></StackPanel></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"><Button Content="Save" Command="{Binding DataContext.SaveCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Id}"/><Button Content="Dismiss" Command="{Binding DataContext.DismissCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Id}"/></StackPanel></Grid></Border></DataTemplate></ListBox.ItemTemplate>
+      </ListBox>
+      <TextBlock Text="{Binding Status}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="360" />
+    </Grid>
+    <Border Grid.Row="1" Grid.Column="1" Padding="20" BorderBrush="{DynamicResource SystemControlForegroundBaseMediumBrush}" BorderThickness="1"><StackPanel Spacing="10"><TextBlock Text="Repository details" FontSize="18" FontWeight="SemiBold"/><TextBlock Text="{Binding SelectedItem.Repository.FullName}" FontSize="16"/><TextBlock Text="{Binding SelectedItem.Repository.Description}" TextWrapping="Wrap"/><TextBlock Text="{Binding SelectedItem.Reason.Summary}" Opacity="0.7" TextWrapping="Wrap"/><Separator/><TextBlock Text="Select an item to review why it was recommended." Opacity="0.65" TextWrapping="Wrap"/></StackPanel></Border>
+  </Grid>
+</UserControl>

@@ -101,7 +101,7 @@ public class RecommendationEngine : IRecommendationEngine
     /// <summary>
     /// 基于聚类的推荐
     /// </summary>
-    public async Task<IEnumerable<Repository>> GetClusterRecommendationsAsync(IEnumerable<long> seedIds, int count = 15)
+    public async Task<IEnumerable<Repository>> GetRelatedRecommendationsAsync(IEnumerable<long> seedIds, int count = 15)
     {
         var seeds = new List<Repository>();
         foreach (var id in seedIds)
@@ -112,12 +112,12 @@ public class RecommendationEngine : IRecommendationEngine
         
         if (!seeds.Any()) return Enumerable.Empty<Repository>();
         
-        var clusterProfile = BuildClusterProfile(seeds);
-        var candidates = await FindClusterCandidatesAsync(clusterProfile, seedIds);
+        var profile = BuildInterestProfile(seeds);
+        var candidates = await FindInterestCandidatesAsync(profile, seedIds);
         
         var scored = candidates.Select(repo =>
         {
-            var score = CalculateClusterMatchScore(repo, clusterProfile);
+            var score = CalculateInterestMatchScore(repo, profile);
             return new { Repository = repo, Score = score };
         });
         
@@ -354,9 +354,9 @@ public class RecommendationEngine : IRecommendationEngine
         return candidates.Distinct(new RepositoryComparer()).ToList();
     }
     
-    private ClusterProfile BuildClusterProfile(List<Repository> seeds)
+    private InterestProfile BuildInterestProfile(List<Repository> seeds)
     {
-        var profile = new ClusterProfile();
+        var profile = new InterestProfile();
         
         profile.CommonTopics = seeds
             .SelectMany(s => s.Topics)
@@ -382,7 +382,7 @@ public class RecommendationEngine : IRecommendationEngine
         return profile;
     }
     
-    private async Task<List<Repository>> FindClusterCandidatesAsync(ClusterProfile profile, IEnumerable<long> excludeIds)
+    private async Task<List<Repository>> FindInterestCandidatesAsync(InterestProfile profile, IEnumerable<long> excludeIds)
     {
         var candidates = new HashSet<Repository>(new RepositoryComparer());
         var excludeSet = new HashSet<long>(excludeIds);
@@ -404,7 +404,7 @@ public class RecommendationEngine : IRecommendationEngine
         return candidates.ToList();
     }
     
-    private double CalculateClusterMatchScore(Repository candidate, ClusterProfile profile)
+    private double CalculateInterestMatchScore(Repository candidate, InterestProfile profile)
     {
         var score = 0.0;
         
@@ -636,7 +636,7 @@ public class UserProfile
     public bool PreferSmallProjects { get; set; }
 }
 
-internal class ClusterProfile
+internal class InterestProfile
 {
     public List<string> CommonTopics { get; set; } = new();
     public List<string> CommonLanguages { get; set; } = new();

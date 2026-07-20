@@ -201,8 +201,7 @@ public class RepositorySyncService
             UpdatedAt = repo.UpdatedAt,
             LastPushedAt = repo.LastPushedAt,
             DiscoveryScore = repo.DiscoveryScore,
-            LanguagesJson = System.Text.Json.JsonSerializer.Serialize(repo.Languages),
-            OrbitCategoryId = (int)repo.Orbit
+            LanguagesJson = System.Text.Json.JsonSerializer.Serialize(repo.Languages)
         };
     }
 }
