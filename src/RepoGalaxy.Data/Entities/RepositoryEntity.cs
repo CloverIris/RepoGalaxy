@@ -14,6 +14,8 @@ public class RepositoryEntity
     public string? PrimaryLanguage { get; set; }
     public string? TopicsJson { get; set; }
     public string? HtmlUrl { get; set; }
+    public bool IsPrivate { get; set; }
+    public bool IsArchived { get; set; }
     public int Stars { get; set; }
     public int Forks { get; set; }
     public int Watchers { get; set; }
@@ -89,6 +91,10 @@ public class FeedItemEntity
     [Required] public string Reason { get; set; } = string.Empty;
     public string? MatchedRule { get; set; }
     public double Score { get; set; }
+    public double CoarseScore { get; set; }
+    public double FineScore { get; set; }
+    public string BatchId { get; set; } = string.Empty;
+    public bool IsExploration { get; set; }
     public DateTimeOffset DiscoveredAt { get; set; }
     public bool IsRead { get; set; }
     public bool IsDismissed { get; set; }
@@ -110,4 +116,4 @@ public class UserEntity { [Key] public long Id { get; set; } public string GitHu
 [Table("LocalRepositories")]
 public class LocalRepositoryEntity { [Key] public long Id { get; set; } [Required] public string Name { get; set; } = string.Empty; [Required] public string LocalPath { get; set; } = string.Empty; public string? GitHubUrl { get; set; } public bool IsTracked { get; set; } public DateTimeOffset AddedAt { get; set; } }
 [Table("UserPreferences")]
-public class UserPreferenceEntity { [Key] public long Id { get; set; } public long UserId { get; set; } public string? InterestedTopicsJson { get; set; } public string? InterestedLanguagesJson { get; set; } public int MinStarsThreshold { get; set; } public int MaxStarsThreshold { get; set; } = 1000000; public string? IgnoredTopicsJson { get; set; } public bool PreferFreshContent { get; set; } = true; public bool IncludeTrending { get; set; } = true; public bool PreferSmallProjects { get; set; } public bool DarkMode { get; set; } public int FeedPageSize { get; set; } = 50; public int MaxCacheSizeGB { get; set; } = 2; public bool AutoCleanCache { get; set; } = true; public bool? UseSystemTheme { get; set; } = true; public int SyncIntervalMinutes { get; set; } = 30; public double NotificationThreshold { get; set; } = .75; public DateTimeOffset LastUpdatedAt { get; set; } = DateTimeOffset.UtcNow; }
+public class UserPreferenceEntity { [Key] public long Id { get; set; } public long UserId { get; set; } public string? InterestedTopicsJson { get; set; } public string? InterestedLanguagesJson { get; set; } public int MinStarsThreshold { get; set; } public int MaxStarsThreshold { get; set; } = 1000000; public string? IgnoredTopicsJson { get; set; } public bool PreferFreshContent { get; set; } = true; public bool IncludeTrending { get; set; } = true; public bool PreferSmallProjects { get; set; } public bool DarkMode { get; set; } public int FeedPageSize { get; set; } = 50; public int MaxCacheSizeGB { get; set; } = 2; public bool AutoCleanCache { get; set; } = true; public bool? UseSystemTheme { get; set; } = true; public int SyncIntervalMinutes { get; set; } = 30; public double NotificationThreshold { get; set; } = .75; public int MemoryCacheSizeMB { get; set; } = 256; public int PersistentCacheSizeMB { get; set; } = 1024; public int FeedCacheTtlMinutes { get; set; } = 30; public int DetailCacheTtlMinutes { get; set; } = 360; public int NewsCacheTtlMinutes { get; set; } = 30; public string CachePreset { get; set; } = "均衡"; public DateTimeOffset LastUpdatedAt { get; set; } = DateTimeOffset.UtcNow; }

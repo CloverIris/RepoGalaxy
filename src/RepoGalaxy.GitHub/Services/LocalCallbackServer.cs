@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Security.Cryptography;
 
 namespace RepoGalaxy.GitHub.Services;
 
@@ -19,7 +20,7 @@ public sealed class LocalCallbackServer : IDisposable
         _path = callbackPath.StartsWith('/') ? callbackPath : "/" + callbackPath;
     }
 
-    public async Task<OAuthCallback?> WaitForCallbackAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    public async Task<OAuthCallback?> WaitForCallbackAsync(TimeSpan timeout, string expectedState, CancellationToken cancellationToken = default)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(timeout);
@@ -38,10 +39,12 @@ public sealed class LocalCallbackServer : IDisposable
                 }
                 var query = System.Web.HttpUtility.ParseQueryString(context.Request.Url?.Query ?? string.Empty);
                 var callback = new OAuthCallback(query["code"], query["state"], query["error"]);
-                await WritePageAsync(context.Response, callback.Error == null && callback.Code != null ? 200 : 400,
-                    callback.Error == null && callback.Code != null ? "登录已完成" : "登录未完成",
-                    callback.Error == null && callback.Code != null ? "你可以关闭此页面并返回 RepoGalaxy。" : "授权被取消或未能完成，请回到应用重试。");
-                return callback;
+                var stateMatches = callback.State is not null && FixedTimeEquals(expectedState, callback.State);
+                var succeeded = callback.Error == null && callback.Code != null && stateMatches;
+                await WritePageAsync(context.Response, succeeded ? 200 : 400,
+                    succeeded ? "登录已完成" : "登录未完成",
+                    succeeded ? "你可以关闭此页面并返回 RepoGalaxy。" : "授权被取消或验证失败，请回到应用重试。");
+                return succeeded ? callback : new OAuthCallback(null, null, callback.Error ?? "invalid_state");
             }
         }
         catch (OperationCanceledException) { }
@@ -58,5 +61,6 @@ public sealed class LocalCallbackServer : IDisposable
     }
 
     private void Stop() { try { _listener?.Stop(); _listener?.Close(); } catch { } }
+    private static bool FixedTimeEquals(string expected, string actual) => CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(actual));
     public void Dispose() => Stop();
 }

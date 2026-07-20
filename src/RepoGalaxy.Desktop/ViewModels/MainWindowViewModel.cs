@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using RepoGalaxy.Core.Interfaces;
 using RepoGalaxy.Desktop.Services;
 using RepoGalaxy.Desktop.ViewModels.Dialogs;
 using RepoGalaxy.Desktop.Views.Dialogs;
@@ -14,7 +15,7 @@ namespace RepoGalaxy.Desktop.ViewModels;
 
 public sealed partial class MainWindowViewModel : ViewModelBase
 {
-    private readonly GitHubTokenManager _tokens;
+    private readonly IAuthenticationSessionService _session;
     private readonly GitHubApiClient _github;
     private readonly GitHubAuthService _deviceFlow;
     private readonly OAuthCodeFlowService _loopback;
@@ -30,6 +31,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public LocalReposViewModel LocalRepos { get; }
     public SettingsViewModel Settings { get; }
     public RepositoryDetailsViewModel Details { get; }
+    public DashboardRailViewModel DashboardRail { get; }
+    public ViewModelBase RightRailContent => Details.IsOpen ? Details : DashboardRail;
+    private bool _isDashboardRailInline = true;
+    private bool _isDashboardRailRequested;
+    public bool IsRightRailOpen => Details.IsOpen || ReferenceEquals(CurrentView, Discover) && (_isDashboardRailInline || _isDashboardRailRequested);
+    public bool CanToggleRightRail => ReferenceEquals(CurrentView, Discover) && !_isDashboardRailInline;
 
     public IReadOnlyList<NavigationItemViewModel> PrimaryNavigation { get; }
     public IReadOnlyList<NavigationItemViewModel> WorkspaceNavigation { get; }
@@ -50,7 +57,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public string AccountInitial => string.IsNullOrWhiteSpace(CurrentUserLogin) ? "G" : CurrentUserLogin[..1].ToUpperInvariant();
 
     public MainWindowViewModel(
-        GitHubTokenManager tokens,
+        IAuthenticationSessionService session,
         GitHubApiClient github,
         GitHubAuthService deviceFlow,
         OAuthCodeFlowService loopback,
@@ -64,9 +71,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         MyReposViewModel myRepos,
         LocalReposViewModel localRepos,
         SettingsViewModel settings,
-        RepositoryDetailsViewModel details)
+        RepositoryDetailsViewModel details,
+        DashboardRailViewModel dashboardRail)
     {
-        _tokens = tokens;
+        _session = session;
         _github = github;
         _deviceFlow = deviceFlow;
         _loopback = loopback;
@@ -81,7 +89,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         LocalRepos = localRepos;
         Settings = settings;
         Details = details;
+        DashboardRail = dashboardRail;
         _currentView = discover;
+        Details.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(RepositoryDetailsViewModel.IsOpen))
+            {
+                OnPropertyChanged(nameof(RightRailContent));
+                OnPropertyChanged(nameof(IsRightRailOpen));
+            }
+        };
 
         PrimaryNavigation =
         [
@@ -116,32 +133,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private async Task InitializeAsync()
     {
-        var token = await _tokens.GetTokenAsync();
-        if (!string.IsNullOrWhiteSpace(token))
-        {
-            _github.SetAccessToken(token);
-            var user = await _github.GetCurrentUserAsync();
-            if (user is not null)
-            {
-                IsAuthenticated = true;
-                CurrentUserLogin = user.Login;
-                ConnectionStatus = "GitHub 已连接";
-                await _tokens.SaveSessionMetadataAsync("已验证会话", user.Login, "repo read:user");
-                _audit.Record("session", "verified", user.Login);
-                _sync.Start(true);
-                await Discover.LoadAsync();
-                return;
-            }
-
-            await _tokens.ClearTokenAsync();
-            _github.ClearAccessToken();
-            _audit.Record("session", "invalid");
-        }
-
-        IsAuthenticated = false;
-        ConnectionStatus = "游客模式 · 使用本地缓存";
-        _sync.Start(false);
+        var session = await _session.RestoreAsync();
+        IsAuthenticated = session.IsAuthenticated;
+        CurrentUserLogin = session.User?.Login ?? string.Empty;
+        ConnectionStatus = session.IsAuthenticated ? "GitHub 已连接" : "游客模式 · 使用本地缓存";
         await Discover.LoadAsync();
+        await DashboardRail.LoadAsync();
     }
 
     [RelayCommand]
@@ -163,6 +160,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             _ => Discover
         };
         CurrentViewName = item.Title;
+        OnPropertyChanged(nameof(IsRightRailOpen));
+        OnPropertyChanged(nameof(CanToggleRightRail));
         ConfigureSearch(item.Key);
 
         switch (CurrentView)
@@ -182,16 +181,38 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private void ToggleNavigation() => IsNavigationOpen = !IsNavigationOpen;
 
     [RelayCommand]
+    private void ToggleRightRail()
+    {
+        if (_isDashboardRailInline) return;
+        _isDashboardRailRequested = !_isDashboardRailRequested;
+        OnPropertyChanged(nameof(IsRightRailOpen));
+        OnPropertyChanged(nameof(CanToggleRightRail));
+    }
+
+    public void SetDashboardRailInline(bool value)
+    {
+        _isDashboardRailInline = value;
+        if (value) _isDashboardRailRequested = false;
+        OnPropertyChanged(nameof(IsRightRailOpen));
+        OnPropertyChanged(nameof(CanToggleRightRail));
+    }
+
+    [RelayCommand]
     private async Task LoginAsync()
     {
         if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop || desktop.MainWindow is null) return;
-        var vm = new LoginDialogViewModel(_deviceFlow, _loopback, _tokens, _audit);
+        var vm = new LoginDialogViewModel(_deviceFlow, _loopback, _session, _audit);
         var dialog = new LoginDialog { DataContext = vm };
         vm.LoginSuccess += (_, _) => dialog.Close(true);
         vm.Cancelled += (_, _) => dialog.Close(false);
         if (await dialog.ShowDialog<bool>(desktop.MainWindow))
         {
-            await InitializeAsync();
+            var session = _session.Current;
+            IsAuthenticated = session.IsAuthenticated;
+            CurrentUserLogin = session.User?.Login ?? string.Empty;
+            ConnectionStatus = session.IsAuthenticated ? "GitHub 已连接" : "游客模式";
+            await Discover.LoadAsync();
+            await DashboardRail.LoadAsync();
             SyncStatus = "登录成功，已开始同步";
         }
     }
@@ -199,8 +220,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task LogoutAsync()
     {
-        await _tokens.ClearTokenAsync();
-        _github.ClearAccessToken();
+        await _session.SignOutAsync();
         IsAuthenticated = false;
         CurrentUserLogin = string.Empty;
         ConnectionStatus = "游客模式 · 使用本地缓存";

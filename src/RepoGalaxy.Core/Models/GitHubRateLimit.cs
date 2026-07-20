@@ -10,3 +10,7 @@ public sealed class GitHubRateLimit
     public DateTimeOffset SearchResetAt { get; init; }
     public bool IsExhausted => CoreRemaining <= 0 || SearchRemaining <= 0;
 }
+
+public sealed record GitHubResponse<T>(T? Data, int StatusCode, string Resource, GitHubRateWindow? RateLimit, string? ETag = null, string? LastModified = null, bool NotModified = false, string? NextPageUrl = null);
+public sealed record GitHubPage<T>(IReadOnlyList<T> Items, string? NextPageUrl, GitHubRateWindow? RateLimit, string? ETag = null, string? LastModified = null);
+public sealed record GitHubRateWindow(string Resource, int Limit, int Remaining, DateTimeOffset ResetAt);

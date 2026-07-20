@@ -26,15 +26,21 @@ public partial class MainWindow : Window
 
     private void ApplyResponsiveLayout(double width)
     {
-        var mode = width >= 1440 ? 2 : width >= 1100 ? 1 : 0;
+        var mode = width >= 1440 ? 3 : width >= 1280 ? 2 : width >= 1000 ? 1 : 0;
         if (mode == _layoutMode || _navigationSplit is null || _detailsSplit is null) return;
         _layoutMode = mode;
 
-        if (mode == 2)
+        if (mode == 3)
         {
             _navigationSplit.DisplayMode = SplitViewDisplayMode.CompactInline;
             _detailsSplit.DisplayMode = SplitViewDisplayMode.Inline;
             if (DataContext is MainWindowViewModel vm) vm.IsNavigationOpen = true;
+        }
+        else if (mode == 2)
+        {
+            _navigationSplit.DisplayMode = SplitViewDisplayMode.CompactInline;
+            _detailsSplit.DisplayMode = SplitViewDisplayMode.Inline;
+            if (DataContext is MainWindowViewModel vm) vm.IsNavigationOpen = false;
         }
         else if (mode == 1)
         {
@@ -48,5 +54,6 @@ public partial class MainWindow : Window
             _detailsSplit.DisplayMode = SplitViewDisplayMode.Overlay;
             if (DataContext is MainWindowViewModel vm) vm.IsNavigationOpen = false;
         }
+        if (DataContext is MainWindowViewModel viewModel) viewModel.SetDashboardRailInline(mode >= 2);
     }
 }

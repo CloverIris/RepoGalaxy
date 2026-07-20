@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RepoGalaxy.Core.Models;
+using RepoGalaxy.Core.Interfaces;
 using RepoGalaxy.Data.Services;
 using RepoGalaxy.Desktop.Services;
 
@@ -10,6 +11,7 @@ public sealed partial class RepositoryDetailsViewModel : ViewModelBase
 {
     private readonly DiscoveryStore _store;
     private readonly IExternalLinkService _links;
+    private readonly IRecommendationEngine _recommendations;
 
     [ObservableProperty] private Repository? _repository;
     [ObservableProperty] private FeedReason? _reason;
@@ -26,10 +28,11 @@ public sealed partial class RepositoryDetailsViewModel : ViewModelBase
         : $"更新于 {Repository.UpdatedAt.LocalDateTime:yyyy-MM-dd}";
     public string SaveText => Repository?.IsBookmarked == true ? "已收藏" : "收藏";
 
-    public RepositoryDetailsViewModel(DiscoveryStore store, IExternalLinkService links)
+    public RepositoryDetailsViewModel(DiscoveryStore store, IExternalLinkService links, IRecommendationEngine recommendations)
     {
         _store = store;
         _links = links;
+        _recommendations = recommendations;
     }
 
     public void Show(Repository repository, FeedReason? reason = null)
@@ -45,17 +48,20 @@ public sealed partial class RepositoryDetailsViewModel : ViewModelBase
     public void Close() => IsOpen = false;
 
     [RelayCommand]
-    private void OpenOnGitHub()
+    private async Task OpenOnGitHubAsync()
     {
         if (!_links.Open(Repository?.HtmlUrl)) Feedback = "无法打开 GitHub 链接，请稍后重试。";
+        else if (Repository is not null) await _recommendations.RecordFeedbackAsync(Repository.Id, FeedbackType.Click);
     }
 
     [RelayCommand]
     private async Task ToggleSavedAsync()
     {
         if (Repository is null) return;
+        var isNewSave = !Repository.IsBookmarked;
         await _store.ToggleSavedAsync(Repository.Id);
         Repository.IsBookmarked = !Repository.IsBookmarked;
+        if (isNewSave) await _recommendations.RecordFeedbackAsync(Repository.Id, FeedbackType.Bookmark);
         Feedback = Repository.IsBookmarked ? "已添加到收藏库" : "已从收藏库移除";
         OnPropertyChanged(nameof(SaveText));
     }

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using RepoGalaxy.Core.Interfaces;
+using RepoGalaxy.Core.Models;
 using RepoGalaxy.Data.DbContexts;
 using RepoGalaxy.Data.Services;
 using RepoGalaxy.Desktop.Services;
@@ -16,6 +17,7 @@ using RepoGalaxy.Recommendation.Services;
 using Serilog;
 using System;
 using System.IO;
+using Serilog.Events;
 
 namespace RepoGalaxy.Desktop;
 
@@ -26,7 +28,9 @@ class Program
     {
         // 配置日志
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
+            .MinimumLevel.Information()
+            .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+            .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
             .WriteTo.Console()
             .WriteTo.File(
                 path: GetLogFilePath(),
@@ -72,14 +76,9 @@ class Program
             builder.AddSerilog(dispose: true);
         });
 
-        // 数据库上下文
-        services.AddSingleton<RepoGalaxyDbContext>(sp =>
-        {
-            var dbPath = GetDatabasePath();
-            Log.Information("数据库路径: {DbPath}", dbPath);
-            return sp.GetRequiredService<IDbContextFactory<RepoGalaxyDbContext>>().CreateDbContext();
-        });
-        services.AddDbContextFactory<RepoGalaxyDbContext>(options => options.UseSqlite($"Data Source={GetDatabasePath()}"));
+        // 数据库上下文只通过 factory 创建短生命周期实例，避免跨线程共享跟踪状态。
+        services.AddDbContextFactory<RepoGalaxyDbContext>(options => options.UseSqlite($"Data Source={GetDatabasePath()};Cache=Shared;Pooling=True;Foreign Keys=True;Default Timeout=5"));
+        services.AddSingleton(sp => new DatabaseLifecycleService(sp.GetRequiredService<IDbContextFactory<RepoGalaxyDbContext>>(), GetDatabasePath()));
 
         // 安全存储
         services.AddSingleton<ISecureStorage, SecureStorage>();
@@ -89,6 +88,10 @@ class Program
         services.AddSingleton<IUserService, UserService>();
         services.AddSingleton<RepositoryService>();
         services.AddSingleton<DiscoveryStore>();
+        services.AddSingleton<IMemoryCacheStore, MemoryCacheStore>();
+        services.AddSingleton<IPersistentCacheStore, PersistentCacheStore>();
+        services.AddSingleton<ICacheService, LayeredCacheService>();
+        services.AddSingleton<ILazyRefreshCoordinator, LazyRefreshCoordinator>();
 
         // GitHub 服务 - 使用扩展方法注册
         services.AddGitHubServices(options =>
@@ -134,8 +137,8 @@ class Program
             }
             
             // Device Flow 不需要 Client Secret
-            options.ClientSecret = Environment.GetEnvironmentVariable("REP0GALAXY_GITHUB_CLIENT_SECRET")
-                ?? Environment.GetEnvironmentVariable("REPOGALAXY_GITHUB_CLIENT_SECRET");
+            options.ClientSecret = Environment.GetEnvironmentVariable("REPOGALAXY_GITHUB_CLIENT_SECRET")
+                ?? Environment.GetEnvironmentVariable("REP0GALAXY_GITHUB_CLIENT_SECRET");
             options.Scope = "repo read:user";
             options.TimeoutSeconds = 30;
             options.RateLimitPerSecond = 10;
@@ -145,6 +148,7 @@ class Program
         services.AddSingleton<IGitHubClient>(sp => sp.GetRequiredService<GitHubApiClient>());
 
         // 推荐引擎
+        services.AddSingleton<IRankingPipeline, RankingPipeline>();
         services.AddSingleton<IRecommendationEngine, RecommendationEngine>();
         
         // 数据源服务
@@ -154,16 +158,17 @@ class Program
         
         // 聚类管理器 (拖拽摇晃聚类)
         
-        // 注册 RepositorySyncService
-        services.AddScoped<RepositorySyncService>();
         services.AddSingleton<INotificationService>(_ => new ToastNotificationService(null));
         services.AddSingleton<IDesktopNotificationService, DesktopNotificationService>();
         services.AddSingleton<IAuthenticationAuditService, AuthenticationAuditService>();
+        services.AddSingleton<IAuthenticationSessionService, AuthenticationSessionService>();
         services.AddSingleton<IExternalLinkService, ExternalLinkService>();
+        services.AddSingleton<DashboardDataService>();
 
         // ViewModels
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<RepositoryDetailsViewModel>();
+        services.AddSingleton<DashboardRailViewModel>();
         services.AddSingleton<DiscoverViewModel>();
         services.AddSingleton<SubscriptionsViewModel>();
         services.AddSingleton<LibraryViewModel>();
@@ -183,7 +188,7 @@ class Program
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var appFolder = Path.Combine(appData, "RepoGalaxy");
         Directory.CreateDirectory(appFolder);
-        return Path.Combine(appFolder, "repogalaxy-v2.db");
+        return Path.Combine(appFolder, "repogalaxy-v3.db");
     }
 
     /// <summary>

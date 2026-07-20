@@ -72,6 +72,24 @@ public sealed class DesktopPresentationTests
     }
 
     [Fact]
+    public void MainWindow_switches_shell_modes_at_the_three_responsive_widths()
+    {
+        TestAppBuilder.EnsureInitialized();
+        var window = new MainWindow();
+        var method = typeof(MainWindow).GetMethod("ApplyResponsiveLayout", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Responsive layout method was not found.");
+        var navigation = window.FindControl<SplitView>("NavigationSplit") ?? throw new InvalidOperationException("Navigation split was not found.");
+        var details = window.FindControl<SplitView>("DetailsSplit") ?? throw new InvalidOperationException("Details split was not found.");
+
+        method.Invoke(window, [1440d]);
+        Check(navigation.DisplayMode == SplitViewDisplayMode.CompactInline && details.DisplayMode == SplitViewDisplayMode.Inline, "Wide layout should keep the right rail inline.");
+        method.Invoke(window, [1100d]);
+        Check(navigation.DisplayMode == SplitViewDisplayMode.CompactInline && details.DisplayMode == SplitViewDisplayMode.Overlay, "Medium layout should use a right drawer.");
+        method.Invoke(window, [950d]);
+        Check(navigation.DisplayMode == SplitViewDisplayMode.Overlay && details.DisplayMode == SplitViewDisplayMode.Overlay, "Narrow layout should overlay navigation and details.");
+    }
+
+    [Fact]
     public void ThemeResources_ResolveForLightAndDark()
     {
         TestAppBuilder.EnsureInitialized();

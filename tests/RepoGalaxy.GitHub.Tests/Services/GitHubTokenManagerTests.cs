@@ -22,15 +22,16 @@ public class GitHubTokenManagerTests
     {
         // Arrange
         var token = "ghp_test_token_123";
-        _secureStorage.SetAsync("github_access_token", token).Returns(true);
-        _secureStorage.SetAsync("github_token_expires_at", Arg.Any<string>()).Returns(true);
+        _secureStorage.SetAsync("github_credential_envelope_v3", Arg.Any<string>()).Returns(true);
 
         // Act
         var result = await _tokenManager.SaveTokenAsync(token, DateTimeOffset.Now.AddHours(8));
 
         // Assert
         result.Should().BeTrue();
-        await _secureStorage.Received(1).SetAsync("github_access_token", token);
+        await _secureStorage.Received(1).SetAsync(
+            "github_credential_envelope_v3",
+            Arg.Is<string>(value => value.Contains(token, StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -121,16 +122,15 @@ public class GitHubTokenManagerTests
     public async Task ClearTokenAsync_ClearsAllTokens()
     {
         // Arrange
-        _secureStorage.SetAsync(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
-
         // Act
         var result = await _tokenManager.ClearTokenAsync();
 
         // Assert
         result.Should().BeTrue();
-        await _secureStorage.Received(1).SetAsync("github_access_token", "");
-        await _secureStorage.Received(1).SetAsync("github_token_expires_at", "");
-        await _secureStorage.Received(1).SetAsync("github_refresh_token", "");
+        await _secureStorage.Received(1).RemoveAsync("github_credential_envelope_v3");
+        await _secureStorage.Received(1).RemoveAsync("github_access_token");
+        await _secureStorage.Received(1).RemoveAsync("github_token_expires_at");
+        await _secureStorage.Received(1).RemoveAsync("github_refresh_token");
     }
 
     [Fact]

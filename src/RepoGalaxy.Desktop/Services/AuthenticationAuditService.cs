@@ -1,43 +1,77 @@
 using System;
-using System.IO;
 using System.Linq;
-using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using RepoGalaxy.Data.DbContexts;
+using RepoGalaxy.Data.Entities;
 
 namespace RepoGalaxy.Desktop.Services;
 
-public interface IAuthenticationAuditService { void Record(string action, string outcome, string? detail = null); }
+public interface IAuthenticationAuditService
+{
+    void Record(string action, string outcome, string? detail = null, string? accountId = null);
+}
 
-/// <summary>Local, token-free authentication audit trail retained for thirty days.</summary>
+/// <summary>Database-backed, token-free authentication audit trail retained for thirty days.</summary>
 public sealed class AuthenticationAuditService : IAuthenticationAuditService
 {
-    private readonly string _path;
+    private readonly IDbContextFactory<RepoGalaxyDbContext> _factory;
     private readonly object _gate = new();
-    public AuthenticationAuditService()
+
+    public AuthenticationAuditService(IDbContextFactory<RepoGalaxyDbContext> factory)
     {
-        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RepoGalaxy", "Audit");
-        Directory.CreateDirectory(directory); _path = Path.Combine(directory, "authentication.jsonl");
+        _factory = factory;
         Prune();
     }
-    public void Record(string action, string outcome, string? detail = null)
-    {
-        var entry = JsonSerializer.Serialize(new { timestamp = DateTimeOffset.UtcNow, action, outcome, detail = Sanitize(detail) });
-        lock (_gate) File.AppendAllText(_path, entry + Environment.NewLine);
-    }
-    private void Prune()
-    {
-        if (!File.Exists(_path)) return;
-        var cutoff = DateTimeOffset.UtcNow.AddDays(-30);
-        var retained = File.ReadLines(_path).Where(line => TryKeep(line, cutoff));
-        File.WriteAllLines(_path, retained);
-    }
-    private static bool TryKeep(string line, DateTimeOffset cutoff)
+
+    public void Record(string action, string outcome, string? detail = null, string? accountId = null)
     {
         try
         {
-            using var doc = JsonDocument.Parse(line);
-            return doc.RootElement.TryGetProperty("timestamp", out var time) && time.GetDateTimeOffset() >= cutoff;
+            var (originPath, errorCode) = Sanitize(detail);
+            lock (_gate)
+            {
+                using var db = _factory.CreateDbContext();
+                db.AuthenticationAuditEvents.Add(new AuthenticationAuditEventEntity
+                {
+                    CorrelationId = Guid.NewGuid().ToString("N"),
+                    EventType = SafeCode(action),
+                    Outcome = SafeCode(outcome),
+                    AccountId = string.IsNullOrWhiteSpace(accountId) ? null : SafeCode(accountId),
+                    OriginPath = originPath,
+                    ErrorCode = errorCode,
+                    OccurredAt = DateTimeOffset.UtcNow
+                });
+                db.SaveChanges();
+            }
         }
-        catch { return false; }
+        catch
+        {
+            // Authentication must never fail merely because its audit sink is unavailable.
+        }
     }
-    private static string? Sanitize(string? detail) => string.IsNullOrWhiteSpace(detail) ? null : detail.Split('?', '#')[0].Replace("token", "[redacted]", StringComparison.OrdinalIgnoreCase).Replace("code", "[redacted]", StringComparison.OrdinalIgnoreCase).Replace("state", "[redacted]", StringComparison.OrdinalIgnoreCase);
+
+    private void Prune()
+    {
+        try
+        {
+            using var db = _factory.CreateDbContext();
+            var cutoff = DateTimeOffset.UtcNow.AddDays(-30);
+            db.AuthenticationAuditEvents.Where(x => x.OccurredAt < cutoff).ExecuteDelete();
+        }
+        catch { }
+    }
+
+    private static (string? OriginPath, string? ErrorCode) Sanitize(string? detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail)) return (null, null);
+        if (Uri.TryCreate(detail, UriKind.Absolute, out var uri))
+            return ($"{uri.Scheme}://{uri.Authority}{uri.AbsolutePath}", null);
+        return (null, SafeCode(detail));
+    }
+
+    private static string SafeCode(string value)
+    {
+        var safe = new string(value.Where(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.' or ':').Take(80).ToArray());
+        return string.IsNullOrEmpty(safe) ? "redacted" : safe;
+    }
 }

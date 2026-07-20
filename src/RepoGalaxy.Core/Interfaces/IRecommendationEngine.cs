@@ -11,6 +11,7 @@ public interface IRecommendationEngine
     /// 获取个性化推荐
     /// </summary>
     Task<IEnumerable<Repository>> GetRecommendationsAsync(int count = 20);
+    Task<IReadOnlyList<RankedRecommendation>> GetRankedRecommendationsAsync(int count = 60);
     
     /// <summary>
     /// 获取相似仓库

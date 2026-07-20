@@ -138,11 +138,11 @@
       <SplitView x:Name="DetailsSplit"
                  PanePlacement="Right"
                  DisplayMode="Inline"
-                 IsPaneOpen="{Binding Details.IsOpen}"
-                 OpenPaneLength="380"
+                 IsPaneOpen="{Binding IsRightRailOpen}"
+                 OpenPaneLength="300"
                  CompactPaneLength="0">
         <SplitView.Pane>
-          <ContentControl Content="{Binding Details}" Width="380"/>
+          <ContentControl Content="{Binding RightRailContent}" Width="300"/>
         </SplitView.Pane>
         <Grid RowDefinitions="Auto,*">
           <Border Padding="28,13" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Background="{DynamicResource CanvasBrush}">
@@ -151,6 +151,7 @@
                 <TextBlock Text="{Binding CurrentViewName}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 <TextBlock Text="{Binding SyncStatus}" Classes="meta" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="460"/>
               </StackPanel>
+              <Button Grid.Column="1" Classes="subtle" Command="{Binding ToggleRightRailCommand}" Content="侧栏" IsVisible="{Binding CanToggleRightRail}"/>
             </Grid>
           </Border>
           <ContentControl Grid.Row="1" Content="{Binding CurrentView}"/>

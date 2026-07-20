@@ -64,8 +64,7 @@ public class GitHubAuthService
         
         if (!response.IsSuccessStatusCode)
         {
-            _logger?.LogError("Device flow start failed: {StatusCode}, {Content}", 
-                response.StatusCode, content);
+            _logger?.LogError("Device flow start failed: {StatusCode}", response.StatusCode);
             throw new InvalidOperationException(
                 $"启动 Device Flow 失败: {response.StatusCode}\n\n" +
                 "可能原因：\n" +
@@ -122,8 +121,6 @@ public class GitHubAuthService
         {
             var response = await _httpClient.SendAsync(request, ct);
             var content = await response.Content.ReadAsStringAsync(ct);
-            
-            _logger?.LogDebug("Poll response: {Content}", content);
             
             var result = ParseJsonOrQueryString(content);
             
@@ -250,33 +247,12 @@ public class GitHubAuthService
     public void OpenVerificationPage(string? uri = null)
     {
         var targetUri = uri ?? "https://github.com/login/device";
-        
+        if (!Uri.TryCreate(targetUri, UriKind.Absolute, out var parsed) || parsed.Scheme != Uri.UriSchemeHttps || !parsed.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("拒绝打开不可信的授权地址。");
         try { Process.Start(new ProcessStartInfo { FileName = targetUri, UseShellExecute = true }); }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Failed to open browser");
-        }
-    }
-    
-    /// <summary>
-    /// 验证 PAT 是否有效
-    /// </summary>
-    public async Task<bool> ValidateTokenAsync(string token)
-    {
-        try
-        {
-            using var client = new HttpClient();
-            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
-            client.DefaultRequestHeaders.Add("User-Agent", "RepoGalaxy");
-            client.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
-            client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
-            
-            var response = await client.GetAsync("https://api.github.com/user");
-            return response.IsSuccessStatusCode;
-        }
-        catch
-        {
-            return false;
         }
     }
     

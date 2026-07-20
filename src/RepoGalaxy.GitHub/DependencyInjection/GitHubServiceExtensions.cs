@@ -4,6 +4,7 @@ using RepoGalaxy.GitHub.Auth;
 using RepoGalaxy.GitHub.Clients;
 using RepoGalaxy.GitHub.Configuration;
 using RepoGalaxy.GitHub.Services;
+using RepoGalaxy.Core.Interfaces;
 
 namespace RepoGalaxy.GitHub.DependencyInjection;
 
@@ -27,13 +28,8 @@ public static class GitHubServiceExtensions
             return options;
         });
         
-        // 注册限流器
-        services.AddSingleton<RateLimiter>(sp =>
-        {
-            var options = sp.GetRequiredService<GitHubOptions>();
-            return new RateLimiter(options.RateLimitPerSecond);
-        });
         services.AddSingleton<GitHubRequestBudget>();
+        services.AddSingleton<ISyncOrchestrator, SyncOrchestrator>();
         
         // 注册 Token 管理器
         services.AddSingleton<GitHubTokenManager>();
@@ -53,27 +49,21 @@ public static class GitHubServiceExtensions
             return new OAuthCodeFlowService(options);
         });
         
-        // 注册 API 客户端
-        services.AddSingleton<GitHubApiClient>(sp =>
+        services.AddHttpClient("RepoGalaxy.GitHub", (sp, client) =>
         {
-            var client = new GitHubApiClient();
-            
-            // 如果有存储的 Token，自动设置
-            var tokenManager = sp.GetService<GitHubTokenManager>();
-            if (tokenManager != null)
-            {
-                var token = tokenManager.GetTokenAsync().GetAwaiter().GetResult();
-                if (!string.IsNullOrEmpty(token))
-                {
-                    client.SetAccessToken(token);
-                }
-            }
-            
-            return client;
+            var options = sp.GetRequiredService<GitHubOptions>();
+            client.BaseAddress = new Uri(options.ApiBaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("RepoGalaxy/3.0");
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+            client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2026-03-10");
         });
-        
-        // 注册同步服务
-        services.AddScoped<RepositorySyncService>();
+        services.AddSingleton<GitHubApiClient>(sp => new(
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient("RepoGalaxy.GitHub"),
+            sp.GetRequiredService<GitHubRequestBudget>(),
+            sp.GetRequiredService<ISyncOrchestrator>(),
+            sp.GetService<ICacheService>(),
+            sp.GetService<IUserService>()));
         
         return services;
     }

@@ -5,5 +5,7 @@
     <Nullable>enable</Nullable>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1903</WarningsAsErrors>
+    <AvaloniaTelemetryOptOut>true</AvaloniaTelemetryOptOut>
   </PropertyGroup>
 </Project>

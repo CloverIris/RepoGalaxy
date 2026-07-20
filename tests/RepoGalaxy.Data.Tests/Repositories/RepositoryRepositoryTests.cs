@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using RepoGalaxy.Data.DbContexts;
 using RepoGalaxy.Data.Entities;
 using RepoGalaxy.Data.Repositories;
@@ -11,24 +12,31 @@ public class RepositoryRepositoryTests : IDisposable
 {
     private readonly RepoGalaxyDbContext _context;
     private readonly RepositoryRepository _repository;
+    private readonly SqliteConnection _connection;
 
     public RepositoryRepositoryTests()
     {
+        _connection = new SqliteConnection("DataSource=:memory:");
+        _connection.Open();
         var options = new DbContextOptionsBuilder<RepoGalaxyDbContext>()
-            .UseSqlite("DataSource=:memory:")
+            .UseSqlite(_connection)
             .Options;
 
         _context = new RepoGalaxyDbContext(options);
-        _context.Database.OpenConnection();
         _context.Database.EnsureCreated();
 
-        _repository = new RepositoryRepository(_context);
+        _repository = new RepositoryRepository(new FactoryAdapter(options));
     }
 
     public void Dispose()
     {
-        _context.Database.CloseConnection();
         _context.Dispose();
+        _connection.Dispose();
+    }
+
+    private sealed class FactoryAdapter(DbContextOptions<RepoGalaxyDbContext> options) : IDbContextFactory<RepoGalaxyDbContext>
+    {
+        public RepoGalaxyDbContext CreateDbContext() => new(options);
     }
 
     private RepositoryEntity CreateTestEntity(string owner, string name, int stars = 100)
@@ -245,8 +253,8 @@ public class RepositoryRepositoryTests : IDisposable
         await _repository.AddOrUpdateAsync(old);
         
         // 手动更新 CachedAt（绕过 Repository 的自动更新）
-        recent.CachedAt = DateTimeOffset.Now.AddHours(-1);
-        old.CachedAt = DateTimeOffset.Now.AddDays(-10);
+        (await _context.Repositories.SingleAsync(x => x.Name == "recent")).CachedAt = DateTimeOffset.Now.AddHours(-1);
+        (await _context.Repositories.SingleAsync(x => x.Name == "old")).CachedAt = DateTimeOffset.Now.AddDays(-10);
         await _context.SaveChangesAsync();
 
         // Act
@@ -270,8 +278,8 @@ public class RepositoryRepositoryTests : IDisposable
         await _repository.AddOrUpdateAsync(bookmarked);
         
         // 手动更新 CachedAt（绕过 Repository 的自动更新）
-        old.CachedAt = DateTimeOffset.Now.AddDays(-10);
-        bookmarked.CachedAt = DateTimeOffset.Now.AddDays(-10);
+        (await _context.Repositories.SingleAsync(x => x.Name == "to-delete")).CachedAt = DateTimeOffset.Now.AddDays(-10);
+        (await _context.Repositories.SingleAsync(x => x.Name == "bookmarked")).CachedAt = DateTimeOffset.Now.AddDays(-10);
         await _context.SaveChangesAsync();
 
         // Act

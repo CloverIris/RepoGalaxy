@@ -11,6 +11,7 @@ public class GitHubTokenManager
 {
     private readonly ISecureStorage _secureStorage;
     private const string TokenKey = "github_access_token";
+    private const string CredentialEnvelopeKey = "github_credential_envelope_v3";
     private const string TokenExpiryKey = "github_token_expires_at";
     private const string RefreshTokenKey = "github_refresh_token";
     private const string SessionMetadataKey = "github_session_metadata";
@@ -27,21 +28,7 @@ public class GitHubTokenManager
     {
         try
         {
-            var success = await _secureStorage.SetAsync(TokenKey, accessToken);
-            if (!success) return false;
-            
-            if (expiresAt.HasValue)
-            {
-                await _secureStorage.SetAsync(TokenExpiryKey, expiresAt.Value.ToString("O"));
-            }
-            
-            // 存储 RefreshToken（用于自动刷新）
-            if (!string.IsNullOrEmpty(refreshToken))
-            {
-                await _secureStorage.SetAsync(RefreshTokenKey, refreshToken);
-            }
-            
-            return true;
+            return await _secureStorage.SetAsync(CredentialEnvelopeKey, JsonSerializer.Serialize(new CredentialEnvelope { AccessToken = accessToken, RefreshToken = refreshToken, ExpiresAt = expiresAt }));
         }
         catch
         {
@@ -54,7 +41,8 @@ public class GitHubTokenManager
     /// </summary>
     public async Task<string?> GetTokenAsync()
     {
-        return await _secureStorage.GetAsync(TokenKey);
+        var envelope = await ReadEnvelopeAsync();
+        return envelope?.AccessToken ?? await _secureStorage.GetAsync(TokenKey);
     }
     
     /// <summary>
@@ -62,6 +50,8 @@ public class GitHubTokenManager
     /// </summary>
     public async Task<DateTimeOffset?> GetTokenExpiryAsync()
     {
+        var envelope = await ReadEnvelopeAsync();
+        if (envelope?.ExpiresAt is { } stored) return stored;
         var expiryStr = await _secureStorage.GetAsync(TokenExpiryKey);
         if (string.IsNullOrEmpty(expiryStr))
             return null;
@@ -101,13 +91,14 @@ public class GitHubTokenManager
     {
         try
         {
-            // Clearing to an encrypted empty value keeps compatibility with secure
-            // stores that do not support deletion; no credential material remains.
-            var tokenCleared = await _secureStorage.SetAsync(TokenKey, "");
-            var expiryCleared = await _secureStorage.SetAsync(TokenExpiryKey, "");
-            var refreshCleared = await _secureStorage.SetAsync(RefreshTokenKey, "");
+            // Deletion is intentionally idempotent: a missing legacy key does not
+            // make logout fail. Storage exceptions still surface as a failure.
+            await _secureStorage.RemoveAsync(CredentialEnvelopeKey);
+            await _secureStorage.RemoveAsync(TokenKey);
+            await _secureStorage.RemoveAsync(TokenExpiryKey);
+            await _secureStorage.RemoveAsync(RefreshTokenKey);
             await _secureStorage.RemoveAsync(SessionMetadataKey);
-            return tokenCleared && expiryCleared && refreshCleared;
+            return true;
         }
         catch
         {
@@ -120,7 +111,7 @@ public class GitHubTokenManager
     /// </summary>
     public async Task<string?> GetRefreshTokenAsync()
     {
-        return await _secureStorage.GetAsync(RefreshTokenKey);
+        return (await ReadEnvelopeAsync())?.RefreshToken ?? await _secureStorage.GetAsync(RefreshTokenKey);
     }
     
     /// <summary>
@@ -200,7 +191,16 @@ public class GitHubTokenManager
         try { return string.IsNullOrWhiteSpace(json) ? null : JsonSerializer.Deserialize<TokenSessionMetadata>(json); }
         catch { return null; }
     }
+
+    private async Task<CredentialEnvelope?> ReadEnvelopeAsync()
+    {
+        var json = await _secureStorage.GetAsync(CredentialEnvelopeKey);
+        try { return string.IsNullOrWhiteSpace(json) ? null : JsonSerializer.Deserialize<CredentialEnvelope>(json); }
+        catch { return null; }
+    }
 }
+
+internal sealed class CredentialEnvelope { public string AccessToken { get; set; } = string.Empty; public string? RefreshToken { get; set; } public DateTimeOffset? ExpiresAt { get; set; } }
 
 public sealed class TokenSessionMetadata
 {

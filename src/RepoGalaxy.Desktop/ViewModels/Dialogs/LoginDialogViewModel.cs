@@ -1,8 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using RepoGalaxy.Core.Interfaces;
 using RepoGalaxy.Desktop.Services;
 using RepoGalaxy.GitHub.Auth;
 using RepoGalaxy.GitHub.Services;
@@ -15,7 +17,7 @@ public sealed partial class LoginDialogViewModel : ObservableObject
 {
     private readonly GitHubAuthService _deviceFlow;
     private readonly OAuthCodeFlowService _loopback;
-    private readonly GitHubTokenManager _tokens;
+    private readonly IAuthenticationSessionService _session;
     private readonly IAuthenticationAuditService _audit;
     private CancellationTokenSource? _cancellation;
     private string _deviceCode = string.Empty;
@@ -33,9 +35,9 @@ public sealed partial class LoginDialogViewModel : ObservableObject
     public event EventHandler? LoginSuccess;
     public event EventHandler? Cancelled;
 
-    public LoginDialogViewModel(GitHubAuthService deviceFlow, OAuthCodeFlowService loopback, GitHubTokenManager tokens, IAuthenticationAuditService audit)
+    public LoginDialogViewModel(GitHubAuthService deviceFlow, OAuthCodeFlowService loopback, IAuthenticationSessionService session, IAuthenticationAuditService audit)
     {
-        _deviceFlow = deviceFlow; _loopback = loopback; _tokens = tokens; _audit = audit;
+        _deviceFlow = deviceFlow; _loopback = loopback; _session = session; _audit = audit;
     }
 
     [RelayCommand] private async Task StartDeviceLoginAsync()
@@ -68,6 +70,7 @@ public sealed partial class LoginDialogViewModel : ObservableObject
             if (token == null) { Fail("授权超时或被取消。", "timeout"); return; }
             await CompleteAsync(token.AccessToken, "OAuth 回环");
         }
+        catch (HttpListenerException) { StatusText = "本地回环端口不可用，已切换到设备码登录。"; await StartDeviceLoginAsync(); }
         catch (Exception ex) { Fail("浏览器登录未完成。", ex.GetType().Name); }
     }
 
@@ -77,8 +80,9 @@ public sealed partial class LoginDialogViewModel : ObservableObject
         CurrentState = LoginState.Polling; StatusText = "正在验证凭证…"; _audit.Record("pat", "started");
         try
         {
-            if (!await _deviceFlow.ValidateTokenAsync(PatToken)) { Fail("该 Token 无效或无权访问。", "invalid"); return; }
-            await CompleteAsync(PatToken, "Personal Access Token");
+            var credential = PatToken;
+            PatToken = string.Empty;
+            await CompleteAsync(credential, "Personal Access Token");
         }
         catch (Exception ex) { Fail("凭证验证失败。", ex.GetType().Name); }
     }
@@ -105,8 +109,10 @@ public sealed partial class LoginDialogViewModel : ObservableObject
 
     private async Task CompleteAsync(string accessToken, string method)
     {
-        if (!await _tokens.SaveTokenAsync(accessToken)) { Fail("无法安全保存凭证。", "storage"); return; }
-        CurrentState = LoginState.Success; StatusText = "已安全保存凭证，正在验证账号…"; _audit.Record("credential", "saved", method); LoginSuccess?.Invoke(this, EventArgs.Empty);
+        StatusText = "正在验证账号并建立安全会话…";
+        var session = await _session.SignInAsync(accessToken, method, _cancellation?.Token ?? CancellationToken.None);
+        if (!session.IsAuthenticated) { Fail(session.ErrorCode == "credential_storage" ? "无法安全保存凭证。" : "GitHub 凭证验证失败。", session.ErrorCode ?? "validation"); return; }
+        CurrentState = LoginState.Success; StatusText = $"已登录 {session.User!.Login}，后台同步已经开始。"; _audit.Record("credential", "verified", method); LoginSuccess?.Invoke(this, EventArgs.Empty);
     }
     [RelayCommand] private void Retry() => Reset();
     [RelayCommand] private void Cancel() { _cancellation?.Cancel(); _audit.Record("login", "cancelled"); Cancelled?.Invoke(this, EventArgs.Empty); }

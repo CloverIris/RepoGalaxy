@@ -73,4 +73,10 @@ public class UserPreference
     // 缓存设置
     public int MaxCacheSizeGB { get; set; } = 2;
     public bool AutoCleanCache { get; set; } = true;
+    public int MemoryCacheSizeMB { get; set; } = 256;
+    public int PersistentCacheSizeMB { get; set; } = 1024;
+    public int FeedCacheTtlMinutes { get; set; } = 30;
+    public int DetailCacheTtlMinutes { get; set; } = 360;
+    public int NewsCacheTtlMinutes { get; set; } = 30;
+    public string CachePreset { get; set; } = "均衡";
 }
