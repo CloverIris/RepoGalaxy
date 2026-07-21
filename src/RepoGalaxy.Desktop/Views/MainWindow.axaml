@@ -6,6 +6,7 @@
         x:DataType="vm:MainWindowViewModel"
         Title="RepoGalaxy"
         Width="1440" Height="900"
+        WindowStartupLocation="CenterScreen"
         MinWidth="900" MinHeight="640"
         CanResize="True"
         WindowDecorations="None"

@@ -7,5 +7,9 @@
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <WarningsAsErrors>$(WarningsAsErrors);NU1903</WarningsAsErrors>
     <AvaloniaTelemetryOptOut>true</AvaloniaTelemetryOptOut>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/CloverIris/RepoGalaxy</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/CloverIris/RepoGalaxy</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 </Project>

@@ -41,6 +41,8 @@ public sealed partial class MetroTileViewModel : ObservableObject
     public bool HasIcon => IconGeometry is not null;
     public double Left => Placement.Column * (Unit + Gap);
     public double Top => Placement.Row * (Unit + Gap);
+    [ObservableProperty] private double _renderLeft;
+    [ObservableProperty] private double _renderTop;
     public double Width => Placement.ColumnSpan * Unit + (Placement.ColumnSpan - 1) * Gap;
     public double Height => Placement.RowSpan * Unit + (Placement.RowSpan - 1) * Gap;
     public bool IsRepository => Content.Kind is MetroTileKind.Repository or MetroTileKind.FeaturedRepository;
@@ -61,6 +63,12 @@ public sealed partial class MetroTileViewModel : ObservableObject
     public double DisplayOpacity => (_matchesFilter ? 1 : .15) * _edgeOpacity * _focusOpacity;
     public double BackgroundLayerOpacity => _heldBackgroundOpacity;
 
+    public void SetWorldOrigin(double originX, double originY)
+    {
+        RenderLeft = Left - originX;
+        RenderTop = Top - originY;
+    }
+
     public void SetFilter(string value)
     {
         var query = value.Trim();
@@ -75,8 +83,16 @@ public sealed partial class MetroTileViewModel : ObservableObject
 
     public void SetEdgeOpacity(double value)
     {
-        _edgeOpacity = Math.Clamp(value, .3, 1);
+        value = Math.Clamp(value, .3, 1);
+        if (Math.Abs(_edgeOpacity - value) < .025) return;
+        _edgeOpacity = value;
         OnPropertyChanged(nameof(DisplayOpacity));
+    }
+
+    public void SetRenderState(bool isVisible, double edgeOpacity)
+    {
+        if (IsInRenderWindow != isVisible) IsInRenderWindow = isVisible;
+        SetEdgeOpacity(edgeOpacity);
     }
 
     public void SetFocus(bool focused, double detailProgress)

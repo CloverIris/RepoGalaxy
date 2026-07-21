@@ -67,7 +67,9 @@ public sealed class DiscoverySyncService : IDisposable
             if (!_authenticated)
             {
                 if (!_guestPolicy.TryConsume(manual)) { StatusChanged?.Invoke(this, "游客模式正在使用本地缓存。"); await CompleteRunAsync(run, null, ct); return; }
-                await SyncTrendingAsync(ct); StatusChanged?.Invoke(this, "游客热门内容已更新；后续仅手动刷新会访问 GitHub。"); await CompleteRunAsync(run, null, ct); return;
+                var guestAdded = await SyncTrendingAsync(manual, ct); StatusChanged?.Invoke(this, guestAdded == 0
+                    ? "游客热门数据已核对，本地内容仍是最新状态。"
+                    : $"游客热门 Feed 新增 {guestAdded} 个项目；后续仅手动刷新会访问 GitHub。"); await CompleteRunAsync(run, null, ct); return;
             }
             if (!_budget.CanSearch(out var resetAt)) { StatusChanged?.Invoke(this, $"GitHub 搜索额度已暂停，将在 {resetAt.LocalDateTime:t} 后恢复。"); await CompleteRunAsync(run, "search_budget", ct); return; }
             foreach (var subscription in (await _store.GetSubscriptionsAsync()).Where(x => x.IsEnabled))
@@ -84,7 +86,9 @@ public sealed class DiscoverySyncService : IDisposable
                 }
                 subscription.LastSyncedAt = DateTimeOffset.UtcNow; await _store.SaveSubscriptionAsync(subscription);
             }
-            if (_budget.CanSearch(out _)) await SyncTrendingAsync(ct); await CheckSavedReleasesAsync(ct); await RefreshForYouAsync(ct); await CompleteRunAsync(run, null, ct); StatusChanged?.Invoke(this, "同步完成。");
+            var trendingAdded = _budget.CanSearch(out _) ? await SyncTrendingAsync(manual, ct) : 0;
+            await CheckSavedReleasesAsync(ct); await RefreshForYouAsync(ct); await CompleteRunAsync(run, null, ct);
+            StatusChanged?.Invoke(this, trendingAdded == 0 ? "同步完成 · 本地 Feed 已是最新状态。" : $"同步完成 · 热门 Feed 新增 {trendingAdded} 个项目。");
         }
         catch (OperationCanceledException) { await CompleteRunAsync(run, "cancelled", CancellationToken.None); throw; }
         catch { await CompleteRunAsync(run, "sync_failed", CancellationToken.None); StatusChanged?.Invoke(this, "同步失败，已保留本地缓存并保存恢复位置。"); }
@@ -106,7 +110,34 @@ public sealed class DiscoverySyncService : IDisposable
             await SaveCheckpointAsync(db, relation, page.NextPageUrl, ct); await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct); next = page.NextPageUrl;
         } while (next is not null);
     }
-    private async Task SyncTrendingAsync(CancellationToken ct) { foreach (var repo in (await _github.GetTrendingAsync(cancellationToken: ct)).Take(50)) { ct.ThrowIfCancellationRequested(); repo.CalculateDiscoveryScore(); var reason = new FeedReason { Summary = "近期热门项目", Score = repo.DiscoveryScore }; if (await _store.AddFeedItemAsync(repo, FeedSource.Trending, reason) && _authenticated) NewFeedItem?.Invoke(this, NewItem(repo, FeedSource.Trending, reason)); } }
+    private async Task<int> SyncTrendingAsync(bool manual, CancellationToken ct)
+    {
+        var date = DateTime.UtcNow.Date;
+        var scope = $"daily:{date:yyyyMMdd}";
+        var next = await GetCheckpointAsync("Trending", scope, ct);
+        var pages = manual && _authenticated ? 2 : 1;
+        var added = 0;
+        for (var pageNumber = 0; pageNumber < pages && _budget.CanSearch(out _); pageNumber++)
+        {
+            var query = $"pushed:>{date.AddDays(-1):yyyy-MM-dd} stars:>100 archived:false fork:false";
+            var page = await _github.SearchRepositoriesPageAsync(query, sort: "stars", nextPageUrl: next, cancellationToken: ct);
+            foreach (var repo in page.Items)
+            {
+                ct.ThrowIfCancellationRequested();
+                repo.CalculateDiscoveryScore();
+                var reason = new FeedReason { Summary = "近期热门项目", Score = repo.DiscoveryScore };
+                if (await _store.AddFeedItemAsync(repo, FeedSource.Trending, reason))
+                {
+                    added++;
+                    if (_authenticated) NewFeedItem?.Invoke(this, NewItem(repo, FeedSource.Trending, reason));
+                }
+            }
+            next = page.NextPageUrl;
+            await SaveCheckpointAsync("Trending", scope, next, ct);
+            if (next is null) break;
+        }
+        return added;
+    }
     private async Task CheckSavedReleasesAsync(CancellationToken ct)
     {
         var saved = (await _store.GetSavedForReleaseChecksAsync()).OrderBy(x => x.Id).ToList();

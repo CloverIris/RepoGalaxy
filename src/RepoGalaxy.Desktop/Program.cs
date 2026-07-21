@@ -79,6 +79,7 @@ class Program
         // 数据库上下文只通过 factory 创建短生命周期实例，避免跨线程共享跟踪状态。
         services.AddDbContextFactory<RepoGalaxyDbContext>(options => options.UseSqlite($"Data Source={GetDatabasePath()};Cache=Shared;Pooling=True;Foreign Keys=True;Default Timeout=5"));
         services.AddSingleton(sp => new DatabaseLifecycleService(sp.GetRequiredService<IDbContextFactory<RepoGalaxyDbContext>>(), GetDatabasePath()));
+        services.AddSingleton<IApplicationStartupCoordinator, ApplicationStartupCoordinator>();
 
         // 安全存储
         services.AddSingleton<ISecureStorage, SecureStorage>();
@@ -97,6 +98,7 @@ class Program
         services.AddSingleton<ISemanticIndexCatalogService, SemanticIndexCatalogService>();
         services.AddSingleton<ISpatialTileSearchService, SpatialTileSearchService>();
         services.AddSingleton<IVirtualTileWorldService, VirtualTileWorldService>();
+        services.AddSingleton<ITileWorldPresentationService, TileWorldPresentationService>();
         services.AddSingleton<IZoomableTileLayoutService, ZoomableTileLayoutService>();
         services.AddSingleton<IDetailPortalCoordinator, DetailPortalCoordinator>();
         services.AddSingleton<ITilePaletteService, TilePaletteService>();

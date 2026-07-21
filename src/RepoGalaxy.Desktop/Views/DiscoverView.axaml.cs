@@ -12,6 +12,7 @@ public partial class DiscoverView : UserControl
 {
     private Control? _worldHost;
     private double _lastPinchScale = 1;
+    private bool _viewportCommitQueued;
 
     public DiscoverView()
     {
@@ -31,15 +32,26 @@ public partial class DiscoverView : UserControl
             _worldHost.AddHandler(InputElement.PinchEndedEvent, OnPinchEnded);
             _worldHost.AddHandler(InputElement.PointerTouchPadGestureMagnifyEvent, OnTouchPadMagnify);
         }
-        Dispatcher.UIThread.Post(UpdateViewport, DispatcherPriority.Loaded);
+        QueueViewportUpdate(DispatcherPriority.Loaded);
     }
 
-    private void OnSizeChanged(object? sender, SizeChangedEventArgs e) => UpdateViewport();
+    private void OnSizeChanged(object? sender, SizeChangedEventArgs e) => QueueViewportUpdate(DispatcherPriority.Render);
+
+    private void QueueViewportUpdate(DispatcherPriority priority)
+    {
+        if (_viewportCommitQueued) return;
+        _viewportCommitQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _viewportCommitQueued = false;
+            UpdateViewport();
+        }, priority);
+    }
 
     private void UpdateViewport()
     {
         if (_worldHost is null || DataContext is not DiscoverViewModel vm || _worldHost.Bounds.Width <= 0 || _worldHost.Bounds.Height <= 0) return;
-        _ = vm.SetViewportAsync(_worldHost.Bounds.Width, _worldHost.Bounds.Height);
+        vm.SetViewport(_worldHost.Bounds.Width, _worldHost.Bounds.Height);
     }
 
     private void OnPointerWheelChanged(object? sender, PointerWheelEventArgs e)

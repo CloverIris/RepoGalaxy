@@ -10,7 +10,7 @@
     <img alt="SQLite" src="https://img.shields.io/badge/SQLite-local--first-003B57?logo=sqlite&logoColor=white" />
     <img alt="Markdig" src="https://img.shields.io/badge/Markdig-1.3.2-2F81F7" />
     <img alt="Windows first" src="https://img.shields.io/badge/Platform-Windows_first-0078D4?logo=windows&logoColor=white" />
-    <img alt="License not specified" src="https://img.shields.io/badge/License-not_yet_specified-lightgrey" />
+    <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-2ea44f" /></a>
   </p>
   <p><strong>Language / 语言</strong><br /><a href="README.md">简体中文</a> · <strong>English</strong></p>
 </div>
@@ -48,7 +48,10 @@ The mouse wheel or a touchpad pinch controls zoom, while dragging or a two-finge
 
 ```mermaid
 flowchart LR
-    Desktop["RepoGalaxy.Desktop\nAvalonia UI / MVVM"] --> Core["RepoGalaxy.Core\nDomain models and contracts"]
+    Startup["Startup coordinator\nbackground migration / backup / recovery"] --> Desktop["RepoGalaxy.Desktop\nAvalonia UI / MVVM"]
+    Desktop --> Snapshot["Immutable Feed / Tile snapshots"]
+    Snapshot --> World["Virtual Tile control\nfour-way chunk rendering"]
+    Desktop --> Core["RepoGalaxy.Core\nDomain models and contracts"]
     Desktop --> GitHub["RepoGalaxy.GitHub\nREST, auth, rate limits, sync"]
     Desktop --> Data["RepoGalaxy.Data\nEF Core, SQLite, cache, migrations"]
     Desktop --> Ranking["RepoGalaxy.Recommendation\nRetrieval, coarse/fine ranking"]
@@ -68,7 +71,7 @@ flowchart LR
 | `RepoGalaxy.Desktop` | Avalonia desktop app, page view models, spatial Tile controls, sign-in, and operating-system integration. |
 | `tests/*` | Unit, integration, and Headless UI tests for Core, Data, Desktop, GitHub, and Recommendation. |
 
-The primary data flow is local-snapshot first: the UI consumes immutable feed snapshots; background synchronization writes network responses into the cache and business database; the ranking pipeline creates a new batch; and a diff is submitted to the UI. Camera gestures never perform database, network, or ranking work.
+The app first presents a centered, draggable lightweight startup window. A startup coordinator then performs database checks, migrations, backups, and abandoned-workspace cleanup in the background. The main data flow is local-snapshot first: the UI consumes immutable Feed/Tile snapshots; synchronization writes network responses into the cache and business database; the ranking pipeline creates a new batch; and the UI atomically swaps snapshots. The virtual Tile control queries visible real content in signed world coordinates and continuously draws deterministic `12×8` chunks in all four directions. Pan, zoom, and Resize only update the viewport and camera matrix—never the database, network, ranking pipeline, or semantic catalog. After explicit synchronization or reranking, the camera stays anchored to the prior center item, or falls back to the new data-island center.
 
 ## Get and run RepoGalaxy
 
@@ -94,7 +97,7 @@ Alternatively, choose **Code → Download ZIP** on the GitHub repository page an
 2. Set `RepoGalaxy.Desktop` as the startup project.
 3. Wait for NuGet restore, then press `F5` to debug or `Ctrl+F5` to run without debugging.
 
-Database migrations run automatically during startup; no manual SQLite setup is required.
+A responsive startup page appears first, while database migrations run automatically in the background; no manual SQLite setup is required.
 
 ### Command line
 
@@ -126,7 +129,7 @@ Keep the secret in secure local configuration and never commit it. The app still
 
 ### Local data
 
-RepoGalaxy stores its database, logs, cache, and backups in the current user's local application-data directory. The v3 database uses EF Core migrations with WAL, foreign keys, busy waiting, and full synchronization. Cache cleanup never removes saved repositories, subscriptions, preferences, or business history. Signing out clears the credential and private account-derived data.
+RepoGalaxy stores its database, logs, cache, and backups in the current user's local application-data directory. The v3 database uses EF Core migrations with WAL, foreign keys, busy waiting, and full synchronization. Cache cleanup removes only reconstructible network responses; it never removes Feed data, Tile layouts, saved repositories, subscriptions, preferences, or business history. Signing out clears the credential and private account-derived data.
 
 ## Development and quality checks
 
@@ -154,7 +157,7 @@ Never include tokens, PATs, OAuth codes, state values, Client Secrets, private r
 
 ## License
 
-This repository **does not currently include an open-source license file**. Until a license is explicitly added, do not assume the code may be used, copied, or redistributed under MIT, Apache-2.0, or any other open-source license. Please also review future licensing terms before contributing code.
+RepoGalaxy is released under the [MIT License](LICENSE). You may use, copy, modify, merge, publish, and distribute the software under its terms; retain the copyright and permission notice in copies or substantial portions.
 
 ## Acknowledgements
 

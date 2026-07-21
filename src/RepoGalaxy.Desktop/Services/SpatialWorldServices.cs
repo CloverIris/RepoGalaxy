@@ -49,32 +49,84 @@ public sealed class VirtualTileWorldService : IVirtualTileWorldService
         var bottom = FloorChunk(window.Y + window.Height, ChunkRows * UnitWithGap) + 1;
         var result = new List<VirtualTileSlot>();
         var occupied = OccupiedCells(persistentPlacements);
+        var covered = new HashSet<(int Column, int Row)>(occupied);
         var tipsKey = string.Join('\u001f', tips.Select(x => x.Key));
         for (var cy = top; cy <= bottom; cy++)
             for (var cx = left; cx <= right; cx++)
+            {
                 foreach (var slot in GetChunk(boardSeed, new(cx, cy), tips, tipsKey))
-                    if (!IsOccupied(slot, occupied)) result.Add(slot);
+                {
+                    if (IsOccupied(slot, occupied)) continue;
+                    result.Add(slot);
+                    MarkCovered(slot, covered);
+                }
+
+                // A real tile may intersect only part of a large deterministic
+                // skeleton slot. Dropping that whole slot left visible seams.
+                // Fill just the uncovered residual cells with stable 1x1 tiles;
+                // the normal mixed-span mosaic remains untouched elsewhere.
+                for (var row = cy * ChunkRows; row < (cy + 1) * ChunkRows; row++)
+                    for (var column = cx * ChunkColumns; column < (cx + 1) * ChunkColumns; column++)
+                    {
+                        if (covered.Contains((column, row))) continue;
+                        var fallback = FallbackSlot(boardSeed, new(cx, cy), column, row, tips);
+                        result.Add(fallback);
+                        covered.Add((column, row));
+                    }
+            }
         TilePerformanceMetrics.SkeletonCount(result.Count);
         return result;
     }
 
     public (int Column, int Row) FindNearestCompatibleSlot(string boardSeed, TileWorldWindow preferredWindow, TileSpan span, IReadOnlyList<TilePlacement> persistentPlacements)
     {
-        var tips = new[] { new TipDefinition("slot", "LOADING", "正在发现", "数据到达后将在这里原位填充。", "placeholder", span.Columns, span.Rows) };
+        var occupied = OccupiedCells(persistentPlacements);
         var centerColumn = (int)Math.Floor(preferredWindow.CenterX / UnitWithGap);
         var centerRow = (int)Math.Floor(preferredWindow.CenterY / UnitWithGap);
         var centerChunk = new TileChunkCoordinate(FloorChunk(centerColumn, ChunkColumns), FloorChunk(centerRow, ChunkRows));
         for (var radius = 0; radius <= 64; radius++)
         {
             var candidates = Ring(centerChunk, radius)
-                .SelectMany(chunk => Slots(boardSeed, chunk, tips))
-                .Where(x => x.ColumnSpan == span.Columns && x.RowSpan == span.Rows)
-                .Where(slot => !persistentPlacements.Any(x => Overlaps(slot.Column, slot.Row, slot.ColumnSpan, slot.RowSpan, x.Column, x.Row, x.ColumnSpan, x.RowSpan)))
-                .OrderBy(slot => Math.Pow(slot.Column - centerColumn, 2) + Math.Pow(slot.Row - centerRow, 2))
-                .ThenBy(x => x.Row).ThenBy(x => x.Column).FirstOrDefault();
+                .Distinct()
+                // Data tiles must not be limited to the few fixed template
+                // slots with exactly the same span. The virtual renderer
+                // splits any overlapped skeleton into residual cells, so a
+                // free grid rectangle is a safe, continuous replacement.
+                .SelectMany(chunk => CandidateSlots(chunk, span))
+                .Where(slot => !IsOccupied(slot, occupied))
+                .Select(slot => new
+                {
+                    Slot = slot,
+                    Distance = Math.Pow(slot.Column + slot.ColumnSpan / 2d - centerColumn, 2) + Math.Pow(slot.Row + slot.RowSpan / 2d - centerRow, 2),
+                    Neighbors = NeighborCount(slot, occupied)
+                })
+                // Prefer the frontier of the current mosaic. This makes newly
+                // synchronized repositories grow the visible data island
+                // continuously instead of forming disconnected remote clusters.
+                .OrderByDescending(x => x.Neighbors)
+                .ThenBy(x => x.Distance)
+                .ThenBy(x => x.Slot.Row)
+                .ThenBy(x => x.Slot.Column)
+                .Select(x => x.Slot)
+                .FirstOrDefault();
             if (candidates is not null) return (candidates.Column, candidates.Row);
         }
         return (centerColumn, centerRow);
+    }
+
+    private static IEnumerable<VirtualTileSlot> CandidateSlots(TileChunkCoordinate chunk, TileSpan span)
+    {
+        var minimumColumn = chunk.X * ChunkColumns;
+        var minimumRow = chunk.Y * ChunkRows;
+        var maximumColumn = minimumColumn + ChunkColumns - span.Columns;
+        var maximumRow = minimumRow + ChunkRows - span.Rows;
+        for (var row = minimumRow; row <= maximumRow; row++)
+            for (var column = minimumColumn; column <= maximumColumn; column++)
+            {
+                var key = $"candidate:{chunk.X}:{chunk.Y}:{column}:{row}:{span.Columns}:{span.Rows}";
+                yield return new VirtualTileSlot(key, chunk, column, row, span.Columns, span.Rows,
+                    new TileContent(key, MetroTileKind.Tip, string.Empty, AccentKey: "placeholder", IsPlaceholder: true));
+            }
     }
 
     private static IEnumerable<VirtualTileSlot> Slots(string seed, TileChunkCoordinate chunk, IReadOnlyList<TipDefinition> tips)
@@ -136,6 +188,40 @@ public sealed class VirtualTileWorldService : IVirtualTileWorldService
             for (var column = slot.Column; column < slot.Column + slot.ColumnSpan; column++)
                 if (occupied.Contains((column, row))) return true;
         return false;
+    }
+
+    private static void MarkCovered(VirtualTileSlot slot, HashSet<(int Column, int Row)> covered)
+    {
+        for (var row = slot.Row; row < slot.Row + slot.RowSpan; row++)
+            for (var column = slot.Column; column < slot.Column + slot.ColumnSpan; column++)
+                covered.Add((column, row));
+    }
+
+    private static int NeighborCount(VirtualTileSlot slot, HashSet<(int Column, int Row)> occupied)
+    {
+        var count = 0;
+        for (var row = slot.Row; row < slot.Row + slot.RowSpan; row++)
+        {
+            if (occupied.Contains((slot.Column - 1, row))) count++;
+            if (occupied.Contains((slot.Column + slot.ColumnSpan, row))) count++;
+        }
+        for (var column = slot.Column; column < slot.Column + slot.ColumnSpan; column++)
+        {
+            if (occupied.Contains((column, slot.Row - 1))) count++;
+            if (occupied.Contains((column, slot.Row + slot.RowSpan))) count++;
+        }
+        return count;
+    }
+
+    private static VirtualTileSlot FallbackSlot(string seed, TileChunkCoordinate chunk, int column, int row, IReadOnlyList<TipDefinition> tips)
+    {
+        var value = Stable(seed, column, row, 10_000);
+        var tip = tips[(int)(value % (ulong)tips.Count)];
+        var accent = Accents[(int)((value >> 8) % (ulong)Accents.Length)];
+        var key = $"virtual:{chunk.X}:{chunk.Y}:fill:{column}:{row}";
+        return new(key, chunk, column, row, 1, 1,
+            new TileContent(key, MetroTileKind.Tip, tip.Title, tip.Body,
+                $"{tip.Category} · 等待内容", accent, IsPlaceholder: true, SourceUrl: tip.SourceUrl));
     }
 
     private static IReadOnlyList<(int Column, int Row, int Columns, int Rows)> Template(TileChunkCoordinate chunk, string seed)

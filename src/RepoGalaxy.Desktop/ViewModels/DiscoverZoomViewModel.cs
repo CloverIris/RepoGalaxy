@@ -4,6 +4,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using RepoGalaxy.Core.Models;
 using RepoGalaxy.Desktop.Services;
 
@@ -31,6 +32,7 @@ public sealed partial class DiscoverViewModel
     private double _semanticViewportHeight;
     private CancellationTokenSource? _worldRefreshCancellation;
     private string _renderWindowKey = string.Empty;
+    private string _tileRenderStateKey = string.Empty;
     private int _lastFocusPresentationBucket = -1;
 
     public ObservableCollection<SemanticIndexItemViewModel> SemanticIndexItems { get; } = [];
@@ -103,7 +105,7 @@ public sealed partial class DiscoverViewModel
         string.IsNullOrWhiteSpace(ActiveTileFilter) ? null : SemanticIndexItems.FirstOrDefault(x => x.Title.Equals(ActiveTileFilter, StringComparison.OrdinalIgnoreCase))?.Kind,
         ActiveTileFilter);
 
-    public async Task SetViewportAsync(double width, double height)
+    public void SetViewport(double width, double height)
     {
         if (width <= 0 || height <= 0) return;
         var oldWidth = _viewportWidth;
@@ -113,7 +115,6 @@ public sealed partial class DiscoverViewModel
         OnPropertyChanged(nameof(DetailViewportWidth));
         OnPropertyChanged(nameof(DetailViewportHeight));
         if (DetailPresentation == DetailPresentationState.Full) SetPortal(new(0, 0, width, height));
-        await EnsureTileExtentAsync(width, height);
         ResizeSemanticViewport(oldWidth, oldHeight, width, height);
         UpdateCameraPresentation();
     }
@@ -214,7 +215,7 @@ public sealed partial class DiscoverViewModel
         try
         {
             await Task.Delay(300, cancellation.Token);
-            var candidates = RenderedTiles.Select(ToSearchCandidate).ToList();
+            var candidates = Tiles.Select(ToSearchCandidate).ToList();
             var centerX = CameraX + _viewportWidth / Math.Max(.01, Zoom) / 2;
             var centerY = CameraY + _viewportHeight / Math.Max(.01, Zoom) / 2;
             var result = _spatialSearch.Search(query, candidates, centerX, centerY);
@@ -356,31 +357,26 @@ public sealed partial class DiscoverViewModel
         _rankingRebuild.Rebuilt -= OnRankingRebuilt;
     }
 
-    private void OnRankingRebuilt(object? sender, RankingRebuiltEvent e)
+    private async void OnRankingRebuilt(object? sender, RankingRebuiltEvent e)
     {
         var scope = _session.Current.User?.GitHubId ?? "guest";
         if (!e.ScopeKey.Equals(scope, StringComparison.Ordinal) || e.Source != SelectedSource.Source) return;
         var rankedItems = e.RepositoryIds.Select(id => _allItems.FirstOrDefault(x => x.Repository.Id == id)).Where(x => x is not null).Cast<FeedItemViewModel>().ToList();
         if (rankedItems.Count == 0) return;
-        var centerX = CameraX + _viewportWidth / Math.Max(.01, Zoom) / 2;
-        var centerY = CameraY + _viewportHeight / Math.Max(.01, Zoom) / 2;
-        var slots = Tiles.Select((tile, index) => (tile, index)).Where(x => x.tile.IsRepository)
-            .OrderBy(x => Math.Pow(x.tile.Left + x.tile.Width / 2 - centerX, 2) + Math.Pow(x.tile.Top + x.tile.Height / 2 - centerY, 2)).ToList();
-        var count = Math.Min(slots.Count, rankedItems.Count);
-        for (var i = 0; i < count; i++)
+        if (_tileBoard is null) return;
+        try
         {
-            var (slot, index) = slots[i];
-            var item = rankedItems[i];
-            var repository = item.Repository.Repository;
-            var content = slot.Content with { RepositoryId = repository.Id, Title = repository.FullName, Subtitle = repository.Description, Caption = item.ReasonText, AccentKey = repository.PrimaryLanguage, ImageUrl = repository.OwnerAvatarUrl, SourceUrl = repository.HtmlUrl };
-            var placement = slot.Placement with { Content = content };
-            var replacement = new MetroTileViewModel(placement, _tilePalette.Create(content.AccentKey), item);
-            Tiles[index] = replacement;
-            var renderedIndex = RenderedTiles.IndexOf(slot);
-            if (renderedIndex >= 0) RenderedTiles[renderedIndex] = replacement;
-            if (!string.IsNullOrWhiteSpace(content.ImageUrl)) _ = LoadTileImageAsync(replacement, content.ImageUrl);
+            // A ranking rebuild changes feed order, not only repository
+            // payloads. Use the same complete reflow as explicit sync so
+            // ranked content is visible instead of remaining in old slots.
+            await LoadAsync(reflowTileBoard: true);
+            SpatialSearchStatus = $"已按新参数重排 {rankedItems.Count} 个项目";
         }
-        ApplyTileFilter();
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "应用排序结果到 Tile 布局失败");
+            SpatialSearchStatus = "排序已完成，但 Tile 布局更新失败";
+        }
     }
 
     [RelayCommand]
@@ -587,9 +583,17 @@ public sealed partial class DiscoverViewModel
         if (_tileBoard is null || _viewportWidth <= 0 || _viewportHeight <= 0) return;
         var zoom = Math.Max(_zoomLayout.ScaleProfile.MinimumZoom, Zoom);
         var window = new TileWorldWindow(CameraX, CameraY, _viewportWidth / zoom, _viewportHeight / zoom);
+        var renderStateKey = $"{(int)Math.Floor(CameraX * zoom / 24)}:{(int)Math.Floor(CameraY * zoom / 24)}:{(int)Math.Round(zoom * 20)}:{(int)(_viewportWidth / 24)}:{(int)(_viewportHeight / 24)}";
+        if (force || renderStateKey != _tileRenderStateKey)
+        {
+            _tileRenderStateKey = renderStateKey;
+            UpdateTileRenderStates();
+        }
         var key = $"{(int)Math.Floor(window.X / 1200)}:{(int)Math.Floor((window.X + window.Width) / 1200)}:{(int)Math.Floor(window.Y / 800)}:{(int)Math.Floor((window.Y + window.Height) / 800)}";
         if (!force && key == _renderWindowKey) return;
         _renderWindowKey = key;
+        UpdateMaterializedTiles(window);
+        UpdateTileRenderStates();
         _worldRefreshCancellation?.Cancel();
         _worldRefreshCancellation?.Dispose();
         var cancellation = _worldRefreshCancellation = new CancellationTokenSource();
@@ -609,6 +613,51 @@ public sealed partial class DiscoverViewModel
             if (ReferenceEquals(_worldRefreshCancellation, cancellation)) _worldRefreshCancellation = null;
             cancellation.Dispose();
         }
+    }
+
+    private void UpdateTileRenderStates()
+    {
+        const double overscan = 180;
+        const double edgeBand = 84;
+        foreach (var tile in RenderedTiles)
+        {
+            var left = (tile.Left - CameraX) * Zoom;
+            var top = (tile.Top - CameraY) * Zoom;
+            var right = left + tile.Width * Zoom;
+            var bottom = top + tile.Height * Zoom;
+            var visible = right >= -overscan && left <= _viewportWidth + overscan && bottom >= -overscan && top <= _viewportHeight + overscan;
+            if (!visible)
+            {
+                tile.SetRenderState(false, .3);
+                continue;
+            }
+
+            var inward = Math.Min(Math.Min(left, _viewportWidth - right), Math.Min(top, _viewportHeight - bottom));
+            var normalized = Math.Clamp((inward + edgeBand) / edgeBand, 0, 1);
+            var eased = normalized * normalized * (3 - 2 * normalized);
+            tile.SetRenderState(true, .42 + .58 * eased);
+        }
+    }
+
+    private void UpdateMaterializedTiles(TileWorldWindow window)
+    {
+        // Keep one full chunk around the world viewport so fast camera motion
+        // never exposes an unmaterialized real Tile. The ItemsControl receives
+        // one immutable array instead of Clear/Add notifications.
+        const double overscanX = VirtualTileWorldService.ChunkColumns * VirtualTileWorldService.UnitWithGap;
+        const double overscanY = VirtualTileWorldService.ChunkRows * VirtualTileWorldService.UnitWithGap;
+        var next = Tiles.Where(tile =>
+                tile.Left + tile.Width >= window.X - overscanX
+                && tile.Left <= window.X + window.Width + overscanX
+                && tile.Top + tile.Height >= window.Y - overscanY
+                && tile.Top <= window.Y + window.Height + overscanY)
+            .ToArray();
+        if (RenderedTiles.Count == next.Length
+            && RenderedTiles.Select(x => x.Key).SequenceEqual(next.Select(x => x.Key), StringComparer.Ordinal))
+            return;
+        RenderedTiles = next;
+        OnPropertyChanged(nameof(RenderedTiles));
+        TilePerformanceMetrics.MaterializedControlCount(next.Length);
     }
 
     private void UpdateDetailState(double ratio)

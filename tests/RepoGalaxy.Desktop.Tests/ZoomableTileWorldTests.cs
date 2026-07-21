@@ -1,6 +1,7 @@
 using System.Net;
 using RepoGalaxy.Core.Models;
 using RepoGalaxy.Desktop.Services;
+using RepoGalaxy.Desktop.ViewModels;
 using Xunit;
 
 namespace RepoGalaxy.Desktop.Tests;
@@ -243,6 +244,114 @@ public sealed class ZoomableTileWorldTests
         Assert.Contains(first, x => x.Row < 0);
         Assert.InRange(first.Count, 1, 800);
     }
+
+    [Fact]
+    public void Virtual_world_fills_residual_cells_when_real_content_splits_a_large_skeleton_slot()
+    {
+        var service = new VirtualTileWorldService();
+        var tips = new[] { new TipDefinition("history", "TIP", "History", "Body", "C#", 1, 1) };
+        var real = new TilePlacement(1,
+            new TileContent("repository:1", MetroTileKind.Repository, "owner/repository", RepositoryId: 1),
+            4, 0, 6, 1);
+
+        var slots = service.Materialize("continuous-board", new TileWorldWindow(0, 0, 1200, 800), [real], tips);
+        var covered = new HashSet<(int Column, int Row)>();
+        for (var row = real.Row; row < real.Row + real.RowSpan; row++)
+            for (var column = real.Column; column < real.Column + real.ColumnSpan; column++) covered.Add((column, row));
+        foreach (var slot in slots)
+            for (var row = slot.Row; row < slot.Row + slot.RowSpan; row++)
+                for (var column = slot.Column; column < slot.Column + slot.ColumnSpan; column++) covered.Add((column, row));
+
+        for (var row = 0; row < VirtualTileWorldService.ChunkRows; row++)
+            for (var column = 0; column < VirtualTileWorldService.ChunkColumns; column++)
+                Assert.Contains((column, row), covered);
+    }
+
+    [Fact]
+    public void Virtual_world_covers_every_visible_signed_cell_exactly_once()
+    {
+        var service = new VirtualTileWorldService();
+        var tips = new[] { new TipDefinition("history", "TIP", "History", "Body", "Rust", 1, 1) };
+        var real = new[]
+        {
+            new TilePlacement(1, new TileContent("repository:left", MetroTileKind.Repository, "owner/left"), -8, -3, 6, 1),
+            new TilePlacement(2, new TileContent("repository:right", MetroTileKind.FeaturedRepository, "owner/right"), 6, 4, 2, 2)
+        };
+        var window = new TileWorldWindow(-1450, -950, 3100, 2100);
+        var slots = service.Materialize("coverage-board", window, real, tips);
+        var counts = new Dictionary<(int Column, int Row), int>();
+
+        foreach (var placement in real)
+            Add(placement.Column, placement.Row, placement.ColumnSpan, placement.RowSpan);
+        foreach (var slot in slots)
+            Add(slot.Column, slot.Row, slot.ColumnSpan, slot.RowSpan);
+
+        var left = (int)Math.Floor(window.X / VirtualTileWorldService.UnitWithGap);
+        var right = (int)Math.Ceiling((window.X + window.Width) / VirtualTileWorldService.UnitWithGap) - 1;
+        var top = (int)Math.Floor(window.Y / VirtualTileWorldService.UnitWithGap);
+        var bottom = (int)Math.Ceiling((window.Y + window.Height) / VirtualTileWorldService.UnitWithGap) - 1;
+        for (var row = top; row <= bottom; row++)
+            for (var column = left; column <= right; column++)
+                Assert.Equal(1, counts.GetValueOrDefault((column, row)));
+
+        void Add(int column, int row, int width, int height)
+        {
+            for (var y = row; y < row + height; y++)
+                for (var x = column; x < column + width; x++)
+                    counts[(x, y)] = counts.GetValueOrDefault((x, y)) + 1;
+        }
+    }
+
+    [Fact]
+    public void Real_tile_projection_uses_world_origin_without_changing_tile_geometry()
+    {
+        var tile = new MetroTileViewModel(
+            new TilePlacement(1, new TileContent("repository:wide", MetroTileKind.Repository, "owner/wide"), -12, 7, 6, 1),
+            new TilePalette("#102030", "#ffffff", "#d0d0d0", "#00000080"));
+
+        tile.SetWorldOrigin(-1800, 400);
+
+        Assert.Equal(600, tile.RenderLeft);
+        Assert.Equal(300, tile.RenderTop);
+        Assert.Equal(596, tile.Width);
+        Assert.Equal(96, tile.Height);
+    }
+
+    [Fact]
+    public void Nearest_compatible_slots_extend_the_real_tile_frontier_without_template_gaps()
+    {
+        var service = new VirtualTileWorldService();
+        var placements = new List<TilePlacement>();
+        var window = new TileWorldWindow(0, 0, 1200, 800);
+        var span = new TileSpan(6, 1);
+
+        for (var index = 0; index < 10; index++)
+        {
+            var (column, row) = service.FindNearestCompatibleSlot("continuous-board", window, span, placements);
+            placements.Add(new TilePlacement(index + 1,
+                new TileContent($"repository:{index}", MetroTileKind.Repository, $"owner/repository-{index}"),
+                column, row, span.Columns, span.Rows));
+        }
+
+        var occupied = new HashSet<(int Column, int Row)>();
+        foreach (var placement in placements)
+            for (var row = placement.Row; row < placement.Row + placement.RowSpan; row++)
+                for (var column = placement.Column; column < placement.Column + placement.ColumnSpan; column++)
+                    Assert.True(occupied.Add((column, row)), "real tiles must never overlap");
+
+        for (var index = 1; index < placements.Count; index++)
+        {
+            var tile = placements[index];
+            Assert.True(placements.Take(index).Any(previous => Touches(tile, previous)),
+                $"{tile.Content.Key} should extend the existing frontier");
+        }
+    }
+
+    private static bool Touches(TilePlacement first, TilePlacement second) =>
+        (first.Column < second.Column + second.ColumnSpan && first.Column + first.ColumnSpan > second.Column
+            && (first.Row == second.Row + second.RowSpan || first.Row + first.RowSpan == second.Row))
+        || (first.Row < second.Row + second.RowSpan && first.Row + first.RowSpan > second.Row
+            && (first.Column == second.Column + second.ColumnSpan || first.Column + first.ColumnSpan == second.Column));
 
     [Fact]
     public void Peek_never_requests_a_snap_or_suppresses_the_right_rail()

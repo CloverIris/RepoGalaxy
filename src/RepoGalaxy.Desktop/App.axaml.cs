@@ -1,28 +1,23 @@
 using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using RepoGalaxy.Core.Interfaces;
-using RepoGalaxy.Data.DbContexts;
 using RepoGalaxy.Data.Services;
+using RepoGalaxy.Desktop.Services;
 using RepoGalaxy.Desktop.ViewModels;
 using RepoGalaxy.Desktop.Views;
-using RepoGalaxy.Desktop.Services;
 using RepoGalaxy.Recommendation.Services;
 using Serilog;
-using System;
 
 namespace RepoGalaxy.Desktop;
 
 public partial class App : Application
 {
     private readonly IServiceProvider? _serviceProvider;
-    
-    /// <summary>
-    /// 全局服务访问器
-    /// </summary>
+    private CancellationTokenSource? _startupCancellation;
+    private bool _mainWindowStarted;
+
     public static IServiceProvider? Services => ((App?)Current)?._serviceProvider;
 
     public App()
@@ -34,104 +29,158 @@ public partial class App : Application
         _serviceProvider = serviceProvider;
     }
 
-    public override void Initialize()
-    {
-        AvaloniaXamlLoader.Load(this);
-    }
+    public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
     {
-        // 初始化数据库
-        if (!InitializeDatabase(out var initializationError))
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && _serviceProvider is not null)
         {
-            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime failedDesktop)
-            {
-                var status = new TextBlock { Text = initializationError, TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontSize = 16 };
-                var restore = new Button { Content = "从最近备份恢复", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
-                restore.Click += async (_, _) =>
-                {
-                    restore.IsEnabled = false;
-                    var lifecycle = _serviceProvider?.GetService<DatabaseLifecycleService>();
-                    var restored = lifecycle is not null && await lifecycle.RestoreLatestBackupAsync();
-                    status.Text = restored ? "数据库已恢复。请重新启动 RepoGalaxy。" : "没有可用的完整备份，恢复未执行。";
-                    restore.IsVisible = !restored;
-                };
-                failedDesktop.MainWindow = new Window
-                {
-                    Title = "RepoGalaxy · 数据库恢复",
-                    Width = 620,
-                    Height = 280,
-                    Content = new StackPanel { Margin = new Thickness(32), Spacing = 20, Children = { new TextBlock { Text = "本地数据需要修复", FontSize = 24, FontWeight = Avalonia.Media.FontWeight.SemiBold }, status, restore } }
-                };
-            }
-            base.OnFrameworkInitializationCompleted();
-            return;
-        }
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var startupWindow = new StartupWindow();
+            desktop.MainWindow = startupWindow;
 
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-        {
-            // 登录窗口等临时窗口不应延长应用生命周期；主窗口关闭即进入统一清理链路。
-            desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
-            var mainWindow = new MainWindow();
-            ToastNotificationService.Attach(mainWindow);
-            
-            // 使用 DI 创建 ViewModel
-            if (_serviceProvider != null)
+            startupWindow.Opened += async (_, _) => await StartApplicationAsync(desktop, startupWindow);
+            startupWindow.RetryRequested += async (_, _) => await StartApplicationAsync(desktop, startupWindow);
+            startupWindow.RestoreRequested += async (_, _) => await RestoreAndRetryAsync(desktop, startupWindow);
+            startupWindow.Closed += (_, _) =>
             {
-                var viewModel = _serviceProvider.GetRequiredService<MainWindowViewModel>();
-                mainWindow.DataContext = viewModel;
-            }
-
-            desktop.MainWindow = mainWindow;
-            desktop.Exit += (_, _) =>
-            {
-                Log.Information("开始关闭 RepoGalaxy 后台服务");
-                _serviceProvider?.GetService<DatabaseLifecycleService>()?.MarkCleanShutdown();
-                Log.Information("数据库已标记为正常关闭，正在停止同步服务");
-                _serviceProvider?.GetService<DiscoverySyncService>()?.StopAsync().GetAwaiter().GetResult();
-                Log.Information("同步服务已停止，正在释放服务容器");
-                (_serviceProvider as IDisposable)?.Dispose();
-                Log.Information("RepoGalaxy 后台服务已全部停止");
+                if (_mainWindowStarted) return;
+                _startupCancellation?.Cancel();
+                desktop.Shutdown();
             };
+
+            desktop.Exit += (_, _) => ShutdownServices();
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
-    /// <summary>
-    /// 初始化数据库
-    /// </summary>
-    private bool InitializeDatabase(out string error)
+    private async Task StartApplicationAsync(
+        IClassicDesktopStyleApplicationLifetime desktop,
+        StartupWindow startupWindow)
     {
-        error = string.Empty;
+        if (_mainWindowStarted || _serviceProvider is null) return;
+
+        _startupCancellation?.Cancel();
+        _startupCancellation?.Dispose();
+        _startupCancellation = new CancellationTokenSource();
+        var token = _startupCancellation.Token;
+        var coordinator = _serviceProvider.GetRequiredService<IApplicationStartupCoordinator>();
+        var progress = new Progress<StartupState>(startupWindow.Apply);
+
         try
         {
-            if (_serviceProvider != null)
+            var result = await coordinator.InitializeAsync(progress, token);
+            if (!result.Success || token.IsCancellationRequested || _mainWindowStarted) return;
+
+            var mainWindow = new MainWindow();
+            ConfigureInitialGeometry(mainWindow, startupWindow);
+            ToastNotificationService.Attach(mainWindow);
+
+            var viewModel = _serviceProvider.GetRequiredService<MainWindowViewModel>();
+            mainWindow.DataContext = viewModel;
+            mainWindow.Opened += async (_, _) =>
             {
-                var lifecycle = _serviceProvider.GetRequiredService<DatabaseLifecycleService>();
-                var result = lifecycle.InitializeAsync().GetAwaiter().GetResult();
-                if (!result.Success) { error = result.Message; return false; }
-                using var dbContext = _serviceProvider.GetRequiredService<IDbContextFactory<RepoGalaxyDbContext>>().CreateDbContext();
-                DatabaseSeeder.Seed(dbContext);
                 try
                 {
-                    _serviceProvider.GetRequiredService<IRepositoryCloneService>().CleanupAbandonedAsync().GetAwaiter().GetResult();
+                    await viewModel.InitializeAsync();
                 }
-                catch (Exception cleanupError)
+                catch (Exception error)
                 {
-                    // Abandoned clone cleanup is recoverable and must never make a
-                    // healthy database look corrupt or prevent the main window opening.
-                    Log.Warning(cleanupError, "未完成的克隆工作区清理失败，将在下次启动重试");
+                    Log.Error(error, "\u4e3b\u754c\u9762\u5f02\u6b65\u521d\u59cb\u5316\u5931\u8d25");
+                    viewModel.SyncStatus = "\u672c\u5730\u5185\u5bb9\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u624b\u52a8\u91cd\u8bd5";
                 }
-                Log.Information("数据库初始化完成");
-            }
-            return true;
+            };
+
+            _mainWindowStarted = true;
+            desktop.MainWindow = mainWindow;
+            desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+            mainWindow.Show();
+            startupWindow.Close();
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            Log.Error(ex, "数据库初始化失败");
-            error = $"数据库初始化失败：{ex.Message}";
-            return false;
         }
+        catch (Exception error)
+        {
+            Log.Error(error, "\u5e94\u7528\u542f\u52a8\u534f\u8c03\u5931\u8d25");
+            startupWindow.Apply(new(
+                StartupPhase.Failed,
+                "\u542f\u52a8\u5931\u8d25",
+                error.Message,
+                1,
+                CanRestore: true));
+        }
+    }
+
+    private async Task RestoreAndRetryAsync(
+        IClassicDesktopStyleApplicationLifetime desktop,
+        StartupWindow startupWindow)
+    {
+        if (_serviceProvider is null) return;
+
+        _startupCancellation?.Cancel();
+        _startupCancellation?.Dispose();
+        _startupCancellation = new CancellationTokenSource();
+        var token = _startupCancellation.Token;
+        startupWindow.Apply(new(
+            StartupPhase.Restoring,
+            "\u6b63\u5728\u6062\u590d\u672c\u5730\u6570\u636e",
+            "\u6b63\u5728\u4ece\u6700\u8fd1\u7684\u5b8c\u6574\u5907\u4efd\u6062\u590d\u2026",
+            .5));
+
+        try
+        {
+            var restored = await _serviceProvider
+                .GetRequiredService<IApplicationStartupCoordinator>()
+                .RestoreLatestBackupAsync(token);
+            if (!restored)
+            {
+                startupWindow.Apply(new(
+                    StartupPhase.Failed,
+                    "\u6ca1\u6709\u53ef\u7528\u5907\u4efd",
+                    "\u672a\u627e\u5230\u53ef\u6062\u590d\u7684\u5b8c\u6574\u5907\u4efd\u3002",
+                    1));
+                return;
+            }
+
+            await StartApplicationAsync(desktop, startupWindow);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+        }
+    }
+
+    private static void ConfigureInitialGeometry(Window mainWindow, Window startupWindow)
+    {
+        var screen = startupWindow.Screens.ScreenFromWindow(startupWindow)
+            ?? startupWindow.Screens.Primary;
+        if (screen is null) return;
+
+        var scale = screen.Scaling;
+        var workArea = screen.WorkingArea;
+        var width = Math.Min(1440, workArea.Width / scale * .9);
+        var height = Math.Min(900, workArea.Height / scale * .9);
+        mainWindow.Width = Math.Max(mainWindow.MinWidth, width);
+        mainWindow.Height = Math.Max(mainWindow.MinHeight, height);
+        mainWindow.Position = new PixelPoint(
+            workArea.X + (workArea.Width - (int)Math.Round(mainWindow.Width * scale)) / 2,
+            workArea.Y + (workArea.Height - (int)Math.Round(mainWindow.Height * scale)) / 2);
+    }
+
+    private void ShutdownServices()
+    {
+        _startupCancellation?.Cancel();
+        Log.Information("\u5f00\u59cb\u5173\u95ed RepoGalaxy \u540e\u53f0\u670d\u52a1");
+        _serviceProvider?.GetService<DatabaseLifecycleService>()?.MarkCleanShutdown();
+        try
+        {
+            _serviceProvider?.GetService<DiscoverySyncService>()?.StopAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception error)
+        {
+            Log.Warning(error, "\u505c\u6b62\u540c\u6b65\u670d\u52a1\u65f6\u53d1\u751f\u53ef\u6062\u590d\u9519\u8bef");
+        }
+        (_serviceProvider as IDisposable)?.Dispose();
     }
 }

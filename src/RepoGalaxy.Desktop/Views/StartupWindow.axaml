@@ -1,0 +1,36 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="RepoGalaxy.Desktop.Views.StartupWindow"
+        Title="RepoGalaxy"
+        Width="540" Height="260"
+        MinWidth="540" MinHeight="260"
+        CanResize="False"
+        WindowStartupLocation="CenterScreen"
+        WindowDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="42"
+        Win32Properties.WindowCornerPreference="DoNotRound">
+  <Grid RowDefinitions="42,*" Background="{DynamicResource CanvasBrush}">
+    <Border x:Name="StartupTitleBar" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="*,46">
+        <StackPanel Orientation="Horizontal" Spacing="9" Margin="14,0" VerticalAlignment="Center" IsHitTestVisible="False">
+          <Border Width="24" Height="24" Background="{DynamicResource AccentBrush}"><TextBlock Text="R" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+          <TextBlock Text="RepoGalaxy" FontWeight="SemiBold" VerticalAlignment="Center"/>
+        </StackPanel>
+        <Button x:Name="StartupCloseButton" Grid.Column="1" Width="46" Height="42" Padding="0" Background="Transparent" BorderThickness="0" Click="OnCloseClick">
+          <Grid Width="20" Height="20"><Path x:Name="StartupCloseIcon" Data="M3,3 L17,17 M17,3 L3,17" Stroke="{DynamicResource PrimaryTextBrush}" StrokeThickness="1" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid>
+        </Button>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1" Margin="34,28,34,30" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
+      <TextBlock x:Name="StartupTitle" Text="正在准备 RepoGalaxy" FontSize="24" FontWeight="SemiBold"/>
+      <TextBlock x:Name="StartupMessage" Grid.Row="1" Text="正在检查本地运行环境…" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"/>
+      <ProgressBar x:Name="StartupProgress" Grid.Row="2" Minimum="0" Maximum="1" Value="0.08" Height="4" VerticalAlignment="Center"/>
+      <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <Button x:Name="RestoreButton" Classes="subtle" Content="从最近备份恢复" IsVisible="False" Click="OnRestoreClick"/>
+        <Button x:Name="RetryButton" Classes="primary" Content="重试" IsVisible="False" Click="OnRetryClick"/>
+      </StackPanel>
+    </Grid>
+  </Grid>
+</Window>

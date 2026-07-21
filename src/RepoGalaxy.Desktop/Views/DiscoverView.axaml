@@ -25,6 +25,7 @@
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
           <TextBlock Text="二维 Tile 世界" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource AccentTextBrush}"/>
           <TextBlock Text="{Binding ResultSummary}" Classes="meta"/>
+          <TextBlock Text="{Binding TilePopulationSummary}" Classes="meta"/>
           <TextBlock Text="{Binding SpatialSearchStatus}" Classes="meta"/>
           <Border IsVisible="{Binding HasActiveTileFilter}" Background="{DynamicResource AccentBrush}" Padding="8,3">
             <StackPanel Orientation="Horizontal" Spacing="7"><TextBlock Text="{Binding ActiveTileFilter}" Foreground="White"/><Button Classes="ghost" Content="×" Foreground="White" Padding="2,0" MinHeight="20" Command="{Binding ClearTileFilterCommand}"/></StackPanel>
@@ -56,20 +57,24 @@
         </Border>
       </Canvas>
 
-      <controls:ZoomableTileCanvas x:Name="TileWorld"
+      <controls:VirtualizedTileWorldControl x:Name="TileWorld"
                                    ZIndex="{Binding TileWorldZIndex}"
                                    CameraX="{Binding CameraX}"
                                    CameraY="{Binding CameraY}"
                                    Zoom="{Binding Zoom}"
+                                   WorldOriginX="{Binding TileWorldOriginX}"
+                                   WorldOriginY="{Binding TileWorldOriginY}"
                                    SkeletonRevision="{Binding SkeletonRevision}"
                                    Opacity="{Binding TileBoardOpacity}"
                                    Background="Transparent">
-        <ItemsControl ItemsSource="{Binding RenderedTiles}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <ItemsControl ItemsSource="{Binding RenderedTiles}"
+                      Width="{Binding TileCanvasWidth}" Height="{Binding TileCanvasHeight}"
+                      HorizontalAlignment="Left" VerticalAlignment="Top">
           <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
           <ItemsControl.Styles>
             <Style Selector="ContentPresenter">
-              <Setter Property="Canvas.Left" Value="{Binding Left}"/>
-              <Setter Property="Canvas.Top" Value="{Binding Top}"/>
+              <Setter Property="Canvas.Left" Value="{Binding RenderLeft}"/>
+              <Setter Property="Canvas.Top" Value="{Binding RenderTop}"/>
               <Setter Property="Width" Value="{Binding Width}"/>
               <Setter Property="Height" Value="{Binding Height}"/>
               <Setter Property="Panel.ZIndex" Value="{Binding ZIndex}"/>
@@ -78,6 +83,7 @@
           <ItemsControl.ItemTemplate>
             <DataTemplate>
               <Border Classes="metro-tile" Background="Transparent" Opacity="{Binding DisplayOpacity}" IsVisible="{Binding IsInRenderWindow}" RenderTransformOrigin="0,0">
+                <Border.Transitions><Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.14"/></Transitions></Border.Transitions>
                 <Grid>
                   <Grid Opacity="{Binding BackgroundLayerOpacity}" IsHitTestVisible="False">
                     <Border Background="{Binding Background}"/>
@@ -112,7 +118,7 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
-      </controls:ZoomableTileCanvas>
+      </controls:VirtualizedTileWorldControl>
 
       <views:SemanticIndexView ZIndex="30" Opacity="{Binding SemanticIndexOpacity}"/>
       <ProgressBar ZIndex="40" IsIndeterminate="True" IsVisible="{Binding IsLoading}" Height="3" VerticalAlignment="Top"/>

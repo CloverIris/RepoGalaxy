@@ -99,6 +99,39 @@ public readonly record struct TileWorldWindow(double X, double Y, double Width, 
     public double CenterY => Y + Height / 2;
 }
 
+public readonly record struct TileWorldViewport(
+    double CameraX,
+    double CameraY,
+    double Zoom,
+    double Width,
+    double Height)
+{
+    public TileWorldWindow WorldWindow => new(
+        CameraX,
+        CameraY,
+        Width / Math.Max(.01, Zoom),
+        Height / Math.Max(.01, Zoom));
+}
+
+public readonly record struct TileWorldContentBounds(double Left, double Top, double Right, double Bottom)
+{
+    public double Width => Math.Max(0, Right - Left);
+    public double Height => Math.Max(0, Bottom - Top);
+    public double CenterX => Left + Width / 2;
+    public double CenterY => Top + Height / 2;
+    public static TileWorldContentBounds Empty => new(0, 0, 1, 1);
+}
+
+public readonly record struct TileWorldAnchor(string ContentKey, double WorldX, double WorldY);
+
+public sealed record TileWorldSnapshot(
+    long BoardId,
+    int LayoutVersion,
+    string WorldSeed,
+    IReadOnlyList<TilePlacement> Placements,
+    TileWorldContentBounds ContentBounds,
+    TileWorldAnchor? Anchor);
+
 public sealed record VirtualTileSlot(
     string Key,
     TileChunkCoordinate Chunk,

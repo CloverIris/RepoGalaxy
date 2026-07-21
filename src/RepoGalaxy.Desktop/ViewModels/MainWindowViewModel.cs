@@ -146,18 +146,35 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             _notifications.ShowFeedNotification(item);
         };
         _sync.StatusChanged += (_, status) => SyncStatus = status;
-        _ = InitializeAsync();
     }
 
-    private async Task InitializeAsync()
+    private bool _hasInitialized;
+    public async Task InitializeAsync()
     {
-        var session = await _session.RestoreAsync();
-        IsAuthenticated = session.IsAuthenticated;
-        CurrentUserLogin = session.User?.Login ?? string.Empty;
-        await AccountProfile.SetUserAsync(session.User);
-        ConnectionStatus = session.IsAuthenticated ? "GitHub 已连接" : "游客模式 · 使用本地缓存";
-        await Discover.LoadAsync();
-        await DashboardRail.LoadAsync();
+        if (_hasInitialized) return;
+        _hasInitialized = true;
+        try
+        {
+            // Render the local snapshot before any credential validation or
+            // remote /user request. The shell stays interactive throughout.
+            await Task.Yield();
+            await Discover.LoadAsync();
+            await DashboardRail.LoadAsync();
+
+            ConnectionStatus = "正在验证本地会话";
+            var session = await _session.RestoreAsync();
+            IsAuthenticated = session.IsAuthenticated;
+            CurrentUserLogin = session.User?.Login ?? string.Empty;
+            await AccountProfile.SetUserAsync(session.User);
+            ConnectionStatus = session.IsAuthenticated ? "GitHub 已连接" : "游客模式 · 使用本地缓存";
+            if (session.IsAuthenticated)
+                await Discover.LoadAsync();
+        }
+        catch
+        {
+            _hasInitialized = false;
+            throw;
+        }
     }
 
     [RelayCommand]

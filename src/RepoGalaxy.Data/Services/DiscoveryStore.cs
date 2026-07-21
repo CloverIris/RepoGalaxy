@@ -40,7 +40,10 @@ public sealed class DiscoveryStore
         var query = db.FeedItems.AsNoTracking().Include(f => f.Repository).Where(f => f.Source == (int)source && !f.IsDismissed);
         if (unreadOnly) query = query.Where(f => !f.IsRead);
         var rows = await query.ToListAsync();
-        return rows.OrderByDescending(f => f.DiscoveredAt).Take(100).Select(Map).ToList();
+        var ordered = source == FeedSource.ForYou
+            ? rows.OrderByDescending(f => f.FineScore).ThenByDescending(f => f.DiscoveredAt)
+            : rows.OrderByDescending(f => f.DiscoveredAt).ThenByDescending(f => f.FineScore);
+        return ordered.Take(300).Select(Map).ToList();
     }
 
     public async Task<IReadOnlyList<FeedItem>> GetNotificationsAsync()

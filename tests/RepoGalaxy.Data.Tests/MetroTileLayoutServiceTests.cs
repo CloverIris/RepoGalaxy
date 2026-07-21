@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using RepoGalaxy.Core.Models;
 using RepoGalaxy.Data.DbContexts;
+using RepoGalaxy.Data.Entities;
 using RepoGalaxy.Data.Services;
 using Xunit;
 
@@ -110,6 +111,110 @@ public sealed class MetroTileLayoutServiceTests
 
         (replacement.Column, replacement.Row, replacement.ColumnSpan, replacement.RowSpan)
             .Should().Be((position.Column, position.Row, position.ColumnSpan, position.RowSpan));
+    }
+
+    [Fact]
+    public async Task Explicit_reflow_rebuilds_every_real_slot_from_the_latest_feed_order()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var service = new MetroTileLayoutService(database.Factory);
+        var initial = Enumerable.Range(0, 5)
+            .Select(index => new TileContent($"repository:old-{index}", MetroTileKind.Repository, $"old/{index}"))
+            .ToList();
+        await service.SynchronizeAsync("guest", FeedSource.Trending, initial, 18, 10);
+
+        var latest = Enumerable.Range(0, 14)
+            .Select(index => new TileContent($"repository:new-{index}", MetroTileKind.Repository, $"new/{index}"))
+            .ToList();
+        var reflowed = await service.SynchronizeAsync("guest", FeedSource.Trending, latest, 18, 10, reflow: true);
+
+        reflowed.Placements.Where(x => !x.Content.IsPlaceholder).Select(x => x.Content.Key)
+            .Should().BeEquivalentTo(latest.Select(x => x.Key));
+        reflowed.Placements.Should().OnlyContain(x => !x.Content.Key.StartsWith("repository:old-", StringComparison.Ordinal));
+        AssertNoOverlap(reflowed.Placements);
+    }
+
+    [Fact]
+    public async Task V3_layout_uses_a_stable_compact_sixteen_by_ten_data_island()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var service = new MetroTileLayoutService(database.Factory);
+        var content = Enumerable.Range(0, 180)
+            .Select(index => new TileContent($"repository:{index}", MetroTileKind.Repository, $"owner/repository-{index}"))
+            .Concat(Enumerable.Range(0, 20)
+                .Select(index => new TileContent($"language:{index}", MetroTileKind.Language, $"Language {index}")))
+            .ToList();
+
+        var board = await service.SynchronizeAsync("guest", FeedSource.Trending, content, 18, 10);
+
+        board.LayoutVersion.Should().Be(3);
+        board.Placements.Should().HaveCount(content.Count);
+        AssertNoOverlap(board.Placements);
+        (board.ExtentColumns / (double)board.ExtentRows).Should().BeInRange(1.25, 2.05);
+        board.Placements.Min(x => x.Column).Should().Be(0);
+        board.Placements.Min(x => x.Row).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Synchronizing_v3_removes_only_obsolete_layout_versions()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using (var db = await database.Factory.CreateDbContextAsync())
+        {
+            db.TileBoards.Add(new TileBoardEntity
+            {
+                ScopeKey = "guest",
+                Source = (int)FeedSource.Trending,
+                LayoutVersion = 2,
+                ExtentColumns = 18,
+                ExtentRows = 10,
+                WorldSeed = "old"
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var service = new MetroTileLayoutService(database.Factory);
+        var board = await service.SynchronizeAsync("guest", FeedSource.Trending,
+            [new TileContent("repository:new", MetroTileKind.Repository, "owner/new")], 18, 10);
+
+        board.LayoutVersion.Should().Be(3);
+        await using var verify = await database.Factory.CreateDbContextAsync();
+        (await verify.TileBoards.CountAsync(x => x.ScopeKey == "guest" && x.Source == (int)FeedSource.Trending && x.LayoutVersion != 3))
+            .Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Reorder_persists_ranked_repository_content_without_moving_geometry()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        long firstId;
+        long secondId;
+        await using (var db = await database.Factory.CreateDbContextAsync())
+        {
+            var first = new RepositoryEntity { GitHubId = "11", Owner = "one", Name = "first" };
+            var second = new RepositoryEntity { GitHubId = "22", Owner = "two", Name = "second" };
+            db.Repositories.AddRange(first, second);
+            await db.SaveChangesAsync();
+            firstId = first.Id;
+            secondId = second.Id;
+        }
+
+        var service = new MetroTileLayoutService(database.Factory);
+        var board = await service.SynchronizeAsync("guest", FeedSource.ForYou,
+        [
+            new TileContent("repository:first", MetroTileKind.Repository, "one/first", RepositoryId: firstId),
+            new TileContent("repository:second", MetroTileKind.Repository, "two/second", RepositoryId: secondId)
+        ], 12, 8);
+        var geometry = board.Placements.Select(x => (x.Column, x.Row, x.ColumnSpan, x.RowSpan)).Order().ToArray();
+        var secondSlot = board.Placements.Single(x => x.Content.RepositoryId == secondId);
+        var focus = new TileWorldWindow(secondSlot.Column * 100, secondSlot.Row * 100, 596, 96);
+
+        var reordered = await service.ReorderRepositoriesAsync(board.Id, [firstId, secondId], focus);
+        var restored = await service.LoadAsync("guest", FeedSource.ForYou);
+
+        reordered.Placements.Select(x => (x.Column, x.Row, x.ColumnSpan, x.RowSpan)).Order().Should().Equal(geometry);
+        restored.Placements.OrderBy(x => Math.Pow(x.Column * 100 + 298 - focus.CenterX, 2) + Math.Pow(x.Row * 100 + 48 - focus.CenterY, 2))
+            .First().Content.RepositoryId.Should().Be(firstId);
     }
 
     private static void AssertNoOverlap(IEnumerable<TilePlacement> placements)

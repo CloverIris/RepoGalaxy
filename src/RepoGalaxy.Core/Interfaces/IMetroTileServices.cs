@@ -5,7 +5,8 @@ namespace RepoGalaxy.Core.Interfaces;
 public interface IMetroTileLayoutService
 {
     Task<TileBoardState> LoadAsync(string scopeKey, FeedSource source, CancellationToken cancellationToken = default);
-    Task<TileBoardState> SynchronizeAsync(string scopeKey, FeedSource source, IReadOnlyList<TileContent> content, int minimumColumns, int minimumRows, CancellationToken cancellationToken = default);
+    Task<TileBoardState> SynchronizeAsync(string scopeKey, FeedSource source, IReadOnlyList<TileContent> content, int minimumColumns, int minimumRows, bool reflow = false, CancellationToken cancellationToken = default);
+    Task<TileBoardState> ReorderRepositoriesAsync(long boardId, IReadOnlyList<long> repositoryIds, TileWorldWindow preferredWindow, CancellationToken cancellationToken = default);
     Task SaveCameraAsync(long boardId, CameraState camera, CancellationToken cancellationToken = default);
     Task SaveSemanticViewportAsync(long boardId, SemanticViewportState viewport, CancellationToken cancellationToken = default);
     Task ResetAsync(string? scopeKey = null, CancellationToken cancellationToken = default);
@@ -25,6 +26,12 @@ public interface IVirtualTileWorldService
 {
     IReadOnlyList<VirtualTileSlot> Materialize(string boardSeed, TileWorldWindow window, IReadOnlyList<TilePlacement> persistentPlacements, IReadOnlyList<TipDefinition> tips);
     (int Column, int Row) FindNearestCompatibleSlot(string boardSeed, TileWorldWindow preferredWindow, TileSpan span, IReadOnlyList<TilePlacement> persistentPlacements);
+}
+
+public interface ITileWorldPresentationService
+{
+    TileWorldSnapshot CreateSnapshot(TileBoardState board, string? anchorContentKey = null);
+    IReadOnlyList<TilePlacement> QueryVisible(TileWorldSnapshot snapshot, TileWorldViewport viewport, double overscan = 180);
 }
 
 public interface ISemanticMosaicLayoutService

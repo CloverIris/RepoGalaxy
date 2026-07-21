@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Input.GestureRecognizers;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Styling;
 using RepoGalaxy.Desktop.ViewModels;
 using RepoGalaxy.Desktop.Services;
 using System.Globalization;
@@ -16,7 +17,7 @@ namespace RepoGalaxy.Desktop.Controls;
 /// Projects a fixed-size tile world through a camera. Pointer wheel changes only Z;
 /// mouse drag and scroll gestures change only X/Y.
 /// </summary>
-public sealed class ZoomableTileCanvas : ContentControl
+public class ZoomableTileCanvas : ContentControl
 {
     public static readonly StyledProperty<double> CameraXProperty =
         AvaloniaProperty.Register<ZoomableTileCanvas, double>(nameof(CameraX));
@@ -26,6 +27,10 @@ public sealed class ZoomableTileCanvas : ContentControl
         AvaloniaProperty.Register<ZoomableTileCanvas, double>(nameof(Zoom), 1d);
     public static readonly StyledProperty<int> SkeletonRevisionProperty =
         AvaloniaProperty.Register<ZoomableTileCanvas, int>(nameof(SkeletonRevision));
+    public static readonly StyledProperty<double> WorldOriginXProperty =
+        AvaloniaProperty.Register<ZoomableTileCanvas, double>(nameof(WorldOriginX));
+    public static readonly StyledProperty<double> WorldOriginYProperty =
+        AvaloniaProperty.Register<ZoomableTileCanvas, double>(nameof(WorldOriginY));
 
     private Point _pressPoint;
     private bool _mousePressed;
@@ -40,6 +45,8 @@ public sealed class ZoomableTileCanvas : ContentControl
     public double CameraY { get => GetValue(CameraYProperty); set => SetValue(CameraYProperty, value); }
     public double Zoom { get => GetValue(ZoomProperty); set => SetValue(ZoomProperty, value); }
     public int SkeletonRevision { get => GetValue(SkeletonRevisionProperty); set => SetValue(SkeletonRevisionProperty, value); }
+    public double WorldOriginX { get => GetValue(WorldOriginXProperty); set => SetValue(WorldOriginXProperty, value); }
+    public double WorldOriginY { get => GetValue(WorldOriginYProperty); set => SetValue(WorldOriginYProperty, value); }
 
     public ZoomableTileCanvas()
     {
@@ -65,7 +72,8 @@ public sealed class ZoomableTileCanvas : ContentControl
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == CameraXProperty || change.Property == CameraYProperty || change.Property == ZoomProperty)
+        if (change.Property == CameraXProperty || change.Property == CameraYProperty || change.Property == ZoomProperty
+            || change.Property == WorldOriginXProperty || change.Property == WorldOriginYProperty)
         {
             ApplyProjection();
             InvalidateVisual();
@@ -88,7 +96,13 @@ public sealed class ZoomableTileCanvas : ContentControl
         if (Content is not Visual content) return;
         content.RenderTransformOrigin = RelativePoint.TopLeft;
         content.RenderTransform = _worldTransform;
-        _worldTransform.Matrix = new Matrix(Zoom, 0, 0, Zoom, -CameraX * Zoom, -CameraY * Zoom);
+        _worldTransform.Matrix = new Matrix(
+            Zoom,
+            0,
+            0,
+            Zoom,
+            (WorldOriginX - CameraX) * Zoom,
+            (WorldOriginY - CameraY) * Zoom);
     }
 
     public override void Render(DrawingContext context)
@@ -106,17 +120,37 @@ public sealed class ZoomableTileCanvas : ContentControl
             var bounds = new Rect(left, top, width, height);
             if (!viewport.Intersects(bounds)) continue;
 
-            var color = SkeletonColor(slot.Content.AccentKey);
-            var fill = new SolidColorBrush(Color.FromArgb(36, color.R, color.G, color.B));
-            var border = new Pen(new SolidColorBrush(Color.FromArgb(105, color.R, color.G, color.B)), 1);
-            context.DrawRectangle(fill, border, bounds);
+            var accent = SkeletonColor(slot.Content.AccentKey);
+            var dark = ActualThemeVariant == ThemeVariant.Dark;
+            var surface = dark ? Color.FromRgb(17, 24, 33) : Color.FromRgb(246, 248, 250);
+            var fill = Blend(surface, accent, dark ? .28 : .14);
+            var foreground = dark ? Color.FromRgb(245, 248, 252) : Color.FromRgb(25, 33, 43);
+            var secondary = dark ? Color.FromRgb(211, 220, 232) : Color.FromRgb(67, 78, 91);
+            var edgeOpacity = EdgeOpacity(bounds, viewport);
+            context.DrawRectangle(new SolidColorBrush(WithAlpha(fill, 222 * edgeOpacity)),
+                new Pen(new SolidColorBrush(WithAlpha(accent, 210 * edgeOpacity)), 1), bounds);
 
-            if (width < 64 || height < 44) continue;
-            var fontSize = Math.Clamp((int)Math.Round(12 * Zoom), 9, 18);
-            var foreground = RelativeLuminance(color) > .42 ? Colors.Black : Colors.White;
-            var text = GetText(slot.Content.Key, slot.Content.Title, fontSize, foreground);
-            using (context.PushClip(bounds.Deflate(Math.Max(4, 9 * Zoom))))
-                context.DrawText(text, new Point(left + Math.Max(5, 9 * Zoom), top + Math.Max(5, 9 * Zoom)));
+            var accentHeight = Math.Max(2, Math.Min(4, 3 * Zoom));
+            context.DrawRectangle(new SolidColorBrush(WithAlpha(accent, 230 * edgeOpacity)), null,
+                new Rect(left, top, width, accentHeight));
+
+            if (width < 54 || height < 40) continue;
+            var inset = Math.Max(6, 10 * Zoom);
+            var titleSize = Math.Clamp((int)Math.Round(11 * Zoom), 9, 16);
+            var categorySize = Math.Clamp((int)Math.Round(8 * Zoom), 7, 11);
+            var title = GetText(slot.Content.Key + ":title", Truncate(slot.Content.Title, width >= 180 ? 32 : 16), titleSize, WithAlpha(foreground, 255 * edgeOpacity));
+            var category = GetText(slot.Content.Key + ":category", Truncate(slot.Content.Caption.Split('·')[0].Trim(), 14), categorySize, WithAlpha(secondary, 245 * edgeOpacity));
+            using (context.PushClip(bounds.Deflate(inset)))
+            {
+                context.DrawText(category, new Point(left + inset, top + inset));
+                if (height >= 66) context.DrawText(title, new Point(left + inset, top + inset + Math.Max(14, 17 * Zoom)));
+                if (height >= 132)
+                {
+                    var bodySize = Math.Clamp((int)Math.Round(9 * Zoom), 8, 13);
+                    var body = GetText(slot.Content.Key + ":body", Truncate(slot.Content.Subtitle, width >= 180 ? 54 : 28), bodySize, WithAlpha(secondary, 232 * edgeOpacity));
+                    context.DrawText(body, new Point(left + inset, top + height - inset - Math.Max(14, 17 * Zoom)));
+                }
+            }
         }
     }
 
@@ -265,9 +299,30 @@ public sealed class ZoomableTileCanvas : ContentControl
         return Color.FromRgb((byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
     }
 
-    private static double RelativeLuminance(Color color)
+    private static Color Blend(Color baseColor, Color accent, double amount)
     {
-        static double Linear(byte component) { var c = component / 255d; return c <= .04045 ? c / 12.92 : Math.Pow((c + .055) / 1.055, 2.4); }
-        return .2126 * Linear(color.R) + .7152 * Linear(color.G) + .0722 * Linear(color.B);
+        amount = Math.Clamp(amount, 0, 1);
+        return Color.FromRgb(
+            (byte)Math.Round(baseColor.R + (accent.R - baseColor.R) * amount),
+            (byte)Math.Round(baseColor.G + (accent.G - baseColor.G) * amount),
+            (byte)Math.Round(baseColor.B + (accent.B - baseColor.B) * amount));
+    }
+
+    private static Color WithAlpha(Color color, double alpha) => Color.FromArgb((byte)Math.Clamp(Math.Round(alpha), 0, 255), color.R, color.G, color.B);
+
+    private static double EdgeOpacity(Rect bounds, Rect viewport)
+    {
+        const double band = 84;
+        var inward = Math.Min(Math.Min(bounds.Left, viewport.Right - bounds.Right), Math.Min(bounds.Top, viewport.Bottom - bounds.Bottom));
+        var value = Math.Clamp((inward + band) / band, 0, 1);
+        value = value * value * (3 - 2 * value);
+        return .38 + .62 * value;
+    }
+
+    private static string Truncate(string value, int maximumLength)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        value = value.ReplaceLineEndings(" ").Trim();
+        return value.Length <= maximumLength ? value : value[..Math.Max(1, maximumLength - 1)] + "…";
     }
 }

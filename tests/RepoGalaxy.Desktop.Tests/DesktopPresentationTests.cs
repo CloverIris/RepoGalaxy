@@ -77,6 +77,7 @@ public sealed class DesktopPresentationTests
     {
         TestAppBuilder.EnsureInitialized();
         Check(new MainWindow() is not null, "Main window failed to load.");
+        Check(new StartupWindow() is not null, "Startup window failed to load.");
         Check(new DiscoverView() is not null, "Discover view failed to load.");
         Check(new SubscriptionsView() is not null, "Subscriptions view failed to load.");
         Check(new LibraryView() is not null, "Library view failed to load.");
@@ -85,6 +86,43 @@ public sealed class DesktopPresentationTests
         Check(new LocalReposView() is not null, "Local repositories view failed to load.");
         Check(new SettingsView() is not null, "Settings view failed to load.");
         Check(new LoginDialog() is not null, "Login dialog failed to load.");
+    }
+
+    [Fact]
+    public void Startup_window_is_centered_responsive_and_uses_custom_chrome()
+    {
+        TestAppBuilder.EnsureInitialized();
+        var window = new StartupWindow();
+        var configure = typeof(StartupWindow).GetMethod("ConfigureWindowChrome", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Startup chrome configuration was not found.");
+        configure.Invoke(window, null);
+
+        Check(window.WindowStartupLocation == WindowStartupLocation.CenterScreen, "Startup window must open in the active screen center.");
+        Check(window.WindowDecorations == WindowDecorations.None, "Startup window must use custom chrome.");
+        var title = window.FindControl<Control>("StartupTitleBar") ?? throw new InvalidOperationException("Startup title bar was not found.");
+        var close = window.FindControl<Button>("StartupCloseButton") ?? throw new InvalidOperationException("Startup close button was not found.");
+        Check(WindowDecorationProperties.GetElementRole(title) == WindowDecorationsElementRole.TitleBar, "Startup title role is incorrect.");
+        Check(WindowDecorationProperties.GetElementRole(close) == WindowDecorationsElementRole.CloseButton, "Startup close role is incorrect.");
+        Check(window.FindControl<Avalonia.Controls.Shapes.Path>("StartupCloseIcon")?.Stroke is not null, "Startup close icon must be visible.");
+    }
+
+    [Fact]
+    public void Tile_world_snapshot_preserves_signed_geometry_and_full_wide_tiles()
+    {
+        var placements = new[]
+        {
+            new TilePlacement(1, new TileContent("repository:wide", MetroTileKind.Repository, "owner/wide"), -12, 4, 6, 1),
+            new TilePlacement(2, new TileContent("language:csharp", MetroTileKind.Language, "C#"), 3, -2, 1, 1)
+        };
+        var board = new TileBoardState(5, "guest", FeedSource.Trending, 3, 0, 0, 1, null, "", 0, 0, 18, 10, placements, "seed");
+        var service = new TileWorldPresentationService();
+
+        var snapshot = service.CreateSnapshot(board, "repository:wide");
+        var visible = service.QueryVisible(snapshot, new TileWorldViewport(-1250, 350, 1, 800, 500), 0);
+
+        Check(snapshot.ContentBounds.Left == -1200 && snapshot.ContentBounds.Top == -200, "Signed content origin was not preserved.");
+        Check(snapshot.Anchor?.ContentKey == "repository:wide", "Requested content anchor was not retained.");
+        Check(visible.Single(x => x.Content.Key == "repository:wide").ColumnSpan == 6, "Wide Tile must remain a full 6x1 rectangle.");
     }
 
     [Fact]
