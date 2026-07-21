@@ -61,13 +61,14 @@ public sealed class DesktopPresentationTests
     }
 
     [Fact]
-    public void NavigationItem_TreatsWindowsIconFontValueAsGlyphInsteadOfPathMarkup()
+    public void NavigationItem_AlwaysUsesAuditedVectorGeometry()
     {
         TestAppBuilder.EnsureInitialized();
         var item = new NavigationItemViewModel("Discover", "发现", "\uE721", "M3,5 L9,3 L7,9");
 
         Check(item.Glyph == "\uE721", "Windows icon-font value was not retained as a glyph.");
         Check(item.Icon is not null, "Fallback vector geometry was not parsed.");
+        Check(!item.UseSystemGlyph && item.UseFallbackIcon, "Navigation must not depend on optional Windows icon-font glyphs.");
         Check(item.Group == "Primary", "Default navigation group changed unexpectedly.");
     }
 
@@ -126,6 +127,9 @@ public sealed class DesktopPresentationTests
         Check(WindowDecorationProperties.GetElementRole(maximize) == WindowDecorationsElementRole.MaximizeButton, "Maximize role is incorrect.");
         Check(WindowDecorationProperties.GetElementRole(close) == WindowDecorationsElementRole.CloseButton, "Close role is incorrect.");
         Check(minimize.Width == 46 && maximize.Width == 46 && close.Width == 46, "Caption buttons must retain three fixed 46px hit targets.");
+        Check(window.FindControl<Avalonia.Controls.Shapes.Path>("MinimizeIcon")?.Stroke is not null, "Minimize icon must use a visible stroke path.");
+        Check(window.FindControl<Avalonia.Controls.Shapes.Path>("MaximizeIcon")?.Stroke is not null, "Maximize icon must use a visible stroke path.");
+        Check(window.FindControl<Avalonia.Controls.Shapes.Path>("CloseIcon")?.Stroke is not null, "Close icon must use a visible stroke path.");
         Check(window.FindControl<Button>("NavigationToggleButton") is not null, "Hamburger button must live in the navigation pane.");
 
         var login = new LoginDialog();

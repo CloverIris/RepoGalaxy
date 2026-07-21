@@ -73,7 +73,18 @@ public sealed class TileImageService : ITileImageService
     }
 
     private static bool IsImage(string? mediaType) => mediaType is "image/png" or "image/jpeg" or "image/webp";
-    private static bool CanDecode(byte[] bytes) { try { using var image = SKBitmap.Decode(bytes); return image is not null && image.Width > 0 && image.Height > 0; } catch { return false; } }
+    private static bool CanDecode(byte[] bytes)
+    {
+        try
+        {
+            using var image = SKBitmap.Decode(bytes);
+            return image is not null
+                && image.Width is > 0 and <= 4096
+                && image.Height is > 0 and <= 4096
+                && (long)image.Width * image.Height <= 16_000_000;
+        }
+        catch { return false; }
+    }
     private static string Dominant(byte[] bytes)
     {
         try

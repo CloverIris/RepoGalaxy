@@ -31,8 +31,10 @@ public sealed partial class NavigationItemViewModel : ObservableObject
     public string Title { get; }
     public Geometry Icon { get; }
     public string Glyph { get; } = string.Empty;
-    public bool UseSystemGlyph => OperatingSystem.IsWindows() && !string.IsNullOrWhiteSpace(Glyph);
-    public bool UseFallbackIcon => !UseSystemGlyph;
+    // Every visible icon is a validated project Geometry. Font glyph availability varies
+    // by Windows build and previously produced missing-square placeholders.
+    public bool UseSystemGlyph => false;
+    public bool UseFallbackIcon => true;
     public string Group { get; }
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private int _badgeCount;

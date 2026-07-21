@@ -20,7 +20,6 @@
     </Style>
     <Style Selector="Button.nav:pointerover"><Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/></Style>
     <Style Selector="Button.nav.selected"><Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/><Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}"/></Style>
-    <Style Selector="Button.nav TextBlock.nav-glyph"><Setter Property="FontFamily" Value="Segoe MDL2 Assets,Segoe Fluent Icons"/><Setter Property="FontSize" Value="18"/><Setter Property="HorizontalAlignment" Value="Center"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
     <Style Selector="Button.caption"><Setter Property="Width" Value="46"/><Setter Property="Height" Value="48"/><Setter Property="MinHeight" Value="48"/><Setter Property="Padding" Value="0"/><Setter Property="CornerRadius" Value="0"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/></Style>
     <Style Selector="Button.caption:pointerover"><Setter Property="Background" Value="#287F8C9B"/></Style>
     <Style Selector="Button.caption.close:pointerover"><Setter Property="Background" Value="#E81123"/><Setter Property="Foreground" Value="White"/></Style>
@@ -34,25 +33,68 @@
           <TextBlock Text="RepoGalaxy" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
         </StackPanel>
 
-        <Grid x:Name="SearchRegion" Grid.Column="1" MaxWidth="620" MinWidth="180" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="18,0">
-          <TextBox Classes="search" Text="{Binding SearchText}" PlaceholderText="{Binding SearchPlaceholder}" IsEnabled="{Binding CanSearch}" Padding="36,6,10,6" MinHeight="34"/>
+        <Grid x:Name="SearchRegion" Grid.Column="1" MaxWidth="620" MinWidth="180" RowDefinitions="38,4" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="18,0">
+          <TextBox x:Name="SearchBox" Classes="search" Text="{Binding SearchText}" PlaceholderText="{Binding SearchPlaceholder}" IsEnabled="{Binding CanSearch}" Padding="36,6,10,6" MinHeight="34"/>
           <PathIcon Data="{StaticResource IconSearch}" Width="16" Height="16" Margin="12,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" Foreground="{DynamicResource SecondaryTextBrush}" IsHitTestVisible="False"/>
+          <Button Grid.Row="1" Classes="ghost" Padding="0" MinHeight="4" Height="4" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="3">
+              <ProgressBar Height="3" Minimum="0" Maximum="1" Value="{Binding CoreBudgetRatio}" Foreground="{Binding CoreBudgetColor}" ToolTip.Tip="{Binding CoreBudgetText}"/>
+              <ProgressBar Grid.Column="1" Height="3" Minimum="0" Maximum="1" Value="{Binding SearchBudgetRatio}" Foreground="{Binding SearchBudgetColor}" ToolTip.Tip="{Binding SearchBudgetText}"/>
+            </Grid>
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedLeft">
+                <Border Width="360" Padding="16" Background="{DynamicResource ElevatedSurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                  <StackPanel Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto"><TextBlock Text="GitHub API 额度" FontSize="16" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding BudgetSessionText}" Classes="meta"/></Grid>
+                    <StackPanel Spacing="4"><TextBlock Text="{Binding CoreBudgetText}"/><ProgressBar Height="5" Maximum="1" Value="{Binding CoreBudgetRatio}" Foreground="{Binding CoreBudgetColor}"/></StackPanel>
+                    <StackPanel Spacing="4"><TextBlock Text="{Binding SearchBudgetText}"/><ProgressBar Height="5" Maximum="1" Value="{Binding SearchBudgetRatio}" Foreground="{Binding SearchBudgetColor}"/></StackPanel>
+                    <TextBlock Text="缓存命中不会改变额度；实际网络响应头是唯一计量事实。" Classes="meta" TextWrapping="Wrap"/>
+                    <Button Classes="subtle" Content="手动刷新额度" HorizontalAlignment="Right" Command="{Binding RefreshRateLimitCommand}"/>
+                  </StackPanel>
+                </Border>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
         </Grid>
 
         <StackPanel x:Name="AccountRegion" Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="8,0">
           <Border Classes="badge" VerticalAlignment="Center"><StackPanel Orientation="Horizontal" Spacing="6"><Ellipse Width="6" Height="6" Fill="{DynamicResource SuccessBrush}"/><TextBlock x:Name="ConnectionStatusText" Text="{Binding ConnectionStatus}"/></StackPanel></Border>
           <Button Classes="icon" Command="{Binding SyncCommand}" ToolTip.Tip="同步"><PathIcon Data="{StaticResource IconRefresh}" Width="17" Height="17"/></Button>
           <Button Classes="subtle" Command="{Binding LoginCommand}" IsVisible="{Binding !IsAuthenticated}" Content="登录 GitHub"/>
-          <Button IsVisible="{Binding IsAuthenticated}" Classes="ghost" Padding="4" ToolTip.Tip="账户菜单">
-            <Button.Flyout><MenuFlyout><MenuItem Header="退出 GitHub" Command="{Binding LogoutCommand}"/></MenuFlyout></Button.Flyout>
-            <StackPanel Orientation="Horizontal" Spacing="8"><Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AccentBrush}"><TextBlock Text="{Binding AccountInitial}" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock x:Name="AccountNameText" Text="{Binding CurrentUserLogin}" FontWeight="SemiBold" VerticalAlignment="Center"/></StackPanel>
+          <Button IsVisible="{Binding IsAuthenticated}" Classes="ghost" Padding="4" ToolTip.Tip="账户资料" Command="{Binding OpenAccountProfileCommand}">
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedRight">
+                <Border Width="360" Padding="18" Background="{DynamicResource ElevatedSurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                  <StackPanel Spacing="12">
+                    <Grid ColumnDefinitions="64,*" ColumnSpacing="14">
+                      <Grid Width="64" Height="64">
+                        <Border CornerRadius="32" Background="{DynamicResource AccentBrush}"><TextBlock Text="{Binding AccountProfile.Initial}" Foreground="White" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                        <Border CornerRadius="32" ClipToBounds="True" IsVisible="{Binding AccountProfile.HasAvatar}"><Image Source="{Binding AccountProfile.Avatar}" Stretch="UniformToFill"/></Border>
+                      </Grid>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3"><TextBlock Text="{Binding AccountProfile.DisplayName}" FontSize="18" FontWeight="SemiBold"/><TextBlock Text="{Binding AccountProfile.LoginText}" Classes="meta"/><TextBlock Text="{Binding AccountProfile.Context}" Classes="meta" TextWrapping="Wrap"/></StackPanel>
+                    </Grid>
+                    <TextBlock Text="{Binding AccountProfile.User.Bio}" TextWrapping="Wrap" MaxLines="4"/>
+                    <TextBlock Text="{Binding AccountProfile.Statistics}" Classes="meta" TextWrapping="Wrap"/>
+                    <ItemsControl ItemsSource="{Binding AccountProfile.SocialAccounts}">
+                      <ItemsControl.ItemTemplate><DataTemplate><Button Classes="ghost" HorizontalContentAlignment="Left" Padding="0,5" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AccountProfile.OpenUrlCommand}" CommandParameter="{Binding Url}"><StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IconLink}" Width="15" Height="15"/><TextBlock Text="{Binding Provider}"/><TextBlock Text="{Binding Url}" Classes="meta" TextTrimming="CharacterEllipsis" MaxWidth="235"/></StackPanel></Button></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding AccountProfile.Status}" Classes="meta"/>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8"><Button Classes="primary" Content="打开 GitHub 主页" Command="{Binding AccountProfile.OpenUrlCommand}" CommandParameter="{Binding AccountProfile.User.ProfileUrl}"/><Button Grid.Column="1" Classes="subtle" Content="退出登录" Command="{Binding LogoutCommand}"/></Grid>
+                  </StackPanel>
+                </Border>
+              </Flyout>
+            </Button.Flyout>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Grid Width="28" Height="28"><Border CornerRadius="14" Background="{DynamicResource AccentBrush}"><TextBlock Text="{Binding AccountProfile.Initial}" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><Border CornerRadius="14" ClipToBounds="True" IsVisible="{Binding AccountProfile.HasAvatar}"><Image Source="{Binding AccountProfile.Avatar}" Stretch="UniformToFill"/></Border></Grid>
+              <TextBlock x:Name="AccountNameText" Text="{Binding CurrentUserLogin}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            </StackPanel>
           </Button>
         </StackPanel>
 
         <StackPanel Grid.Column="3" Orientation="Horizontal">
-          <Button x:Name="MinimizeButton" Classes="caption" Click="OnMinimizeClick" ToolTip.Tip="最小化"><PathIcon Data="M2,8 L18,8" Width="12" Height="12"/></Button>
-          <Button x:Name="MaximizeButton" Classes="caption" Click="OnMaximizeClick" ToolTip.Tip="最大化或还原"><PathIcon x:Name="MaximizeIcon" Data="M3,3 L17,3 L17,17 L3,17 Z" Width="12" Height="12"/></Button>
-          <Button x:Name="CloseButton" Classes="caption close" Click="OnCloseClick" ToolTip.Tip="关闭"><PathIcon Data="M3,3 L17,17 M17,3 L3,17" Width="12" Height="12"/></Button>
+          <Button x:Name="MinimizeButton" Classes="caption" Click="OnMinimizeClick" ToolTip.Tip="最小化"><Grid Width="20" Height="20"><Path x:Name="MinimizeIcon" Data="M3,10 L17,10" Stroke="{DynamicResource PrimaryTextBrush}" StrokeThickness="1" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid></Button>
+          <Button x:Name="MaximizeButton" Classes="caption" Click="OnMaximizeClick" ToolTip.Tip="最大化或还原"><Grid Width="20" Height="20"><Path x:Name="MaximizeIcon" Data="M3,3 L17,3 L17,17 L3,17 Z" Stroke="{DynamicResource PrimaryTextBrush}" StrokeThickness="1" Fill="Transparent" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid></Button>
+          <Button x:Name="CloseButton" Classes="caption close" Click="OnCloseClick" ToolTip.Tip="关闭"><Grid Width="20" Height="20"><Path x:Name="CloseIcon" Data="M3,3 L17,17 M17,3 L3,17" Stroke="{DynamicResource PrimaryTextBrush}" StrokeThickness="1" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid></Button>
         </StackPanel>
       </Grid>
     </Border>
@@ -66,16 +108,16 @@
             <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
               <StackPanel>
                 <ItemsControl ItemsSource="{Binding PrimaryNavigation}">
-                  <ItemsControl.ItemTemplate><DataTemplate x:DataType="vm:NavigationItemViewModel"><controls:MetroRevealButton Classes="nav" Classes.selected="{Binding IsSelected}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).NavigateCommand}" CommandParameter="{Binding}" ToolTip.Tip="{Binding Title}"><Grid ColumnDefinitions="48,*,Auto"><Border Width="4" HorizontalAlignment="Left" Background="{DynamicResource AccentBrush}" IsVisible="{Binding IsSelected}"/><Grid Width="48" Height="48"><TextBlock Classes="nav-glyph" Text="{Binding Glyph}" Width="20" Height="20" TextAlignment="Center" IsVisible="{Binding UseSystemGlyph}"/><PathIcon Data="{Binding Icon}" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding UseFallbackIcon}"/></Grid><TextBlock Grid.Column="1" Text="{Binding Title}" Margin="8,0,0,0" VerticalAlignment="Center" FontWeight="Medium"/><Border Grid.Column="2" Classes="badge" IsVisible="{Binding BadgeCount}" Margin="0,0,10,0"><TextBlock Text="{Binding BadgeCount}"/></Border></Grid></controls:MetroRevealButton></DataTemplate></ItemsControl.ItemTemplate>
+                  <ItemsControl.ItemTemplate><DataTemplate x:DataType="vm:NavigationItemViewModel"><controls:MetroRevealButton Classes="nav" Classes.selected="{Binding IsSelected}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).NavigateCommand}" CommandParameter="{Binding}" ToolTip.Tip="{Binding Title}"><Grid ColumnDefinitions="48,*,Auto"><Border Width="4" HorizontalAlignment="Left" Background="{DynamicResource AccentBrush}" IsVisible="{Binding IsSelected}"/><Grid Width="48" Height="48"><PathIcon Data="{Binding Icon}" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid><TextBlock Grid.Column="1" Text="{Binding Title}" Margin="8,0,0,0" VerticalAlignment="Center" FontWeight="Medium"/><Border Grid.Column="2" Classes="badge" IsVisible="{Binding BadgeCount}" Margin="0,0,10,0"><TextBlock Text="{Binding BadgeCount}"/></Border></Grid></controls:MetroRevealButton></DataTemplate></ItemsControl.ItemTemplate>
                 </ItemsControl>
                 <Separator Margin="12,12"/>
                 <TextBlock Text="仓库" Classes="meta" Margin="16,0,0,8" IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsNavigationOpen}"/>
                 <ItemsControl ItemsSource="{Binding WorkspaceNavigation}">
-                  <ItemsControl.ItemTemplate><DataTemplate x:DataType="vm:NavigationItemViewModel"><controls:MetroRevealButton Classes="nav" Classes.selected="{Binding IsSelected}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).NavigateCommand}" CommandParameter="{Binding}" ToolTip.Tip="{Binding Title}"><Grid ColumnDefinitions="48,*"><Border Width="4" HorizontalAlignment="Left" Background="{DynamicResource AccentBrush}" IsVisible="{Binding IsSelected}"/><Grid Width="48" Height="48"><TextBlock Classes="nav-glyph" Text="{Binding Glyph}" Width="20" Height="20" TextAlignment="Center" IsVisible="{Binding UseSystemGlyph}"/><PathIcon Data="{Binding Icon}" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding UseFallbackIcon}"/></Grid><TextBlock Grid.Column="1" Text="{Binding Title}" Margin="8,0,0,0" VerticalAlignment="Center"/></Grid></controls:MetroRevealButton></DataTemplate></ItemsControl.ItemTemplate>
+                  <ItemsControl.ItemTemplate><DataTemplate x:DataType="vm:NavigationItemViewModel"><controls:MetroRevealButton Classes="nav" Classes.selected="{Binding IsSelected}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).NavigateCommand}" CommandParameter="{Binding}" ToolTip.Tip="{Binding Title}"><Grid ColumnDefinitions="48,*"><Border Width="4" HorizontalAlignment="Left" Background="{DynamicResource AccentBrush}" IsVisible="{Binding IsSelected}"/><Grid Width="48" Height="48"><PathIcon Data="{Binding Icon}" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid><TextBlock Grid.Column="1" Text="{Binding Title}" Margin="8,0,0,0" VerticalAlignment="Center"/></Grid></controls:MetroRevealButton></DataTemplate></ItemsControl.ItemTemplate>
                 </ItemsControl>
               </StackPanel>
             </ScrollViewer>
-            <controls:MetroRevealButton Grid.Row="3" Classes="nav" Classes.selected="{Binding SettingsNavigation.IsSelected}" Command="{Binding NavigateCommand}" CommandParameter="{Binding SettingsNavigation}" ToolTip.Tip="设置"><Grid ColumnDefinitions="48,*"><Border Width="4" HorizontalAlignment="Left" Background="{DynamicResource AccentBrush}" IsVisible="{Binding SettingsNavigation.IsSelected}"/><Grid Width="48" Height="48"><TextBlock Classes="nav-glyph" Text="{Binding SettingsNavigation.Glyph}" Width="20" Height="20" TextAlignment="Center" IsVisible="{Binding SettingsNavigation.UseSystemGlyph}"/><PathIcon Data="{Binding SettingsNavigation.Icon}" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding SettingsNavigation.UseFallbackIcon}"/></Grid><TextBlock Grid.Column="1" Text="设置" Margin="8,0,0,0" VerticalAlignment="Center"/></Grid></controls:MetroRevealButton>
+            <controls:MetroRevealButton Grid.Row="3" Classes="nav" Classes.selected="{Binding SettingsNavigation.IsSelected}" Command="{Binding NavigateCommand}" CommandParameter="{Binding SettingsNavigation}" ToolTip.Tip="设置"><Grid ColumnDefinitions="48,*"><Border Width="4" HorizontalAlignment="Left" Background="{DynamicResource AccentBrush}" IsVisible="{Binding SettingsNavigation.IsSelected}"/><Grid Width="48" Height="48"><PathIcon Data="{Binding SettingsNavigation.Icon}" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid><TextBlock Grid.Column="1" Text="设置" Margin="8,0,0,0" VerticalAlignment="Center"/></Grid></controls:MetroRevealButton>
           </Grid>
         </Border>
       </SplitView.Pane>

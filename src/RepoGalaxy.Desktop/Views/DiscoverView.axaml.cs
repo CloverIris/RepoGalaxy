@@ -45,21 +45,24 @@ public partial class DiscoverView : UserControl
     private void OnPointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
         if (_worldHost is null || DataContext is not DiscoverViewModel vm || !IsInsideWorld(e.Source)) return;
+        var tileWorld = this.FindControl<Controls.ZoomableTileCanvas>("TileWorld");
+        if (tileWorld is null) return;
         var point = e.GetPosition(_worldHost);
         if (TileInputClassifier.Classify(e.Delta.X, e.Delta.Y) == TileWheelIntent.Pan)
-            vm.PanBy(-e.Delta.X * 72, -e.Delta.Y * 72);
+            tileWorld.QueuePan(-e.Delta.X * 72, -e.Delta.Y * 72);
         else
-            vm.ZoomBy(e.Delta.Y, point.X, point.Y, FindTile(e.Source));
-        vm.CommitCamera();
+            tileWorld.QueueZoom(e.Delta.Y, point.X, point.Y, FindTile(e.Source));
         e.Handled = true;
     }
 
     private void OnPinch(object? sender, PinchEventArgs e)
     {
-        if (DataContext is not DiscoverViewModel vm) return;
+        if (DataContext is not DiscoverViewModel) return;
+        var tileWorld = this.FindControl<Controls.ZoomableTileCanvas>("TileWorld");
+        if (tileWorld is null) return;
         var incremental = e.Scale / Math.Max(.001, _lastPinchScale);
         _lastPinchScale = e.Scale;
-        vm.ZoomByFactor(incremental, e.ScaleOrigin.X, e.ScaleOrigin.Y, FindTile(e.Source));
+        tileWorld.QueueZoomFactor(incremental, e.ScaleOrigin.X, e.ScaleOrigin.Y, FindTile(e.Source));
         e.Handled = true;
     }
 
@@ -71,10 +74,11 @@ public partial class DiscoverView : UserControl
 
     private void OnTouchPadMagnify(object? sender, PointerDeltaEventArgs e)
     {
-        if (_worldHost is null || DataContext is not DiscoverViewModel vm) return;
+        if (_worldHost is null || DataContext is not DiscoverViewModel) return;
+        var tileWorld = this.FindControl<Controls.ZoomableTileCanvas>("TileWorld");
+        if (tileWorld is null) return;
         var point = e.GetPosition(_worldHost);
-        vm.ZoomByFactor(Math.Exp(Math.Clamp(e.Delta.Y, -.35, .35)), point.X, point.Y, FindTile(e.Source));
-        vm.CommitCamera();
+        tileWorld.QueueZoomFactor(Math.Exp(Math.Clamp(e.Delta.Y, -.35, .35)), point.X, point.Y, FindTile(e.Source));
         e.Handled = true;
     }
 

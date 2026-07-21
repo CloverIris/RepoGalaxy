@@ -14,6 +14,7 @@ public sealed partial class MetroTileViewModel : ObservableObject
     private double _edgeOpacity = 1;
     private double _focusOpacity = 1;
     private bool _matchesFilter = true;
+    private double _heldBackgroundOpacity = 1;
 
     public MetroTileViewModel(TilePlacement placement, TilePalette palette, FeedItemViewModel? repository = null, DashboardListViewModel? ranking = null)
     {
@@ -55,8 +56,10 @@ public sealed partial class MetroTileViewModel : ObservableObject
     [ObservableProperty] private Bitmap? _backgroundImage;
     [ObservableProperty] private bool _isInRenderWindow = true;
     [ObservableProperty] private bool _isFocused;
+    [ObservableProperty] private bool _isPeekVisible;
     public int ZIndex => IsFocused ? 1000 : 0;
     public double DisplayOpacity => (_matchesFilter ? 1 : .15) * _edgeOpacity * _focusOpacity;
+    public double BackgroundLayerOpacity => _heldBackgroundOpacity;
 
     public void SetFilter(string value)
     {
@@ -82,6 +85,13 @@ public sealed partial class MetroTileViewModel : ObservableObject
         _focusOpacity = focused ? 1 : Math.Clamp(1 - detailProgress * .78, .22, 1);
         OnPropertyChanged(nameof(DisplayOpacity));
         OnPropertyChanged(nameof(ZIndex));
+    }
+
+    public void SetPointerHeld(bool held)
+    {
+        _heldBackgroundOpacity = held ? .2 : 1;
+        IsPeekVisible = held;
+        OnPropertyChanged(nameof(BackgroundLayerOpacity));
     }
 
     public void ApplyImageAsset(TileImageAsset asset, ITilePaletteService palettes)

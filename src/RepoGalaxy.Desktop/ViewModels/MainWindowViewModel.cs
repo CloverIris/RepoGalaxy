@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RepoGalaxy.Core.Interfaces;
+using RepoGalaxy.Core.Models;
 using RepoGalaxy.Desktop.Services;
 using RepoGalaxy.Desktop.ViewModels.Dialogs;
 using RepoGalaxy.Desktop.Views.Dialogs;
@@ -22,6 +24,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly DiscoverySyncService _sync;
     private readonly IDesktopNotificationService _notifications;
     private readonly IAuthenticationAuditService _audit;
+    private readonly GitHubRequestBudget _budget;
 
     public DiscoverViewModel Discover { get; }
     public SubscriptionsViewModel Subscriptions { get; }
@@ -32,6 +35,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public SettingsViewModel Settings { get; }
     public RepositoryDetailsViewModel Details { get; }
     public DashboardRailViewModel DashboardRail { get; }
+    public AccountProfileViewModel AccountProfile { get; }
     public ViewModelBase RightRailContent => Details.IsOpen ? Details : DashboardRail;
     private bool _isDashboardRailInline = true;
     private bool _isDashboardRailRequested;
@@ -52,9 +56,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _syncStatus = "正在读取本地内容";
     [ObservableProperty] private string _connectionStatus = "游客模式";
     [ObservableProperty] private bool _isNavigationOpen = true;
+    [ObservableProperty] private double _coreBudgetRatio;
+    [ObservableProperty] private double _searchBudgetRatio;
+    [ObservableProperty] private string _coreBudgetText = "Core · 等待首次请求";
+    [ObservableProperty] private string _searchBudgetText = "Search · 等待首次请求";
+    [ObservableProperty] private string _budgetSessionText = "游客额度";
 
     public string AccountLabel => IsAuthenticated ? CurrentUserLogin : "登录 GitHub";
     public string AccountInitial => string.IsNullOrWhiteSpace(CurrentUserLogin) ? "G" : CurrentUserLogin[..1].ToUpperInvariant();
+    public string CoreBudgetColor => BudgetColor(CoreBudgetRatio);
+    public string SearchBudgetColor => BudgetColor(SearchBudgetRatio);
 
     public MainWindowViewModel(
         IAuthenticationSessionService session,
@@ -72,7 +83,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         LocalReposViewModel localRepos,
         SettingsViewModel settings,
         RepositoryDetailsViewModel details,
-        DashboardRailViewModel dashboardRail)
+        DashboardRailViewModel dashboardRail,
+        AccountProfileViewModel accountProfile,
+        GitHubRequestBudget budget)
     {
         _session = session;
         _github = github;
@@ -90,6 +103,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Settings = settings;
         Details = details;
         DashboardRail = dashboardRail;
+        AccountProfile = accountProfile;
+        _budget = budget;
+        _budget.Changed += (_, snapshot) => Dispatcher.UIThread.Post(() => ApplyBudget(snapshot));
+        ApplyBudget(_budget.Snapshot);
         Discover.ImmersiveDetailChanged += (_, _) => OnPropertyChanged(nameof(IsRightRailOpen));
         _currentView = discover;
         Details.PropertyChanged += (_, args) =>
@@ -137,6 +154,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var session = await _session.RestoreAsync();
         IsAuthenticated = session.IsAuthenticated;
         CurrentUserLogin = session.User?.Login ?? string.Empty;
+        await AccountProfile.SetUserAsync(session.User);
         ConnectionStatus = session.IsAuthenticated ? "GitHub 已连接" : "游客模式 · 使用本地缓存";
         await Discover.LoadAsync();
         await DashboardRail.LoadAsync();
@@ -212,6 +230,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             var session = _session.Current;
             IsAuthenticated = session.IsAuthenticated;
             CurrentUserLogin = session.User?.Login ?? string.Empty;
+            await AccountProfile.SetUserAsync(session.User);
             ConnectionStatus = session.IsAuthenticated ? "GitHub 已连接" : "游客模式";
             await Discover.LoadAsync();
             await DashboardRail.LoadAsync();
@@ -225,6 +244,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         await _session.SignOutAsync();
         IsAuthenticated = false;
         CurrentUserLogin = string.Empty;
+        await AccountProfile.SetUserAsync(null);
         ConnectionStatus = "游客模式 · 使用本地缓存";
         _audit.Record("session", "signed-out");
         SyncStatus = "已退出登录";
@@ -236,6 +256,42 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         SyncStatus = "正在同步…";
         await Discover.SyncAsync();
     }
+
+    [RelayCommand]
+    private async Task OpenAccountProfileAsync() => await AccountProfile.EnsureSocialAccountsAsync();
+
+    [RelayCommand]
+    private async Task RefreshRateLimitAsync()
+    {
+        SyncStatus = "正在读取 GitHub API 额度…";
+        var rate = await _github.GetRateLimitAsync();
+        if (rate is not null) _budget.Update(rate);
+        SyncStatus = rate is null ? "额度读取失败，保留最近观测值" : "API 额度已更新";
+    }
+
+    public void MoveToNextSearchMatch()
+    {
+        if (ReferenceEquals(CurrentView, Discover)) Discover.MoveToNextSearchMatch();
+    }
+
+    private void ApplyBudget(GitHubBudgetSnapshot snapshot)
+    {
+        BudgetSessionText = snapshot.SessionKind == GitHubBudgetSessionKind.Authenticated ? "登录额度" : "游客额度";
+        CoreBudgetRatio = snapshot.Core?.UsedRatio ?? 0;
+        SearchBudgetRatio = snapshot.Search?.UsedRatio ?? 0;
+        CoreBudgetText = FormatBudget("Core", snapshot.Core);
+        SearchBudgetText = FormatBudget("Search", snapshot.Search);
+    }
+
+    private static string FormatBudget(string name, GitHubRateWindow? window)
+        => window is null
+            ? $"{name} · 等待首次请求"
+            : $"{name} · {window.EffectiveUsed:N0} / {window.Limit:N0} · {window.Remaining:N0} 剩余 · {window.ResetAt.LocalDateTime:HH:mm} 重置";
+
+    private static string BudgetColor(double ratio) => ratio >= .95 ? "#E81123" : ratio >= .80 ? "#FFB900" : "#4C9AFF";
+
+    partial void OnCoreBudgetRatioChanged(double value) => OnPropertyChanged(nameof(CoreBudgetColor));
+    partial void OnSearchBudgetRatioChanged(double value) => OnPropertyChanged(nameof(SearchBudgetColor));
 
     partial void OnSearchTextChanged(string value)
     {

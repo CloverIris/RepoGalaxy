@@ -19,10 +19,19 @@ public sealed partial class DiscoverViewModel
     private CancellationTokenSource? _cameraAnimation;
     private CancellationTokenSource? _portalAnimation;
     private CancellationTokenSource? _imageLoadCancellation;
+    private CancellationTokenSource? _searchNavigationDebounce;
+    private IReadOnlyList<TileSearchCandidate> _searchMatches = [];
+    private int _searchMatchIndex = -1;
+    private MetroTileViewModel? _pointerHeldTile;
     private string _scheduledDetailKey = string.Empty;
     private CameraState? _detailEntryCamera;
     private long _markdownImageBudget;
     private double _latchedDetailFitScale;
+    private double _semanticViewportWidth;
+    private double _semanticViewportHeight;
+    private CancellationTokenSource? _worldRefreshCancellation;
+    private string _renderWindowKey = string.Empty;
+    private int _lastFocusPresentationBucket = -1;
 
     public ObservableCollection<SemanticIndexItemViewModel> SemanticIndexItems { get; } = [];
     public ObservableCollection<SemanticMosaicItemViewModel> SemanticMosaicItems { get; } = [];
@@ -53,6 +62,8 @@ public sealed partial class DiscoverViewModel
     [ObservableProperty] private double _semanticCanvasHeight = 480;
     [ObservableProperty] private double _semanticViewportX = 24;
     [ObservableProperty] private double _semanticViewportY = 24;
+    [ObservableProperty] private bool _semanticViewportUserPositioned;
+    [ObservableProperty] private string _spatialSearchStatus = string.Empty;
     [ObservableProperty] private int _markdownPageNumber = 1;
     [ObservableProperty] private int _markdownPageCount;
     [ObservableProperty] private bool _hasMarkdown;
@@ -83,6 +94,8 @@ public sealed partial class DiscoverViewModel
     public double PortalInnerOffsetY => -PortalY;
     public double DetailViewportWidth => Math.Max(1, _viewportWidth);
     public double DetailViewportHeight => Math.Max(1, _viewportHeight);
+    public int PortalZIndex => DetailPresentation is DetailPresentationState.Snapping or DetailPresentationState.Full ? 20 : 0;
+    public int TileWorldZIndex => 10;
 
     public event EventHandler? ImmersiveDetailChanged;
 
@@ -93,12 +106,15 @@ public sealed partial class DiscoverViewModel
     public async Task SetViewportAsync(double width, double height)
     {
         if (width <= 0 || height <= 0) return;
+        var oldWidth = _viewportWidth;
+        var oldHeight = _viewportHeight;
         _viewportWidth = width;
         _viewportHeight = height;
         OnPropertyChanged(nameof(DetailViewportWidth));
         OnPropertyChanged(nameof(DetailViewportHeight));
         if (DetailPresentation == DetailPresentationState.Full) SetPortal(new(0, 0, width, height));
         await EnsureTileExtentAsync(width, height);
+        ResizeSemanticViewport(oldWidth, oldHeight, width, height);
         UpdateCameraPresentation();
     }
 
@@ -137,12 +153,20 @@ public sealed partial class DiscoverViewModel
         if (!IsSemanticIndexInteractive) return;
         SemanticViewportX = ClampSemanticAxis(SemanticViewportX + screenDeltaX, viewportWidth, SemanticCanvasWidth);
         SemanticViewportY = ClampSemanticAxis(SemanticViewportY + screenDeltaY, viewportHeight, SemanticCanvasHeight);
+        SemanticViewportUserPositioned = true;
     }
 
     public void NormalizeSemanticViewport(double viewportWidth, double viewportHeight)
     {
+        if (!SemanticViewportUserPositioned)
+        {
+            SemanticViewportX = (viewportWidth - SemanticCanvasWidth) / 2;
+            SemanticViewportY = (viewportHeight - SemanticCanvasHeight) / 2;
+        }
         SemanticViewportX = ClampSemanticAxis(SemanticViewportX, viewportWidth, SemanticCanvasWidth);
         SemanticViewportY = ClampSemanticAxis(SemanticViewportY, viewportHeight, SemanticCanvasHeight);
+        _semanticViewportWidth = viewportWidth;
+        _semanticViewportHeight = viewportHeight;
     }
 
     public void CommitSemanticViewport()
@@ -150,6 +174,112 @@ public sealed partial class DiscoverViewModel
         _semanticViewportSaveDebounce?.Cancel();
         var cancellation = _semanticViewportSaveDebounce = new CancellationTokenSource();
         _ = SaveSemanticViewportAfterDelayAsync(cancellation);
+    }
+
+    public void BeginTilePointerInteraction(MetroTileViewModel? tile)
+    {
+        if (tile is null || DetailPresentation is DetailPresentationState.Snapping or DetailPresentationState.Full) return;
+        _pointerHeldTile?.SetPointerHeld(false);
+        _pointerHeldTile = tile;
+        tile.SetPointerHeld(true);
+    }
+
+    public void MarkTilePointerDragging() { }
+
+    public void EndTilePointerInteraction()
+    {
+        _pointerHeldTile?.SetPointerHeld(false);
+        _pointerHeldTile = null;
+    }
+
+    public void MoveToNextSearchMatch()
+    {
+        if (_searchMatches.Count == 0) return;
+        _searchMatchIndex = (_searchMatchIndex + 1) % _searchMatches.Count;
+        _ = NavigateToSearchMatchAsync(_searchMatches[_searchMatchIndex]);
+    }
+
+    private void ScheduleSpatialSearch(string query)
+    {
+        _searchNavigationDebounce?.Cancel();
+        _searchNavigationDebounce?.Dispose();
+        _searchMatchIndex = -1;
+        if (string.IsNullOrWhiteSpace(query)) { _searchMatches = []; SpatialSearchStatus = string.Empty; return; }
+        var cancellation = _searchNavigationDebounce = new CancellationTokenSource();
+        _ = RunSpatialSearchAfterDelayAsync(query, cancellation);
+    }
+
+    private async Task RunSpatialSearchAfterDelayAsync(string query, CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(300, cancellation.Token);
+            var candidates = RenderedTiles.Select(ToSearchCandidate).ToList();
+            var centerX = CameraX + _viewportWidth / Math.Max(.01, Zoom) / 2;
+            var centerY = CameraY + _viewportHeight / Math.Max(.01, Zoom) / 2;
+            var result = _spatialSearch.Search(query, candidates, centerX, centerY);
+            if (cancellation.IsCancellationRequested || !SearchText.Trim().Equals(query.Trim(), StringComparison.Ordinal)) return;
+            _searchMatches = result.Matches;
+            if (result.Matches.Count == 0) { SpatialSearchStatus = "当前画布没有匹配项"; return; }
+            _searchMatchIndex = 0;
+            SpatialSearchStatus = $"已定位 1 / {result.Matches.Count}";
+            await NavigateToSearchMatchAsync(result.Matches[0]);
+        }
+        catch (OperationCanceledException) { }
+        finally { if (ReferenceEquals(_searchNavigationDebounce, cancellation)) _searchNavigationDebounce = null; cancellation.Dispose(); }
+    }
+
+    private async Task NavigateToSearchMatchAsync(TileSearchCandidate match)
+    {
+        if (DetailPresentation != DetailPresentationState.Board) await CloseImmersiveDetailAsync();
+        var target = _zoomLayout.CenterOn(Camera with { FocusedContentKey = string.Empty }, match.Bounds, _viewportWidth, _viewportHeight, 1);
+        await AnimateCameraAsync(target, 220);
+        SpatialSearchStatus = $"已定位 {_searchMatchIndex + 1} / {_searchMatches.Count}";
+    }
+
+    private static TileSearchCandidate ToSearchCandidate(MetroTileViewModel tile) => new(tile.Key, tile.Content.Kind, tile.Title, tile.Subtitle, tile.Language,
+        tile.RepositoryItem?.Repository.Topics ?? [], tile.Caption, Rect(tile));
+
+    private void ResizeSemanticViewport(double oldWidth, double oldHeight, double width, double height)
+    {
+        if (width <= 0 || height <= 0) return;
+        if (SemanticViewportUserPositioned)
+        {
+            var basisWidth = _semanticViewportWidth > 0 ? _semanticViewportWidth : oldWidth;
+            var basisHeight = _semanticViewportHeight > 0 ? _semanticViewportHeight : oldHeight;
+            SemanticViewportX += (width - basisWidth) / 2;
+            SemanticViewportY += (height - basisHeight) / 2;
+        }
+        else
+        {
+            SemanticViewportX = (width - SemanticCanvasWidth) / 2;
+            SemanticViewportY = (height - SemanticCanvasHeight) / 2;
+        }
+        NormalizeSemanticViewport(width, height);
+        CommitSemanticViewport();
+    }
+
+    [RelayCommand]
+    private async Task ResetSemanticViewportAsync()
+    {
+        SemanticViewportUserPositioned = false;
+        var targetX = ClampSemanticAxis((_viewportWidth - SemanticCanvasWidth) / 2, _viewportWidth, SemanticCanvasWidth);
+        var targetY = ClampSemanticAxis((_viewportHeight - SemanticCanvasHeight) / 2, _viewportHeight, SemanticCanvasHeight);
+        await AnimateSemanticViewportAsync(targetX, targetY);
+    }
+
+    private async Task AnimateSemanticViewportAsync(double targetX, double targetY)
+    {
+        var startX = SemanticViewportX; var startY = SemanticViewportY;
+        if (!MotionPreferences.AnimationsEnabled) { SemanticViewportX = targetX; SemanticViewportY = targetY; CommitSemanticViewport(); return; }
+        var stopwatch = Stopwatch.StartNew();
+        while (stopwatch.Elapsed.TotalMilliseconds < 180)
+        {
+            await Task.Delay(16);
+            var t = Smooth(stopwatch.Elapsed.TotalMilliseconds / 180);
+            SemanticViewportX = Lerp(startX, targetX, t); SemanticViewportY = Lerp(startY, targetY, t);
+        }
+        SemanticViewportX = targetX; SemanticViewportY = targetY; CommitSemanticViewport();
     }
 
     public void ActivateSemanticIndexFromPointer(SemanticMosaicItemViewModel? item)
@@ -203,7 +333,7 @@ public sealed partial class DiscoverViewModel
         var boardId = _tileBoard?.Id ?? 0;
         if (boardId <= 0) return;
         var camera = Camera;
-        var semanticViewport = new SemanticViewportState(SemanticViewportX, SemanticViewportY);
+        var semanticViewport = new SemanticViewportState(SemanticViewportX, SemanticViewportY, _semanticViewportWidth, _semanticViewportHeight, SemanticViewportUserPositioned);
         await _tileLayout.SaveCameraAsync(boardId, camera);
         await _tileLayout.SaveSemanticViewportAsync(boardId, semanticViewport);
     }
@@ -221,6 +351,36 @@ public sealed partial class DiscoverViewModel
         _semanticViewportSaveDebounce?.Cancel(); _semanticViewportSaveDebounce?.Dispose(); _semanticViewportSaveDebounce = null;
         CancelDetailLoad(); CancelCameraAnimation(); CancelPortalAnimation();
         _imageLoadCancellation?.Cancel(); _imageLoadCancellation?.Dispose();
+        _searchNavigationDebounce?.Cancel(); _searchNavigationDebounce?.Dispose();
+        _worldRefreshCancellation?.Cancel(); _worldRefreshCancellation?.Dispose();
+        _rankingRebuild.Rebuilt -= OnRankingRebuilt;
+    }
+
+    private void OnRankingRebuilt(object? sender, RankingRebuiltEvent e)
+    {
+        var scope = _session.Current.User?.GitHubId ?? "guest";
+        if (!e.ScopeKey.Equals(scope, StringComparison.Ordinal) || e.Source != SelectedSource.Source) return;
+        var rankedItems = e.RepositoryIds.Select(id => _allItems.FirstOrDefault(x => x.Repository.Id == id)).Where(x => x is not null).Cast<FeedItemViewModel>().ToList();
+        if (rankedItems.Count == 0) return;
+        var centerX = CameraX + _viewportWidth / Math.Max(.01, Zoom) / 2;
+        var centerY = CameraY + _viewportHeight / Math.Max(.01, Zoom) / 2;
+        var slots = Tiles.Select((tile, index) => (tile, index)).Where(x => x.tile.IsRepository)
+            .OrderBy(x => Math.Pow(x.tile.Left + x.tile.Width / 2 - centerX, 2) + Math.Pow(x.tile.Top + x.tile.Height / 2 - centerY, 2)).ToList();
+        var count = Math.Min(slots.Count, rankedItems.Count);
+        for (var i = 0; i < count; i++)
+        {
+            var (slot, index) = slots[i];
+            var item = rankedItems[i];
+            var repository = item.Repository.Repository;
+            var content = slot.Content with { RepositoryId = repository.Id, Title = repository.FullName, Subtitle = repository.Description, Caption = item.ReasonText, AccentKey = repository.PrimaryLanguage, ImageUrl = repository.OwnerAvatarUrl, SourceUrl = repository.HtmlUrl };
+            var placement = slot.Placement with { Content = content };
+            var replacement = new MetroTileViewModel(placement, _tilePalette.Create(content.AccentKey), item);
+            Tiles[index] = replacement;
+            var renderedIndex = RenderedTiles.IndexOf(slot);
+            if (renderedIndex >= 0) RenderedTiles[renderedIndex] = replacement;
+            if (!string.IsNullOrWhiteSpace(content.ImageUrl)) _ = LoadTileImageAsync(replacement, content.ImageUrl);
+        }
+        ApplyTileFilter();
     }
 
     [RelayCommand]
@@ -373,7 +533,7 @@ public sealed partial class DiscoverViewModel
         if (persist) DebounceCameraSave();
     }
 
-    private async Task AnimateCameraAsync(CameraState target)
+    private async Task AnimateCameraAsync(CameraState target, int durationMilliseconds = 160)
     {
         CancelCameraAnimation();
         if (!MotionPreferences.AnimationsEnabled) { ApplyCamera(target); CommitCamera(); return; }
@@ -382,10 +542,10 @@ public sealed partial class DiscoverViewModel
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            while (stopwatch.Elapsed.TotalMilliseconds < 160)
+            while (stopwatch.Elapsed.TotalMilliseconds < durationMilliseconds)
             {
                 await Task.Delay(16, cancellation.Token);
-                var t = Smooth(stopwatch.Elapsed.TotalMilliseconds / 160);
+                var t = Smooth(stopwatch.Elapsed.TotalMilliseconds / durationMilliseconds);
                 ApplyCamera(new(Lerp(start.X, target.X, t), Lerp(start.Y, target.Y, t), Lerp(start.Zoom, target.Zoom, t), target.FocusedContentKey, target.ActiveIndexKind, target.ActiveIndexKey), false);
             }
             ApplyCamera(target); CommitCamera();
@@ -408,21 +568,47 @@ public sealed partial class DiscoverViewModel
         DetailProgress = Smooth(Math.Clamp((ratio - .65) / .27, 0, 1));
         PortalContentOpacity = DetailProgress;
 
-        var viewport = new TileWorldRect(CameraX, CameraY, _viewportWidth / Math.Max(_zoomLayout.ScaleProfile.MinimumZoom, Zoom), _viewportHeight / Math.Max(_zoomLayout.ScaleProfile.MinimumZoom, Zoom));
-        foreach (var tile in Tiles)
+        var focusBucket = (int)Math.Round(DetailProgress * 20);
+        if (focusBucket != _lastFocusPresentationBucket)
         {
-            var rect = Rect(tile);
-            tile.IsInRenderWindow = Intersects(rect, viewport, 400);
-            var visibleWidth = Math.Max(0, Math.Min(rect.X + rect.Width, viewport.X + viewport.Width) - Math.Max(rect.X, viewport.X));
-            var visibleHeight = Math.Max(0, Math.Min(rect.Y + rect.Height, viewport.Y + viewport.Height) - Math.Max(rect.Y, viewport.Y));
-            var visibleRatio = rect.Width <= 0 || rect.Height <= 0 ? 0 : visibleWidth * visibleHeight / (rect.Width * rect.Height);
-            tile.SetEdgeOpacity(visibleRatio >= .999 ? 1 : .3 + .7 * visibleRatio);
-            tile.SetFocus(ReferenceEquals(tile, FocusedTile), DetailProgress);
+            _lastFocusPresentationBucket = focusBucket;
+            foreach (var tile in Tiles) tile.SetFocus(ReferenceEquals(tile, FocusedTile), DetailProgress);
         }
+
+        RefreshRenderedWorld();
 
         if (transition.ShouldPrefetch && FocusedTile is not null) ScheduleDetailLoad(FocusedTile);
         else if (ratio < .55) CancelDetailLoad();
         UpdateDetailState(ratio);
+    }
+
+    private async void RefreshRenderedWorld(bool force = false)
+    {
+        if (_tileBoard is null || _viewportWidth <= 0 || _viewportHeight <= 0) return;
+        var zoom = Math.Max(_zoomLayout.ScaleProfile.MinimumZoom, Zoom);
+        var window = new TileWorldWindow(CameraX, CameraY, _viewportWidth / zoom, _viewportHeight / zoom);
+        var key = $"{(int)Math.Floor(window.X / 1200)}:{(int)Math.Floor((window.X + window.Width) / 1200)}:{(int)Math.Floor(window.Y / 800)}:{(int)Math.Floor((window.Y + window.Height) / 800)}";
+        if (!force && key == _renderWindowKey) return;
+        _renderWindowKey = key;
+        _worldRefreshCancellation?.Cancel();
+        _worldRefreshCancellation?.Dispose();
+        var cancellation = _worldRefreshCancellation = new CancellationTokenSource();
+        var tips = _tips.GetTips(DateOnly.FromDateTime(DateTime.Today));
+        var seed = _tileBoard.WorldSeed;
+        var placements = _tileBoard.Placements.Where(x => !x.Content.IsPlaceholder).ToList();
+        try
+        {
+            var slots = await Task.Run(() => _virtualWorld.Materialize(seed, window, placements, tips), cancellation.Token);
+            if (cancellation.IsCancellationRequested || key != _renderWindowKey) return;
+            RenderedSkeletonSlots = slots;
+            SkeletonRevision++;
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            if (ReferenceEquals(_worldRefreshCancellation, cancellation)) _worldRefreshCancellation = null;
+            cancellation.Dispose();
+        }
     }
 
     private void UpdateDetailState(double ratio)
@@ -494,6 +680,8 @@ public sealed partial class DiscoverViewModel
         OnPropertyChanged(nameof(IsImmersiveDetail));
         OnPropertyChanged(nameof(IsPortalVisible));
         OnPropertyChanged(nameof(ShouldSuppressRightRail));
+        OnPropertyChanged(nameof(PortalZIndex));
+        OnPropertyChanged(nameof(TileWorldZIndex));
         ImmersiveDetailChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -609,7 +797,7 @@ public sealed partial class DiscoverViewModel
         try
         {
             await Task.Delay(220, cancellation.Token);
-            if (_tileBoard is not null) await _tileLayout.SaveSemanticViewportAsync(_tileBoard.Id, new(SemanticViewportX, SemanticViewportY), cancellation.Token);
+            if (_tileBoard is not null) await _tileLayout.SaveSemanticViewportAsync(_tileBoard.Id, new(SemanticViewportX, SemanticViewportY, _semanticViewportWidth, _semanticViewportHeight, SemanticViewportUserPositioned), cancellation.Token);
         }
         catch (OperationCanceledException) { }
         finally { if (ReferenceEquals(_semanticViewportSaveDebounce, cancellation)) _semanticViewportSaveDebounce = null; cancellation.Dispose(); }
@@ -696,7 +884,11 @@ public sealed partial class DiscoverViewModel
     private static double ClampSemanticAxis(double value, double viewport, double content)
     {
         if (viewport <= 0 || content <= 0) return 24;
-        if (content <= Math.Max(0, viewport - 48)) return (viewport - content) / 2;
+        if (content <= Math.Max(0, viewport - 48))
+        {
+            const double visible = 88;
+            return Math.Clamp(value, 24 + Math.Min(visible, content) - content, viewport - 24 - Math.Min(visible, content));
+        }
         return Math.Clamp(value, viewport - content - 24, 24);
     }
     private static double Lerp(double start, double end, double progress) => start + (end - start) * progress;

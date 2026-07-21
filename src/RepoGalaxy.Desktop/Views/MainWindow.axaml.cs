@@ -21,6 +21,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         _navigationSplit = this.FindControl<SplitView>("NavigationSplit");
         _detailsSplit = this.FindControl<SplitView>("DetailsSplit");
+        if (this.FindControl<TextBox>("SearchBox") is { } searchBox) searchBox.KeyDown += OnSearchKeyDown;
         SizeChanged += OnWindowSizeChanged;
         Opened += OnWindowOpened;
         PropertyChanged += (_, args) =>
@@ -36,6 +37,14 @@ public partial class MainWindow : Window
     }
 
     private void OnWindowSizeChanged(object? sender, SizeChangedEventArgs e) => ApplyResponsiveLayout(e.NewSize.Width);
+
+    private void OnSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || DataContext is not MainWindowViewModel vm) return;
+        if (sender is TextBox textBox) vm.SearchText = textBox.Text ?? string.Empty;
+        vm.MoveToNextSearchMatch();
+        e.Handled = true;
+    }
 
     private void ApplyResponsiveLayout(double width)
     {
@@ -84,7 +93,7 @@ public partial class MainWindow : Window
 
     private void UpdateMaximizeIcon()
     {
-        if (this.FindControl<PathIcon>("MaximizeIcon") is not { } icon) return;
+        if (this.FindControl<Avalonia.Controls.Shapes.Path>("MaximizeIcon") is not { } icon) return;
         icon.Data = WindowState == WindowState.Maximized ? RestoreGeometry : MaximizeGeometry;
     }
 

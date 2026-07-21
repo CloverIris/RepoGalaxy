@@ -19,17 +19,32 @@ public sealed class GitHubApiClient : IGitHubClient, IDisposable
     private string _cachePartition = "guest";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     public GitHubApiClient(HttpClient http, GitHubRequestBudget budget, ISyncOrchestrator orchestrator, ICacheService? cache = null, IUserService? users = null) { _http = http; _budget = budget; _orchestrator = orchestrator; _cache = cache; _users = users; }
-    public void SetAccessToken(string token, string? accountId = null) { _accessToken = token; _cachePartition = string.IsNullOrWhiteSpace(accountId) ? "authenticated" : accountId; }
-    public void ClearAccessToken() { _accessToken = null; _cachePartition = "guest"; }
+    public void SetAccessToken(string token, string? accountId = null) { _accessToken = token; _cachePartition = string.IsNullOrWhiteSpace(accountId) ? "authenticated" : accountId; _budget.BeginSession(GitHubBudgetSessionKind.Authenticated, _cachePartition, preserveObservedWindows: true); }
+    public void ClearAccessToken() { _accessToken = null; _cachePartition = "guest"; _budget.BeginSession(GitHubBudgetSessionKind.Guest, "guest"); }
     public async Task<bool> IsAuthenticatedAsync() => await GetCurrentUserAsync() is not null;
     public async Task<User?> GetCurrentUserAsync() => string.IsNullOrWhiteSpace(_accessToken) ? null : await ValidateTokenAsync(_accessToken);
-    public async Task<User?> ValidateTokenAsync(string token, CancellationToken cancellationToken = default) { var response = await SendAsync<UserDto>(HttpMethod.Get, "user", token, cancellationToken); return response.StatusCode == 200 && response.Data is not null ? Map(response.Data) : null; }
+    public async Task<User?> ValidateTokenAsync(string token, CancellationToken cancellationToken = default)
+    {
+        var validatingCurrentSession = !string.IsNullOrWhiteSpace(_accessToken) && token == _accessToken;
+        if (!validatingCurrentSession) _budget.BeginSession(GitHubBudgetSessionKind.Authenticating, "pending");
+        var response = await SendAsync<UserDto>(HttpMethod.Get, "user", token, cancellationToken);
+        if (response.StatusCode == 200 && response.Data is not null) return Map(response.Data);
+        if (!validatingCurrentSession) _budget.BeginSession(GitHubBudgetSessionKind.Guest, "guest");
+        return null;
+    }
 
     public async Task<GitHubRateLimit?> GetRateLimitAsync()
     {
         var response = await SendAsync<RateLimitDto>(HttpMethod.Get, "rate_limit", null, CancellationToken.None);
         if (response.Data?.Resources is not { } r) return null;
         return new GitHubRateLimit { CoreLimit = r.Core.Limit, CoreRemaining = r.Core.Remaining, CoreResetAt = FromEpoch(r.Core.Reset), SearchLimit = r.Search.Limit, SearchRemaining = r.Search.Remaining, SearchResetAt = FromEpoch(r.Search.Reset) };
+    }
+    public async Task<IReadOnlyList<UserSocialAccount>> GetUserSocialAccountsAsync(string login, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(login)) return [];
+        var response = await SendAsync<List<SocialAccountDto>>(HttpMethod.Get, $"users/{Esc(login)}/social_accounts?per_page=100", null, cancellationToken);
+        return response.Data?.Where(x => Uri.TryCreate(x.Url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
+            .Select(x => new UserSocialAccount(x.Provider, x.Url)).DistinctBy(x => x.Url, StringComparer.OrdinalIgnoreCase).ToList() ?? [];
     }
     public async Task<Repository?> GetRepositoryAsync(string owner, string name, CancellationToken cancellationToken = default) { var response = await SendAsync<RepositoryDto>(HttpMethod.Get, $"repos/{Esc(owner)}/{Esc(name)}", null, cancellationToken); if (response.Data is null) return null; var repo = Map(response.Data); repo.CalculateDiscoveryScore(); return repo; }
     public async Task<IEnumerable<Repository>> SearchRepositoriesAsync(string query, string? language = null, string? sort = null)
@@ -105,7 +120,7 @@ public sealed class GitHubApiClient : IGitHubClient, IDisposable
             try
             {
                 using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-                var rate = ReadRate(response.Headers); if (rate is not null) _budget.Update(rate);
+                var rate = ReadRate(response); if (rate is not null) _budget.Update(rate);
                 var nextPage = NextLink(response.Headers);
                 if ((int)response.StatusCode >= 500 && attempt < 2) { await RetryDelayAsync(attempt, ct); continue; }
                 if (response.StatusCode == HttpStatusCode.NotModified) return new(default, 304, rate?.Resource ?? "core", rate, NotModified: true, NextPageUrl: nextPage);
@@ -151,22 +166,32 @@ public sealed class GitHubApiClient : IGitHubClient, IDisposable
     private static string Esc(string value) => Uri.EscapeDataString(value);
     private static string? Header(HttpResponseMessage r, string name) => r.Headers.TryGetValues(name, out var values) ? values.FirstOrDefault() : null;
     private static string? NextLink(HttpResponseHeaders headers) { if (!headers.TryGetValues("Link", out var values)) return null; foreach (var part in string.Join(',', values).Split(',')) if (part.Contains("rel=\"next\"", StringComparison.OrdinalIgnoreCase)) { var start = part.IndexOf('<'); var end = part.IndexOf('>'); if (start >= 0 && end > start) return part[(start + 1)..end]; } return null; }
-    private static GitHubRateWindow? ReadRate(HttpResponseHeaders h) { if (!TryInt(h, "X-RateLimit-Limit", out var limit) || !TryInt(h, "X-RateLimit-Remaining", out var remaining) || !TryLong(h, "X-RateLimit-Reset", out var reset)) return null; var resource = h.TryGetValues("X-RateLimit-Resource", out var values) ? values.FirstOrDefault() ?? "core" : "core"; return new(resource, limit, remaining, FromEpoch(reset)); }
+    private static GitHubRateWindow? ReadRate(HttpResponseMessage response)
+    {
+        var h = response.Headers;
+        if (!TryInt(h, "X-RateLimit-Limit", out var limit) || !TryInt(h, "X-RateLimit-Remaining", out var remaining) || !TryLong(h, "X-RateLimit-Reset", out var reset)) return null;
+        var resource = h.TryGetValues("X-RateLimit-Resource", out var values) ? values.FirstOrDefault() ?? "core" : "core";
+        var used = TryInt(h, "X-RateLimit-Used", out var headerUsed) ? headerUsed : Math.Max(0, limit - remaining);
+        DateTimeOffset? retryAfter = response.Headers.RetryAfter?.Date;
+        if (retryAfter is null && response.Headers.RetryAfter?.Delta is { } delta) retryAfter = DateTimeOffset.UtcNow + delta;
+        return new(resource, limit, remaining, FromEpoch(reset), used, DateTimeOffset.UtcNow, retryAfter);
+    }
     private static bool TryInt(HttpResponseHeaders h, string name, out int value) { value = 0; return h.TryGetValues(name, out var v) && int.TryParse(v.FirstOrDefault(), out value); }
     private static bool TryLong(HttpResponseHeaders h, string name, out long value) { value = 0; return h.TryGetValues(name, out var v) && long.TryParse(v.FirstOrDefault(), out value); }
     private static DateTimeOffset FromEpoch(long value) => DateTimeOffset.FromUnixTimeSeconds(value);
     private static Repository Map(RepositoryDto r) => new() { GitHubId = r.NodeId, Owner = r.Owner?.Login ?? string.Empty, OwnerAvatarUrl = r.Owner?.AvatarUrl ?? string.Empty, Name = r.Name, HtmlUrl = r.HtmlUrl, Description = r.Description ?? string.Empty, PrimaryLanguage = r.Language ?? "Unknown", Topics = r.Topics ?? [], Homepage = r.Homepage ?? string.Empty, IsPrivate = r.Private, IsArchived = r.Archived, Stars = r.StargazersCount, Forks = r.ForksCount, Watchers = r.WatchersCount, OpenIssues = r.OpenIssuesCount, CreatedAt = r.CreatedAt, UpdatedAt = r.UpdatedAt, LastPushedAt = r.PushedAt };
-    private static User Map(UserDto u) => new() { GitHubId = u.NodeId, Login = u.Login, AvatarUrl = u.AvatarUrl, Bio = u.Bio ?? string.Empty, Company = u.Company ?? string.Empty, Location = u.Location ?? string.Empty, Blog = u.Blog ?? string.Empty, PublicRepos = u.PublicRepos, Followers = u.Followers, Following = u.Following, CreatedAt = u.CreatedAt };
+    private static User Map(UserDto u) => new() { GitHubId = u.NodeId, Login = u.Login, DisplayName = u.Name ?? string.Empty, AvatarUrl = u.AvatarUrl, Bio = u.Bio ?? string.Empty, Company = u.Company ?? string.Empty, Location = u.Location ?? string.Empty, Blog = u.Blog ?? string.Empty, TwitterUsername = u.TwitterUsername ?? string.Empty, ProfileUrl = u.HtmlUrl ?? $"https://github.com/{u.Login}", PublicRepos = u.PublicRepos, Followers = u.Followers, Following = u.Following, CreatedAt = u.CreatedAt };
     public void Dispose() { }
     private sealed record CachedResponse<T>(T Data, string? ETag, string? LastModified, string? NextPageUrl, GitHubRateWindow? RateLimit);
 
     private sealed record OwnerDto([property: JsonPropertyName("login")] string Login, [property: JsonPropertyName("avatar_url")] string? AvatarUrl);
     private sealed record RepositoryDto([property: JsonPropertyName("node_id")] string NodeId, [property: JsonPropertyName("owner")] OwnerDto? Owner, [property: JsonPropertyName("name")] string Name, [property: JsonPropertyName("html_url")] string HtmlUrl, [property: JsonPropertyName("description")] string? Description, [property: JsonPropertyName("language")] string? Language, [property: JsonPropertyName("topics")] List<string>? Topics, [property: JsonPropertyName("homepage")] string? Homepage, [property: JsonPropertyName("private")] bool Private, [property: JsonPropertyName("archived")] bool Archived, [property: JsonPropertyName("stargazers_count")] int StargazersCount, [property: JsonPropertyName("forks_count")] int ForksCount, [property: JsonPropertyName("watchers_count")] int WatchersCount, [property: JsonPropertyName("open_issues_count")] int OpenIssuesCount, [property: JsonPropertyName("created_at")] DateTimeOffset CreatedAt, [property: JsonPropertyName("updated_at")] DateTimeOffset UpdatedAt, [property: JsonPropertyName("pushed_at")] DateTimeOffset? PushedAt);
     private sealed record SearchDto([property: JsonPropertyName("items")] List<RepositoryDto> Items);
-    private sealed record UserDto([property: JsonPropertyName("node_id")] string NodeId, [property: JsonPropertyName("login")] string Login, [property: JsonPropertyName("avatar_url")] string AvatarUrl, [property: JsonPropertyName("bio")] string? Bio, [property: JsonPropertyName("company")] string? Company, [property: JsonPropertyName("location")] string? Location, [property: JsonPropertyName("blog")] string? Blog, [property: JsonPropertyName("public_repos")] int PublicRepos, [property: JsonPropertyName("followers")] int Followers, [property: JsonPropertyName("following")] int Following, [property: JsonPropertyName("created_at")] DateTimeOffset CreatedAt);
+    private sealed record UserDto([property: JsonPropertyName("node_id")] string NodeId, [property: JsonPropertyName("login")] string Login, [property: JsonPropertyName("name")] string? Name, [property: JsonPropertyName("avatar_url")] string AvatarUrl, [property: JsonPropertyName("html_url")] string? HtmlUrl, [property: JsonPropertyName("bio")] string? Bio, [property: JsonPropertyName("company")] string? Company, [property: JsonPropertyName("location")] string? Location, [property: JsonPropertyName("blog")] string? Blog, [property: JsonPropertyName("twitter_username")] string? TwitterUsername, [property: JsonPropertyName("public_repos")] int PublicRepos, [property: JsonPropertyName("followers")] int Followers, [property: JsonPropertyName("following")] int Following, [property: JsonPropertyName("created_at")] DateTimeOffset CreatedAt);
+    private sealed record SocialAccountDto([property: JsonPropertyName("provider")] string Provider, [property: JsonPropertyName("url")] string Url);
     private sealed record ReleaseDto([property: JsonPropertyName("id")] long Id, [property: JsonPropertyName("tag_name")] string TagName, [property: JsonPropertyName("name")] string? Name, [property: JsonPropertyName("html_url")] string HtmlUrl, [property: JsonPropertyName("published_at")] DateTimeOffset? PublishedAt, [property: JsonPropertyName("prerelease")] bool Prerelease, [property: JsonPropertyName("draft")] bool Draft);
     private sealed record ReadmeDto([property: JsonPropertyName("content")] string Content, [property: JsonPropertyName("encoding")] string Encoding, [property: JsonPropertyName("html_url")] string? HtmlUrl);
-    private sealed record ResourceDto([property: JsonPropertyName("limit")] int Limit, [property: JsonPropertyName("remaining")] int Remaining, [property: JsonPropertyName("reset")] long Reset);
+    private sealed record ResourceDto([property: JsonPropertyName("limit")] int Limit, [property: JsonPropertyName("remaining")] int Remaining, [property: JsonPropertyName("reset")] long Reset, [property: JsonPropertyName("used")] int Used = 0);
     private sealed record ResourcesDto([property: JsonPropertyName("core")] ResourceDto Core, [property: JsonPropertyName("search")] ResourceDto Search);
     private sealed record RateLimitDto([property: JsonPropertyName("resources")] ResourcesDto Resources);
 }

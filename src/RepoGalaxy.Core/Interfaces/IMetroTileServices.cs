@@ -16,6 +16,17 @@ public interface ISemanticIndexCatalogService
     SemanticIndexCatalogResult Build(IReadOnlyList<SemanticIndexSignal> signals, SemanticIndexPolicy? policy = null);
 }
 
+public interface ISpatialTileSearchService
+{
+    SpatialTileSearchResult Search(string query, IReadOnlyList<TileSearchCandidate> candidates, double cameraCenterX, double cameraCenterY);
+}
+
+public interface IVirtualTileWorldService
+{
+    IReadOnlyList<VirtualTileSlot> Materialize(string boardSeed, TileWorldWindow window, IReadOnlyList<TilePlacement> persistentPlacements, IReadOnlyList<TipDefinition> tips);
+    (int Column, int Row) FindNearestCompatibleSlot(string boardSeed, TileWorldWindow preferredWindow, TileSpan span, IReadOnlyList<TilePlacement> persistentPlacements);
+}
+
 public interface ISemanticMosaicLayoutService
 {
     Task<SemanticMosaicState> SynchronizeAsync(long boardId, IReadOnlyList<SemanticIndexItem> items, double targetAspect, CancellationToken cancellationToken = default);

@@ -13,4 +13,23 @@ public sealed class GitHubRateLimit
 
 public sealed record GitHubResponse<T>(T? Data, int StatusCode, string Resource, GitHubRateWindow? RateLimit, string? ETag = null, string? LastModified = null, bool NotModified = false, string? NextPageUrl = null);
 public sealed record GitHubPage<T>(IReadOnlyList<T> Items, string? NextPageUrl, GitHubRateWindow? RateLimit, string? ETag = null, string? LastModified = null);
-public sealed record GitHubRateWindow(string Resource, int Limit, int Remaining, DateTimeOffset ResetAt);
+public sealed record GitHubRateWindow(
+    string Resource,
+    int Limit,
+    int Remaining,
+    DateTimeOffset ResetAt,
+    int Used = -1,
+    DateTimeOffset? ObservedAt = null,
+    DateTimeOffset? RetryAfter = null)
+{
+    public int EffectiveUsed => Used >= 0 ? Used : Math.Max(0, Limit - Remaining);
+    public double UsedRatio => Limit <= 0 ? 0 : Math.Clamp(EffectiveUsed / (double)Limit, 0, 1);
+}
+
+public enum GitHubBudgetSessionKind { Guest, Authenticating, Authenticated }
+
+public sealed record GitHubBudgetSnapshot(
+    GitHubBudgetSessionKind SessionKind,
+    string ScopeKey,
+    GitHubRateWindow? Core,
+    GitHubRateWindow? Search);

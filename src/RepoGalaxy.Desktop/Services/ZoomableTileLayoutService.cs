@@ -10,8 +10,6 @@ public sealed class ZoomableTileLayoutService : IZoomableTileLayoutService
     public const double MaximumZoom = 8;
     public const double SemanticFullyVisibleZoom = .55;
     public const double SemanticFadeEndZoom = .70;
-    private const double EdgeOverscan = 64;
-
     public ZoomScaleProfile ScaleProfile { get; } = new(MinimumZoom, SemanticFullyVisibleZoom, SemanticFadeEndZoom, DefaultZoom, MaximumZoom);
 
     public CameraState ZoomAt(CameraState camera, double requestedZoom, double anchorX, double anchorY, double viewportWidth, double viewportHeight, double worldWidth, double worldHeight)
@@ -21,13 +19,13 @@ public sealed class ZoomableTileLayoutService : IZoomableTileLayoutService
         var worldAnchorX = camera.X + anchorX / oldZoom;
         var worldAnchorY = camera.Y + anchorY / oldZoom;
         var result = camera with { X = worldAnchorX - anchorX / zoom, Y = worldAnchorY - anchorY / zoom, Zoom = zoom };
-        return Clamp(result, viewportWidth, viewportHeight, worldWidth, worldHeight);
+        return result;
     }
 
     public CameraState Pan(CameraState camera, double screenDeltaX, double screenDeltaY, double viewportWidth, double viewportHeight, double worldWidth, double worldHeight)
     {
         var zoom = Math.Max(MinimumZoom, camera.Zoom);
-        return Clamp(camera with { X = camera.X - screenDeltaX / zoom, Y = camera.Y - screenDeltaY / zoom }, viewportWidth, viewportHeight, worldWidth, worldHeight);
+        return camera with { X = camera.X - screenDeltaX / zoom, Y = camera.Y - screenDeltaY / zoom };
     }
 
     public CameraState CenterOn(CameraState camera, TileWorldRect target, double viewportWidth, double viewportHeight, double zoom)
@@ -65,21 +63,6 @@ public sealed class ZoomableTileLayoutService : IZoomableTileLayoutService
         var progress = SmoothStep(Math.Clamp((ratio - .65) / .35, 0, 1));
         var mode = progress >= .999 ? ZoomVisualMode.Detail : progress > 0 ? ZoomVisualMode.DetailTransition : ZoomVisualMode.TileBoard;
         return new(mode, 0, 1 - progress * .82, progress, fit, ratio >= .55);
-    }
-
-    private static CameraState Clamp(CameraState camera, double viewportWidth, double viewportHeight, double worldWidth, double worldHeight)
-    {
-        var visibleWidth = viewportWidth / Math.Max(MinimumZoom, camera.Zoom);
-        var visibleHeight = viewportHeight / Math.Max(MinimumZoom, camera.Zoom);
-        var x = ClampAxis(camera.X, visibleWidth, worldWidth);
-        var y = ClampAxis(camera.Y, visibleHeight, worldHeight);
-        return camera with { X = x, Y = y };
-    }
-
-    private static double ClampAxis(double value, double visible, double world)
-    {
-        var maximum = Math.Max(-EdgeOverscan, world - visible + EdgeOverscan);
-        return Math.Clamp(value, -EdgeOverscan, maximum);
     }
 
     private static double SmoothStep(double value)

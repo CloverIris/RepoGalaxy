@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RepoGalaxy.Data.DbContexts;
 
@@ -10,9 +11,11 @@ using RepoGalaxy.Data.DbContexts;
 namespace RepoGalaxy.Data.Migrations
 {
     [DbContext(typeof(RepoGalaxyDbContext))]
-    partial class RepoGalaxyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260721042634_SpatialWorldAccountProfile")]
+    partial class SpatialWorldAccountProfile
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
@@ -495,9 +498,6 @@ namespace RepoGalaxy.Data.Migrations
                     b.Property<bool>("IsDirty")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("ProfileRevision")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -550,85 +550,6 @@ namespace RepoGalaxy.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("RankingDecisions");
-                });
-
-            modelBuilder.Entity("RepoGalaxy.Data.Entities.RankingTuningProfileEntity", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("CoarseCandidateCount")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<double>("CoarseFreshness")
-                        .HasColumnType("REAL");
-
-                    b.Property<double>("CoarsePreference")
-                        .HasColumnType("REAL");
-
-                    b.Property<double>("CoarseQuality")
-                        .HasColumnType("REAL");
-
-                    b.Property<double>("CoarseRuleMatch")
-                        .HasColumnType("REAL");
-
-                    b.Property<double>("CoarseStarVelocity")
-                        .HasColumnType("REAL");
-
-                    b.Property<double>("ExplorationRatio")
-                        .HasColumnType("REAL");
-
-                    b.Property<double>("FineBehavior")
-                        .HasColumnType("REAL");
-
-                    b.Property<double>("FineCoarse")
-                        .HasColumnType("REAL");
-
-                    b.Property<double>("FineContentProfile")
-                        .HasColumnType("REAL");
-
-                    b.Property<double>("FineLocalRelevance")
-                        .HasColumnType("REAL");
-
-                    b.Property<double>("FineNovelty")
-                        .HasColumnType("REAL");
-
-                    b.Property<int>("FineResultCount")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<double>("FreshnessHalfLifeDays")
-                        .HasColumnType("REAL");
-
-                    b.Property<int>("Preset")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Revision")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("SameLanguagePerTen")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("SameOwnerPerTen")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("ScopeKey")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("TEXT");
-
-                    b.Property<double>("Temperature")
-                        .HasColumnType("REAL");
-
-                    b.Property<long>("UpdatedAt")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ScopeKey")
-                        .IsUnique();
-
-                    b.ToTable("RankingTuningProfiles");
                 });
 
             modelBuilder.Entity("RepoGalaxy.Data.Entities.ReleaseNotificationEntity", b =>

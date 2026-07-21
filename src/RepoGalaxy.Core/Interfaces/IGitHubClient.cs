@@ -12,6 +12,7 @@ public interface IGitHubClient
     Task<User?> GetCurrentUserAsync();
     Task<User?> ValidateTokenAsync(string token, CancellationToken cancellationToken = default);
     Task<GitHubRateLimit?> GetRateLimitAsync();
+    Task<IReadOnlyList<UserSocialAccount>> GetUserSocialAccountsAsync(string login, CancellationToken cancellationToken = default);
     
     // 仓库查询
     Task<Repository?> GetRepositoryAsync(string owner, string name, CancellationToken cancellationToken = default);

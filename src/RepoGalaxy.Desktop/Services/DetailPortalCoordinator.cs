@@ -12,6 +12,7 @@ public sealed class DetailPortalCoordinator : IDetailPortalCoordinator
     public DetailPortalDecision Evaluate(DetailPresentationState current, bool hasFocus, double fitRatio)
     {
         if (!hasFocus) return new(DetailPresentationState.Board, false, current is DetailPresentationState.Full or DetailPresentationState.Snapping, false);
+        if (current == DetailPresentationState.Peek) return new(current, false, false, false);
         if (current == DetailPresentationState.Snapping) return new(current, false, false, true);
         if (current == DetailPresentationState.Full)
             return fitRatio < ExitThreshold

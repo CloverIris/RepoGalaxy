@@ -66,6 +66,22 @@ public sealed class GitHubApiClientTests
         call.Should().Be(2);
     }
 
+    [Fact]
+    public async Task Used_header_is_authoritative_and_core_search_windows_remain_independent()
+    {
+        var budget = new GitHubRequestBudget();
+        budget.BeginSession(RepoGalaxy.Core.Models.GitHubBudgetSessionKind.Authenticated, "account-1");
+        budget.Update(new RepoGalaxy.Core.Models.GitHubRateWindow("core", 5000, 4876,
+            DateTimeOffset.UtcNow.AddHours(1), Used: 123));
+        budget.Update(new RepoGalaxy.Core.Models.GitHubRateWindow("search", 30, 29,
+            DateTimeOffset.UtcNow.AddMinutes(1), Used: 1));
+
+        budget.Snapshot.Core!.EffectiveUsed.Should().Be(123);
+        budget.Snapshot.Search!.EffectiveUsed.Should().Be(1);
+        budget.Snapshot.Core.UsedRatio.Should().BeApproximately(123d / 5000, .00001);
+        budget.Snapshot.SessionKind.Should().Be(RepoGalaxy.Core.Models.GitHubBudgetSessionKind.Authenticated);
+    }
+
     private static GitHubApiClient Client(HttpMessageHandler handler, GitHubRequestBudget budget, SyncOrchestrator orchestrator)
     {
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com/") };

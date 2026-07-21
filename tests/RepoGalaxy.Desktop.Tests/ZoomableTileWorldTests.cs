@@ -8,6 +8,20 @@ namespace RepoGalaxy.Desktop.Tests;
 public sealed class ZoomableTileWorldTests
 {
     [Fact]
+    public void Ten_thousand_camera_inputs_collapse_into_one_frame_snapshot()
+    {
+        var accumulator = new CameraInputAccumulator();
+        for (var i = 0; i < 10_000; i++) accumulator.AddPan(.25, -.5);
+
+        var frame = accumulator.Drain();
+
+        Assert.Equal(10_000, frame.InputCount);
+        Assert.Equal(2_500, frame.PanX, 8);
+        Assert.Equal(-5_000, frame.PanY, 8);
+        Assert.True(accumulator.Drain().IsEmpty);
+    }
+
+    [Fact]
     public void Detail_portal_uses_hysteresis_and_only_suppresses_the_rail_after_snap()
     {
         var service = new DetailPortalCoordinator();
@@ -193,5 +207,49 @@ public sealed class ZoomableTileWorldTests
         {
             if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
         }
+    }
+
+    [Fact]
+    public void Spatial_search_prefers_repository_then_nearest_world_position()
+    {
+        var candidates = new[]
+        {
+            new TileSearchCandidate("language:java", MetroTileKind.Language, "Java", "language", "Java", [], "", new(0, 0, 96, 96)),
+            new TileSearchCandidate("repository:far", MetroTileKind.Repository, "far/java", "Java project", "Java", ["jvm"], "popular", new(900, 0, 596, 96)),
+            new TileSearchCandidate("repository:near", MetroTileKind.Repository, "near/java", "Java tools", "Java", ["jvm"], "recommended", new(200, 0, 596, 96))
+        };
+
+        var result = new SpatialTileSearchService().Search("Java", candidates, 300, 50);
+
+        Assert.Equal("repository:near", result.Matches[0].Key);
+        Assert.Equal("repository:far", result.Matches[1].Key);
+        Assert.Equal("language:java", result.Matches[2].Key);
+    }
+
+    [Fact]
+    public void Virtual_world_is_deterministic_bounded_and_extends_into_negative_coordinates()
+    {
+        var service = new VirtualTileWorldService();
+        var tips = new[] { new TipDefinition("history", "TIP", "History", "Body", "C#", 1, 1) };
+        var window = new TileWorldWindow(-1500, -900, 1000, 700);
+
+        var first = service.Materialize("stable-board", window, [], tips);
+        var second = service.Materialize("stable-board", window, [], tips);
+
+        Assert.NotEmpty(first);
+        Assert.Equal(first.Select(x => (x.Key, x.Column, x.Row, x.ColumnSpan, x.RowSpan)),
+            second.Select(x => (x.Key, x.Column, x.Row, x.ColumnSpan, x.RowSpan)));
+        Assert.Contains(first, x => x.Column < 0);
+        Assert.Contains(first, x => x.Row < 0);
+        Assert.InRange(first.Count, 1, 800);
+    }
+
+    [Fact]
+    public void Peek_never_requests_a_snap_or_suppresses_the_right_rail()
+    {
+        var decision = new DetailPortalCoordinator().Evaluate(DetailPresentationState.Peek, true, .2);
+        Assert.Equal(DetailPresentationState.Peek, decision.State);
+        Assert.False(decision.StartSnap);
+        Assert.False(decision.SuppressRightRail);
     }
 }

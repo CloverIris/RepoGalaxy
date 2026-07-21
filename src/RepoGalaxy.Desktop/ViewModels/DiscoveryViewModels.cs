@@ -43,6 +43,8 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
     private readonly IExternalLinkService _externalLinks;
     private readonly ISemanticMosaicLayoutService _semanticLayout;
     private readonly ISemanticIndexCatalogService _semanticCatalog;
+    private readonly ISpatialTileSearchService _spatialSearch;
+    private readonly IVirtualTileWorldService _virtualWorld;
     private readonly IMarkdownDocumentService _markdown;
     private readonly ISafeMarkdownImageService _markdownImages;
     private readonly ILocalIdeDiscoveryService _ideDiscovery;
@@ -51,10 +53,13 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
     private readonly IIdeLauncher _ideLauncher;
     private readonly IDetailPortalCoordinator _detailPortal;
     private readonly IIdePreferenceService _idePreferences;
+    private readonly IRankingRebuildService _rankingRebuild;
     private readonly List<FeedItemViewModel> _allItems = [];
 
     public ObservableCollection<FeedItemViewModel> Items { get; } = [];
     public ObservableCollection<MetroTileViewModel> Tiles { get; } = [];
+    public ObservableCollection<MetroTileViewModel> RenderedTiles { get; } = [];
+    public IReadOnlyList<VirtualTileSlot> RenderedSkeletonSlots { get; private set; } = [];
     public ObservableCollection<DashboardListViewModel> TopLists => _dashboard.TopLists;
     public IReadOnlyList<FeedSourceViewModel> Sources { get; } =
     [
@@ -75,6 +80,7 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
     [ObservableProperty] private double _cameraX;
     [ObservableProperty] private double _cameraY;
     [ObservableProperty] private double _zoom = 1;
+    [ObservableProperty] private int _skeletonRevision;
     [ObservableProperty] private string _activeTileFilter = string.Empty;
     private TileBoardState? _tileBoard;
     public bool HasActiveTileFilter => !string.IsNullOrWhiteSpace(ActiveTileFilter);
@@ -86,7 +92,7 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
     public event EventHandler? LoginRequested;
     public event EventHandler<string>? SubscriptionRequested;
 
-    public DiscoverViewModel(DiscoveryStore store, DiscoverySyncService sync, RepositoryDetailsViewModel details, ILogger<DiscoverViewModel> logger, DashboardRailViewModel dashboard, RepositoryService repositories, IRecommendationEngine recommendations, IMetroTileLayoutService tileLayout, ITilePaletteService tilePalette, ITileImageService tileImages, ITipCatalog tips, IAuthenticationSessionService session, IZoomableTileLayoutService zoomLayout, IDetailContentService detailContent, IExternalLinkService externalLinks, ISemanticMosaicLayoutService semanticLayout, ISemanticIndexCatalogService semanticCatalog, IMarkdownDocumentService markdown, ISafeMarkdownImageService markdownImages, ILocalIdeDiscoveryService ideDiscovery, ILocalRepositoryResolver localResolver, IRepositoryCloneService cloneService, IIdeLauncher ideLauncher, IDetailPortalCoordinator detailPortal, IIdePreferenceService idePreferences)
+    public DiscoverViewModel(DiscoveryStore store, DiscoverySyncService sync, RepositoryDetailsViewModel details, ILogger<DiscoverViewModel> logger, DashboardRailViewModel dashboard, RepositoryService repositories, IRecommendationEngine recommendations, IMetroTileLayoutService tileLayout, ITilePaletteService tilePalette, ITileImageService tileImages, ITipCatalog tips, IAuthenticationSessionService session, IZoomableTileLayoutService zoomLayout, IDetailContentService detailContent, IExternalLinkService externalLinks, ISemanticMosaicLayoutService semanticLayout, ISemanticIndexCatalogService semanticCatalog, ISpatialTileSearchService spatialSearch, IVirtualTileWorldService virtualWorld, IMarkdownDocumentService markdown, ISafeMarkdownImageService markdownImages, ILocalIdeDiscoveryService ideDiscovery, ILocalRepositoryResolver localResolver, IRepositoryCloneService cloneService, IIdeLauncher ideLauncher, IDetailPortalCoordinator detailPortal, IIdePreferenceService idePreferences, IRankingRebuildService rankingRebuild)
     {
         _store = store;
         _sync = sync;
@@ -105,6 +111,8 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
         _externalLinks = externalLinks;
         _semanticLayout = semanticLayout;
         _semanticCatalog = semanticCatalog;
+        _spatialSearch = spatialSearch;
+        _virtualWorld = virtualWorld;
         _markdown = markdown;
         _markdownImages = markdownImages;
         _ideDiscovery = ideDiscovery;
@@ -113,6 +121,8 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
         _ideLauncher = ideLauncher;
         _detailPortal = detailPortal;
         _idePreferences = idePreferences;
+        _rankingRebuild = rankingRebuild;
+        _rankingRebuild.Rebuilt += OnRankingRebuilt;
         _selectedSource = Sources[0];
         _selectedSource.IsSelected = true;
     }
@@ -245,7 +255,7 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
     private void CreateSubscription(string topic) => SubscriptionRequested?.Invoke(this, topic);
 
     partial void OnSelectedSourceChanged(FeedSourceViewModel value) => _ = LoadAsync();
-    partial void OnSearchTextChanged(string value) { ApplyFilter(); ApplyTileFilter(); }
+    partial void OnSearchTextChanged(string value) { ApplyFilter(); ApplyTileFilter(); ScheduleSpatialSearch(value); }
     partial void OnActiveTileFilterChanged(string value) => OnPropertyChanged(nameof(HasActiveTileFilter));
     partial void OnSelectedItemChanged(FeedItemViewModel? value)
     {
@@ -287,7 +297,7 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
     {
         var previousBoardId = _tileBoard?.Id;
         var liveCamera = Camera;
-        var liveSemanticViewport = new SemanticViewportState(SemanticViewportX, SemanticViewportY);
+        var liveSemanticViewport = new SemanticViewportState(SemanticViewportX, SemanticViewportY, _semanticViewportWidth, _semanticViewportHeight, SemanticViewportUserPositioned);
         var content = new List<TileContent>();
         foreach (var list in TopLists)
             content.Add(new($"ranking:{list.Title}", MetroTileKind.RankingList, list.Title, list.Subtitle, "TOP 5", "TypeScript"));
@@ -304,14 +314,6 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
             content.Add(new($"repository:{item.Repository.Id}", kind, item.Repository.FullName, item.Repository.Description, item.ReasonText, item.Repository.PrimaryLanguage, item.Repository.Id, item.Repository.OwnerAvatarUrl, SourceUrl: item.Repository.Repository.HtmlUrl));
         }
 
-        var catalog = _tips.GetTips(DateOnly.FromDateTime(DateTime.Today));
-        for (var index = 0; index < 42; index++)
-        {
-            var tip = catalog[index % catalog.Count];
-            var sizeMarker = tip.ColumnSpan == 2 && tip.RowSpan == 2 ? ":large:" : tip.ColumnSpan == 2 ? ":wide:" : ":small:";
-            content.Add(new($"tip{sizeMarker}{index}:{tip.Key}", MetroTileKind.Tip, tip.Title, tip.Body, string.Join(" · ", new[] { tip.Category, tip.Attribution }.Where(x => !string.IsNullOrWhiteSpace(x))), tip.AccentKey, IsPlaceholder: true, SourceUrl: tip.SourceUrl));
-        }
-
         var scope = _session.Current.User?.GitHubId ?? "guest";
         _tileBoard = await _tileLayout.SynchronizeAsync(scope, SelectedSource.Source, content, minimumColumns, minimumRows);
         var repositoriesById = _allItems.GroupBy(x => x.Repository.Id).ToDictionary(x => x.Key, x => x.First());
@@ -319,19 +321,30 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
         Tiles.Clear();
         foreach (var placement in _tileBoard.Placements)
         {
+            if (placement.Content.IsPlaceholder) continue;
             repositoriesById.TryGetValue(placement.Content.RepositoryId ?? -1, out var repository);
             rankingsByKey.TryGetValue(placement.Content.Key, out var ranking);
             var tile = new MetroTileViewModel(placement, _tilePalette.Create(placement.Content.AccentKey), repository, ranking);
             Tiles.Add(tile);
             if (tile.IsRepository && !string.IsNullOrWhiteSpace(placement.Content.ImageUrl)) _ = LoadTileImageAsync(tile, placement.Content.ImageUrl);
         }
+        RenderedTiles.Clear();
+        foreach (var tile in Tiles) RenderedTiles.Add(tile);
+        _renderWindowKey = string.Empty;
         TileCanvasWidth = Math.Max(1, _tileBoard.ExtentColumns * 100 - 4);
         TileCanvasHeight = Math.Max(1, _tileBoard.ExtentRows * 100 - 4);
         var camera = previousBoardId == _tileBoard.Id ? liveCamera : new CameraState(_tileBoard.CameraX, _tileBoard.CameraY, _tileBoard.Zoom, ActiveIndexKind: _tileBoard.ActiveIndexKind, ActiveIndexKey: _tileBoard.ActiveIndexKey);
         CameraX = camera.X; CameraY = camera.Y; Zoom = camera.Zoom;
-        var semanticViewport = previousBoardId == _tileBoard.Id ? liveSemanticViewport : new(_tileBoard.SemanticViewportX, _tileBoard.SemanticViewportY);
+        var semanticViewport = previousBoardId == _tileBoard.Id
+            ? liveSemanticViewport
+            : new(_tileBoard.SemanticViewportX, _tileBoard.SemanticViewportY,
+                _tileBoard.SemanticViewportWidth, _tileBoard.SemanticViewportHeight,
+                _tileBoard.SemanticViewportUserPositioned);
         SemanticViewportX = semanticViewport.X;
         SemanticViewportY = semanticViewport.Y;
+        _semanticViewportWidth = semanticViewport.ViewportWidth;
+        _semanticViewportHeight = semanticViewport.ViewportHeight;
+        SemanticViewportUserPositioned = semanticViewport.IsUserPositioned;
         ActiveTileFilter = camera.ActiveIndexKey ?? string.Empty;
         await BuildSemanticIndexAsync();
         ApplyTileFilter();
@@ -542,8 +555,13 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly DiscoverySyncService _syncService;
     private readonly IMetroTileLayoutService _tileLayout;
     private readonly IAuthenticationSessionService _session;
+    private readonly IRankingConfigurationService _rankingConfiguration;
+    private readonly IRankingRebuildService _rankingRebuild;
+    private readonly DiscoverViewModel _discover;
     private UserPreference? _preferences;
     private bool _isLoaded;
+    private bool _loadingRanking;
+    private CancellationTokenSource? _rankingRebuildCancellation;
     public IReadOnlyList<string> ThemeOptions { get; } = ["跟随系统", "浅色", "深色"];
     public IReadOnlyList<SyncIntervalOption> SyncIntervals { get; } = [new(0, "仅手动"), new(15, "每 15 分钟"), new(30, "每 30 分钟"), new(60, "每 60 分钟")];
     public IReadOnlyList<string> CachePresets { get; } = ["节省", "均衡", "高性能", "自定义"];
@@ -564,9 +582,45 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _backupStatus = "正在读取备份状态";
     [ObservableProperty] private string _tileLayoutStatus = string.Empty;
     public ObservableCollection<GitIdentityAliasItem> IdentityAliases { get; } = [];
+    public IReadOnlyList<RankingPresetOption> RankingPresets { get; } =
+    [
+        new(RankingPreset.Balanced, "均衡"), new(RankingPreset.Precision, "精准"),
+        new(RankingPreset.Exploration, "探索"), new(RankingPreset.Custom, "自定义")
+    ];
+    [ObservableProperty] private RankingPresetOption _selectedRankingPreset = new(RankingPreset.Balanced, "均衡");
+    [ObservableProperty] private bool _isRankingAdvanced;
+    [ObservableProperty] private double _coarseRuleMatch = 30;
+    [ObservableProperty] private double _coarseFreshness = 20;
+    [ObservableProperty] private double _coarseStarVelocity = 20;
+    [ObservableProperty] private double _coarseQuality = 15;
+    [ObservableProperty] private double _coarsePreference = 15;
+    [ObservableProperty] private double _fineCoarse = 45;
+    [ObservableProperty] private double _fineContentProfile = 20;
+    [ObservableProperty] private double _fineBehavior = 15;
+    [ObservableProperty] private double _fineNovelty = 10;
+    [ObservableProperty] private double _fineLocalRelevance = 10;
+    [ObservableProperty] private double _explorationRatio = 15;
+    [ObservableProperty] private double _rankingTemperature = 1;
+    [ObservableProperty] private double _freshnessHalfLifeDays = 120;
+    [ObservableProperty] private int _sameLanguagePerTen = 3;
+    [ObservableProperty] private int _sameOwnerPerTen = 1;
+    [ObservableProperty] private int _coarseCandidateCount = 200;
+    [ObservableProperty] private int _fineResultCount = 60;
+    [ObservableProperty] private string _rankingStatus = string.Empty;
+    [ObservableProperty] private double _rankingProgress;
+    [ObservableProperty] private bool _isRankingRebuilding;
 
     public string ThresholdText => $"匹配度达到 {NotificationThreshold:P0} 时提醒";
-    public SettingsViewModel(IUserService users, ICacheService cache, IMemoryCacheStore memoryCache, IDbContextFactory<RepoGalaxyDbContext> databaseFactory, DatabaseLifecycleService databaseLifecycle, DiscoverySyncService syncService, IMetroTileLayoutService tileLayout, IAuthenticationSessionService session) { _users = users; _cache = cache; _memoryCache = memoryCache; _databaseFactory = databaseFactory; _databaseLifecycle = databaseLifecycle; _syncService = syncService; _tileLayout = tileLayout; _session = session; _ = LoadAsync(); }
+    public string RankingScopeText => _session.Current.User is { } user ? $"当前账号：@{user.Login}" : "游客配置";
+    public string CoarseWeightTotalText => $"粗排合计 {CoarseRuleMatch + CoarseFreshness + CoarseStarVelocity + CoarseQuality + CoarsePreference:N0}%";
+    public string FineWeightTotalText => $"精排合计 {FineCoarse + FineContentProfile + FineBehavior + FineNovelty + FineLocalRelevance:N0}%";
+    public SettingsViewModel(IUserService users, ICacheService cache, IMemoryCacheStore memoryCache, IDbContextFactory<RepoGalaxyDbContext> databaseFactory, DatabaseLifecycleService databaseLifecycle, DiscoverySyncService syncService, IMetroTileLayoutService tileLayout, IAuthenticationSessionService session, IRankingConfigurationService rankingConfiguration, IRankingRebuildService rankingRebuild, DiscoverViewModel discover)
+    {
+        _users = users; _cache = cache; _memoryCache = memoryCache; _databaseFactory = databaseFactory; _databaseLifecycle = databaseLifecycle;
+        _syncService = syncService; _tileLayout = tileLayout; _session = session; _rankingConfiguration = rankingConfiguration; _rankingRebuild = rankingRebuild; _discover = discover;
+        _session.Changed += (_, _) => { OnPropertyChanged(nameof(RankingScopeText)); _ = LoadRankingProfileAsync(); };
+        _ = LoadAsync();
+    }
     public async Task LoadAsync()
     {
         _preferences = await _users.GetPreferencesAsync();
@@ -586,6 +640,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         ApplyTheme();
         await RefreshCacheStatisticsAsync();
         await LoadIdentityAliasesAsync();
+        await LoadRankingProfileAsync();
         BackupStatus = _databaseLifecycle.GetLatestBackupPath() is { } path ? $"最近备份：{Path.GetFileName(path)}" : "尚未创建备份";
     }
     partial void OnSelectedThemeChanged(string value) { ApplyTheme(); _ = SaveAsync(); }
@@ -604,6 +659,21 @@ public sealed partial class SettingsViewModel : ViewModelBase
     partial void OnFeedCacheTtlMinutesChanged(int value) { if (_isLoaded) _ = SaveAsync(); }
     partial void OnDetailCacheTtlMinutesChanged(int value) { if (_isLoaded) _ = SaveAsync(); }
     partial void OnNewsCacheTtlMinutesChanged(int value) { if (_isLoaded) _ = SaveAsync(); }
+    partial void OnSelectedRankingPresetChanged(RankingPresetOption value)
+    {
+        if (_loadingRanking || value.Preset == RankingPreset.Custom) return;
+        ApplyRankingProfile(RankingTuningProfile.Create(RankingScope(), value.Preset));
+    }
+    partial void OnCoarseRuleMatchChanged(double value) => RankingWeightChanged();
+    partial void OnCoarseFreshnessChanged(double value) => RankingWeightChanged();
+    partial void OnCoarseStarVelocityChanged(double value) => RankingWeightChanged();
+    partial void OnCoarseQualityChanged(double value) => RankingWeightChanged();
+    partial void OnCoarsePreferenceChanged(double value) => RankingWeightChanged();
+    partial void OnFineCoarseChanged(double value) => RankingWeightChanged();
+    partial void OnFineContentProfileChanged(double value) => RankingWeightChanged();
+    partial void OnFineBehaviorChanged(double value) => RankingWeightChanged();
+    partial void OnFineNoveltyChanged(double value) => RankingWeightChanged();
+    partial void OnFineLocalRelevanceChanged(double value) => RankingWeightChanged();
     private void ApplyTheme()
     {
         if (Application.Current is null) return;
@@ -623,6 +693,85 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _preferences.DetailCacheTtlMinutes = Math.Clamp(DetailCacheTtlMinutes, 5, 1440);
         _preferences.NewsCacheTtlMinutes = Math.Clamp(NewsCacheTtlMinutes, 5, 1440);
         SaveStatus = await _users.SavePreferencesAsync(_preferences) ? "设置已保存" : "设置保存失败";
+    }
+
+    [RelayCommand]
+    private async Task SaveRankingProfileAsync()
+    {
+        var profile = BuildRankingProfile();
+        if (!profile.IsValid)
+        {
+            RankingStatus = "粗排和精排权重必须分别合计为 100%。";
+            return;
+        }
+        try
+        {
+            var saved = await _rankingConfiguration.SaveAsync(profile);
+            ApplyRankingProfile(saved);
+            RankingStatus = $"排序参数已保存（版本 {saved.Revision}），相关批次已标记为待更新。";
+        }
+        catch { RankingStatus = "排序参数保存失败，旧配置仍然有效。"; }
+    }
+
+    [RelayCommand]
+    private void NormalizeRankingWeights()
+    {
+        ApplyRankingProfile(BuildRankingProfile().NormalizeWeights());
+        SelectedRankingPreset = RankingPresets.Single(x => x.Preset == RankingPreset.Custom);
+        RankingStatus = "权重已按比例归一化，请保存后生效。";
+    }
+
+    [RelayCommand]
+    private async Task RebuildCurrentFeedAsync()
+    {
+        if (IsRankingRebuilding) return;
+        await SaveRankingProfileAsync();
+        if (!BuildRankingProfile().IsValid) return;
+        _rankingRebuildCancellation?.Cancel(); _rankingRebuildCancellation?.Dispose();
+        var cancellation = _rankingRebuildCancellation = new CancellationTokenSource();
+        IsRankingRebuilding = true; RankingProgress = 0;
+        var progress = new Progress<RankingRebuildProgress>(value => { RankingProgress = value.Progress * 100; RankingStatus = value.Message; });
+        try
+        {
+            var source = _discover.SelectedSource.Source;
+            var result = await _rankingRebuild.RebuildAsync(new(RankingScope(), source), progress, cancellation.Token);
+            RankingStatus = result.Cancelled ? "已取消重排，旧批次保持不变。" : result.Success ? $"重排完成，共更新 {result.Items.Count} 个项目。" : "重排失败，旧批次保持不变。";
+        }
+        finally { IsRankingRebuilding = false; if (ReferenceEquals(_rankingRebuildCancellation, cancellation)) _rankingRebuildCancellation = null; cancellation.Dispose(); }
+    }
+
+    [RelayCommand] private void CancelRankingRebuild() => _rankingRebuildCancellation?.Cancel();
+
+    private async Task LoadRankingProfileAsync()
+    {
+        try { ApplyRankingProfile(await _rankingConfiguration.GetAsync(RankingScope())); }
+        catch { RankingStatus = "无法读取排序配置，正在使用均衡默认值。"; ApplyRankingProfile(RankingTuningProfile.Create(RankingScope(), RankingPreset.Balanced)); }
+    }
+
+    private RankingTuningProfile BuildRankingProfile() => new(RankingScope(), SelectedRankingPreset.Preset,
+        new(CoarseRuleMatch / 100, CoarseFreshness / 100, CoarseStarVelocity / 100, CoarseQuality / 100, CoarsePreference / 100),
+        new(FineCoarse / 100, FineContentProfile / 100, FineBehavior / 100, FineNovelty / 100, FineLocalRelevance / 100),
+        ExplorationRatio / 100, RankingTemperature, FreshnessHalfLifeDays, SameLanguagePerTen, SameOwnerPerTen, CoarseCandidateCount, FineResultCount);
+
+    private void ApplyRankingProfile(RankingTuningProfile profile)
+    {
+        _loadingRanking = true;
+        SelectedRankingPreset = RankingPresets.Single(x => x.Preset == profile.Preset);
+        CoarseRuleMatch = profile.Coarse.RuleMatch * 100; CoarseFreshness = profile.Coarse.Freshness * 100; CoarseStarVelocity = profile.Coarse.StarVelocity * 100;
+        CoarseQuality = profile.Coarse.Quality * 100; CoarsePreference = profile.Coarse.PreferenceAffinity * 100;
+        FineCoarse = profile.Fine.CoarseScore * 100; FineContentProfile = profile.Fine.ContentProfile * 100; FineBehavior = profile.Fine.Behavior * 100;
+        FineNovelty = profile.Fine.Novelty * 100; FineLocalRelevance = profile.Fine.LocalRelevance * 100;
+        ExplorationRatio = profile.ExplorationRatio * 100; RankingTemperature = profile.Temperature; FreshnessHalfLifeDays = profile.FreshnessHalfLifeDays;
+        SameLanguagePerTen = profile.SameLanguagePerTen; SameOwnerPerTen = profile.SameOwnerPerTen; CoarseCandidateCount = profile.CoarseCandidateCount; FineResultCount = profile.FineResultCount;
+        _loadingRanking = false;
+        OnPropertyChanged(nameof(CoarseWeightTotalText)); OnPropertyChanged(nameof(FineWeightTotalText));
+    }
+
+    private string RankingScope() => _session.Current.User?.GitHubId ?? "guest";
+    private void RankingWeightChanged()
+    {
+        OnPropertyChanged(nameof(CoarseWeightTotalText)); OnPropertyChanged(nameof(FineWeightTotalText));
+        if (!_loadingRanking) SelectedRankingPreset = RankingPresets.Single(x => x.Preset == RankingPreset.Custom);
     }
 
     [RelayCommand]
@@ -685,3 +834,4 @@ public sealed record GitIdentityAliasItem(long Id, string Name, string Email)
     public string Display => string.Join(" · ", new[] { Name, Email }.Where(x => !string.IsNullOrWhiteSpace(x)));
 }
 public sealed record SyncIntervalOption(int Minutes, string Label);
+public sealed record RankingPresetOption(RankingPreset Preset, string Label);

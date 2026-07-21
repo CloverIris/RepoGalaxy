@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 using RepoGalaxy.Core.Interfaces;
 using RepoGalaxy.Core.Models;
 using RepoGalaxy.Data.DbContexts;
@@ -11,9 +13,14 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
     public const int CurrentLayoutVersion = 2;
     private const int ExpansionStep = 6;
     private readonly IDbContextFactory<RepoGalaxyDbContext> _factory;
+    private readonly IVirtualTileWorldService? _virtualWorld;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public MetroTileLayoutService(IDbContextFactory<RepoGalaxyDbContext> factory) => _factory = factory;
+    public MetroTileLayoutService(IDbContextFactory<RepoGalaxyDbContext> factory, IVirtualTileWorldService? virtualWorld = null)
+    {
+        _factory = factory;
+        _virtualWorld = virtualWorld;
+    }
 
     public async Task<TileBoardState> LoadAsync(string scopeKey, FeedSource source, CancellationToken cancellationToken = default)
     {
@@ -44,13 +51,15 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
                     LayoutVersion = CurrentLayoutVersion,
                     ExtentColumns = extent.Columns,
                     ExtentRows = extent.Rows,
-                    Zoom = 1
+                    Zoom = 1,
+                    WorldSeed = Seed(scope, source)
                 };
                 db.TileBoards.Add(board);
             }
 
             board.ExtentColumns = Math.Max(board.ExtentColumns, Math.Max(12, minimumColumns));
             board.ExtentRows = Math.Max(board.ExtentRows, Math.Max(8, minimumRows));
+            if (string.IsNullOrWhiteSpace(board.WorldSeed)) board.WorldSeed = Seed(scope, source);
             board.UpdatedAt = DateTimeOffset.UtcNow;
 
             var requestedKeys = requested.Select(x => Key(x.Kind, x.Key)).ToHashSet(StringComparer.Ordinal);
@@ -65,11 +74,22 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
                 var reusable = board.Placements.FirstOrDefault(x => x.IsPlaceholder && x.ContentKey.StartsWith("vacant:", StringComparison.Ordinal) && x.ColumnSpan == span.Columns && x.RowSpan == span.Rows);
                 if (reusable is not null) { Copy(item, reusable); continue; }
 
-                var position = FindPosition(board.Placements, span, board.ExtentColumns, board.ExtentRows);
-                while (position is null)
+                (int Column, int Row)? position;
+                if (_virtualWorld is not null)
                 {
-                    ExpandBalanced(board, minimumColumns, minimumRows);
+                    var persisted = board.Placements.Select(MapPlacement).ToList();
+                    position = _virtualWorld.FindNearestCompatibleSlot(board.WorldSeed,
+                        new TileWorldWindow(board.CameraX, board.CameraY,
+                            Math.Max(1200, minimumColumns * 100), Math.Max(800, minimumRows * 100)), span, persisted);
+                }
+                else
+                {
                     position = FindPosition(board.Placements, span, board.ExtentColumns, board.ExtentRows);
+                    while (position is null)
+                    {
+                        ExpandBalanced(board, minimumColumns, minimumRows);
+                        position = FindPosition(board.Placements, span, board.ExtentColumns, board.ExtentRows);
+                    }
                 }
                 var placement = new TilePlacementEntity { Board = board, Column = position.Value.Column, Row = position.Value.Row, ColumnSpan = span.Columns, RowSpan = span.Rows };
                 Copy(item, placement);
@@ -106,6 +126,9 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
         if (board is null) return;
         board.SemanticViewportX = viewport.X;
         board.SemanticViewportY = viewport.Y;
+        board.SemanticViewportWidth = viewport.ViewportWidth;
+        board.SemanticViewportHeight = viewport.ViewportHeight;
+        board.SemanticViewportUserPositioned = viewport.IsUserPositioned;
         board.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesWithRetryAsync(cancellationToken: cancellationToken);
     }
@@ -183,12 +206,20 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
         board.ExtentColumns, board.ExtentRows,
         board.Placements.OrderBy(x => x.Row).ThenBy(x => x.Column).Select(x => new TilePlacement(x.Id,
             new TileContent(x.ContentKey, ParseKind(x.ContentKind), x.Title, x.Subtitle, x.Caption, x.AccentKey, x.RepositoryId, x.ImageUrl, x.IsPlaceholder, x.SourceUrl),
-            x.Column, x.Row, x.ColumnSpan, x.RowSpan)).ToList());
+            x.Column, x.Row, x.ColumnSpan, x.RowSpan)).ToList(),
+        string.IsNullOrWhiteSpace(board.WorldSeed) ? Seed(board.ScopeKey, (FeedSource)board.Source) : board.WorldSeed,
+        board.SemanticViewportWidth, board.SemanticViewportHeight, board.SemanticViewportUserPositioned);
 
-    private static TileBoardState Empty(string scopeKey, FeedSource source) => new(0, NormalizeScope(scopeKey), source, CurrentLayoutVersion, 0, 0, 1, null, string.Empty, 24, 24, 12, 8, []);
+    private static TilePlacement MapPlacement(TilePlacementEntity x) => new(x.Id,
+        new TileContent(x.ContentKey, ParseKind(x.ContentKind), x.Title, x.Subtitle, x.Caption, x.AccentKey,
+            x.RepositoryId, x.ImageUrl, x.IsPlaceholder, x.SourceUrl),
+        x.Column, x.Row, x.ColumnSpan, x.RowSpan);
+
+    private static TileBoardState Empty(string scopeKey, FeedSource source) => new(0, NormalizeScope(scopeKey), source, CurrentLayoutVersion, 0, 0, 1, null, string.Empty, 24, 24, 12, 8, [], Seed(NormalizeScope(scopeKey), source));
     private static int Priority(MetroTileKind kind) => kind switch { MetroTileKind.RankingList => 0, MetroTileKind.Language => 1, MetroTileKind.Technology => 2, MetroTileKind.FeaturedRepository => 3, MetroTileKind.Repository => 4, _ => 5 };
     private static int RoundUp(int value, int step) => (int)Math.Ceiling(value / (double)step) * step;
     private static string NormalizeScope(string value) => string.IsNullOrWhiteSpace(value) ? "guest" : value.Trim().ToLowerInvariant();
     private static string Key(MetroTileKind kind, string key) => $"{kind}:{key}";
     private static MetroTileKind ParseKind(string value) => Enum.TryParse<MetroTileKind>(value, out var result) ? result : MetroTileKind.Tip;
+    private static string Seed(string scopeKey, FeedSource source) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{NormalizeScope(scopeKey)}:{source}:tile-world-v1")))[..32];
 }

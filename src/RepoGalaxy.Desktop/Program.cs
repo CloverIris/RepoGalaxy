@@ -95,11 +95,14 @@ class Program
         services.AddSingleton<IMetroTileLayoutService, MetroTileLayoutService>();
         services.AddSingleton<ISemanticMosaicLayoutService, SemanticMosaicLayoutService>();
         services.AddSingleton<ISemanticIndexCatalogService, SemanticIndexCatalogService>();
+        services.AddSingleton<ISpatialTileSearchService, SpatialTileSearchService>();
+        services.AddSingleton<IVirtualTileWorldService, VirtualTileWorldService>();
         services.AddSingleton<IZoomableTileLayoutService, ZoomableTileLayoutService>();
         services.AddSingleton<IDetailPortalCoordinator, DetailPortalCoordinator>();
         services.AddSingleton<ITilePaletteService, TilePaletteService>();
         services.AddSingleton<ITipCatalog, TipCatalog>();
         services.AddSingleton<ITileImageService, TileImageService>();
+        services.AddSingleton<IProfileImageService, ProfileImageService>();
         services.AddSingleton<IDetailContentService, DetailContentService>();
         services.AddSingleton<IExternalMetadataExtractor, ExternalMetadataExtractor>();
         services.AddSingleton<IMarkdownDocumentService, MarkdownDocumentService>();
@@ -168,7 +171,10 @@ class Program
 
         // 推荐引擎
         services.AddSingleton<IRankingPipeline, RankingPipeline>();
-        services.AddSingleton<IRecommendationEngine, RecommendationEngine>();
+        services.AddSingleton<IRankingConfigurationService, RankingConfigurationService>();
+        services.AddSingleton<RecommendationEngine>();
+        services.AddSingleton<IRecommendationEngine>(sp => sp.GetRequiredService<RecommendationEngine>());
+        services.AddSingleton<IRankingRebuildService>(sp => sp.GetRequiredService<RecommendationEngine>());
         
         // 数据源服务
         services.AddSingleton<DiscoverySyncService>();
@@ -188,6 +194,7 @@ class Program
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<RepositoryDetailsViewModel>();
         services.AddSingleton<DashboardRailViewModel>();
+        services.AddSingleton<AccountProfileViewModel>();
         services.AddSingleton<DiscoverViewModel>();
         services.AddSingleton<SubscriptionsViewModel>();
         services.AddSingleton<LibraryViewModel>();

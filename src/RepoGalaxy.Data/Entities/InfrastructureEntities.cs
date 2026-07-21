@@ -78,6 +78,34 @@ public sealed class RankingBatchEntity
     public string AlgorithmVersion { get; set; } = "heuristic-v1";
     public DateTimeOffset CreatedAt { get; set; }
     public bool IsDirty { get; set; }
+    public int ProfileRevision { get; set; } = 1;
+}
+
+[Table("RankingTuningProfiles")]
+public sealed class RankingTuningProfileEntity
+{
+    [Key] public long Id { get; set; }
+    [Required, MaxLength(120)] public string ScopeKey { get; set; } = "guest";
+    public int Preset { get; set; }
+    public double CoarseRuleMatch { get; set; } = .30;
+    public double CoarseFreshness { get; set; } = .20;
+    public double CoarseStarVelocity { get; set; } = .20;
+    public double CoarseQuality { get; set; } = .15;
+    public double CoarsePreference { get; set; } = .15;
+    public double FineCoarse { get; set; } = .45;
+    public double FineContentProfile { get; set; } = .20;
+    public double FineBehavior { get; set; } = .15;
+    public double FineNovelty { get; set; } = .10;
+    public double FineLocalRelevance { get; set; } = .10;
+    public double ExplorationRatio { get; set; } = .15;
+    public double Temperature { get; set; } = 1;
+    public double FreshnessHalfLifeDays { get; set; } = 120;
+    public int SameLanguagePerTen { get; set; } = 3;
+    public int SameOwnerPerTen { get; set; } = 1;
+    public int CoarseCandidateCount { get; set; } = 200;
+    public int FineResultCount { get; set; } = 60;
+    public int Revision { get; set; } = 1;
+    public DateTimeOffset UpdatedAt { get; set; }
 }
 
 [Table("RankingDecisions")]
@@ -133,6 +161,10 @@ public sealed class TileBoardEntity
     [MaxLength(160)] public string ActiveIndexKey { get; set; } = string.Empty;
     public double SemanticViewportX { get; set; } = 24;
     public double SemanticViewportY { get; set; } = 24;
+    public double SemanticViewportWidth { get; set; }
+    public double SemanticViewportHeight { get; set; }
+    public bool SemanticViewportUserPositioned { get; set; }
+    [MaxLength(64)] public string WorldSeed { get; set; } = string.Empty;
     public int ExtentColumns { get; set; } = 12;
     public int ExtentRows { get; set; } = 6;
     public DateTimeOffset UpdatedAt { get; set; }

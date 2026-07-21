@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="title description">
+  <title id="title">RepoGalaxy logo</title>
+  <desc id="description">A square Metro tile mark containing code brackets and a repository grid.</desc>
+  <rect width="160" height="160" fill="#0d1117"/>
+  <path fill="#58a6ff" d="M12 12h48v48H12zM66 12h82v48H66zM12 66h82v82H12zM100 66h48v82h-48z"/>
+  <path fill="#0d1117" d="M23 32h26v8H23zM77 32h60v8H77z" opacity=".72"/>
+  <path d="m31 91-12 16 12 16M75 91l12 16-12 16M60 84l-14 46" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path fill="#ffffff" d="M112 86h24v8h-24zM112 103h24v8h-24zM112 120h16v8h-16z"/>
+  <path fill="#ffffff" d="M12 12h136v4H12z" opacity=".28"/>
+</svg>

@@ -25,6 +25,7 @@
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
           <TextBlock Text="二维 Tile 世界" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource AccentTextBrush}"/>
           <TextBlock Text="{Binding ResultSummary}" Classes="meta"/>
+          <TextBlock Text="{Binding SpatialSearchStatus}" Classes="meta"/>
           <Border IsVisible="{Binding HasActiveTileFilter}" Background="{DynamicResource AccentBrush}" Padding="8,3">
             <StackPanel Orientation="Horizontal" Spacing="7"><TextBlock Text="{Binding ActiveTileFilter}" Foreground="White"/><Button Classes="ghost" Content="×" Foreground="White" Padding="2,0" MinHeight="20" Command="{Binding ClearTileFilterCommand}"/></StackPanel>
           </Border>
@@ -39,25 +40,59 @@
       </Grid>
     </Border>
 
-    <Grid Grid.Row="1" x:Name="WorldHost" ClipToBounds="True">
+    <Grid Grid.Row="1" x:Name="WorldHost" ClipToBounds="True" Background="{DynamicResource CanvasBrush}">
+      <Canvas ZIndex="{Binding PortalZIndex}" IsVisible="{Binding IsPortalVisible}" IsHitTestVisible="{Binding IsDetailInteractive}">
+        <Border Canvas.Left="{Binding PortalX}" Canvas.Top="{Binding PortalY}"
+                Width="{Binding PortalWidth}" Height="{Binding PortalHeight}"
+                ClipToBounds="True" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1"
+                Background="{DynamicResource CanvasBrush}">
+          <views:ImmersiveDetailSurface Width="{Binding DetailViewportWidth}" Height="{Binding DetailViewportHeight}"
+                                        Opacity="{Binding PortalContentOpacity}"
+                                        HorizontalAlignment="Left" VerticalAlignment="Top">
+            <views:ImmersiveDetailSurface.RenderTransform>
+              <TranslateTransform X="{Binding PortalInnerOffsetX}" Y="{Binding PortalInnerOffsetY}"/>
+            </views:ImmersiveDetailSurface.RenderTransform>
+          </views:ImmersiveDetailSurface>
+        </Border>
+      </Canvas>
+
       <controls:ZoomableTileCanvas x:Name="TileWorld"
+                                   ZIndex="{Binding TileWorldZIndex}"
                                    CameraX="{Binding CameraX}"
                                    CameraY="{Binding CameraY}"
                                    Zoom="{Binding Zoom}"
+                                   SkeletonRevision="{Binding SkeletonRevision}"
                                    Opacity="{Binding TileBoardOpacity}"
-                                   Background="{DynamicResource CanvasBrush}">
-        <ItemsControl ItemsSource="{Binding Tiles}" Width="{Binding TileCanvasWidth}" Height="{Binding TileCanvasHeight}" HorizontalAlignment="Left" VerticalAlignment="Top">
-          <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas Width="{Binding DataContext.TileCanvasWidth, RelativeSource={RelativeSource AncestorType=UserControl}}" Height="{Binding DataContext.TileCanvasHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                   Background="Transparent">
+        <ItemsControl ItemsSource="{Binding RenderedTiles}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
           <ItemsControl.Styles>
-            <Style Selector="ContentPresenter"><Setter Property="Canvas.Left" Value="{Binding Left}"/><Setter Property="Canvas.Top" Value="{Binding Top}"/><Setter Property="Width" Value="{Binding Width}"/><Setter Property="Height" Value="{Binding Height}"/><Setter Property="Panel.ZIndex" Value="{Binding ZIndex}"/></Style>
+            <Style Selector="ContentPresenter">
+              <Setter Property="Canvas.Left" Value="{Binding Left}"/>
+              <Setter Property="Canvas.Top" Value="{Binding Top}"/>
+              <Setter Property="Width" Value="{Binding Width}"/>
+              <Setter Property="Height" Value="{Binding Height}"/>
+              <Setter Property="Panel.ZIndex" Value="{Binding ZIndex}"/>
+            </Style>
           </ItemsControl.Styles>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Classes="metro-tile" Background="{Binding Background}" Opacity="{Binding DisplayOpacity}" IsVisible="{Binding IsInRenderWindow}">
+              <Border Classes="metro-tile" Background="Transparent" Opacity="{Binding DisplayOpacity}" IsVisible="{Binding IsInRenderWindow}" RenderTransformOrigin="0,0">
                 <Grid>
-                  <Image Source="{Binding BackgroundImage}" Stretch="UniformToFill" Opacity=".28" IsVisible="{Binding !!BackgroundImage}"/>
-                  <PathIcon Data="{Binding IconGeometry}" Width="76" Height="76" Opacity=".14" Foreground="{Binding Foreground}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,4" IsVisible="{Binding HasIcon}" IsHitTestVisible="False"/>
-                  <TextBlock Text="{Binding Glyph}" FontSize="64" FontWeight="Bold" Opacity=".12" Foreground="{Binding Foreground}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,-10" IsVisible="{Binding !HasIcon}" IsHitTestVisible="False"/>
+                  <Grid Opacity="{Binding BackgroundLayerOpacity}" IsHitTestVisible="False">
+                    <Border Background="{Binding Background}"/>
+                    <Image Source="{Binding BackgroundImage}" Stretch="UniformToFill" Opacity=".28" IsVisible="{Binding !!BackgroundImage}"/>
+                    <PathIcon Data="{Binding IconGeometry}" Width="76" Height="76" Opacity=".14" Foreground="{Binding Foreground}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,4" IsVisible="{Binding HasIcon}"/>
+                    <TextBlock Text="{Binding Glyph}" FontSize="64" FontWeight="Bold" Opacity=".12" Foreground="{Binding Foreground}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,-10" IsVisible="{Binding !HasIcon}"/>
+                  </Grid>
+
+                  <Border Background="#D9121820" Margin="1" Padding="12" IsVisible="{Binding IsPeekVisible}" IsHitTestVisible="False">
+                    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="6">
+                      <TextBlock Text="README 预览" FontSize="10" FontWeight="Bold" Foreground="{Binding SecondaryForeground}"/>
+                      <TextBlock Grid.Row="1" Text="{Binding Subtitle}" FontSize="12" TextWrapping="Wrap" MaxLines="4" Foreground="{Binding Foreground}"/>
+                      <TextBlock Grid.Row="2" Text="{Binding Caption}" FontSize="10" TextTrimming="CharacterEllipsis" Foreground="{Binding SecondaryForeground}"/>
+                    </Grid>
+                  </Border>
 
                   <Button Classes="tile-hit" Command="{Binding DataContext.ActivateTileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}">
                     <Grid Margin="13" RowDefinitions="Auto,*,Auto">
@@ -79,22 +114,8 @@
         </ItemsControl>
       </controls:ZoomableTileCanvas>
 
-      <Canvas IsVisible="{Binding IsPortalVisible}" IsHitTestVisible="{Binding IsDetailInteractive}">
-        <Border Canvas.Left="{Binding PortalX}" Canvas.Top="{Binding PortalY}"
-                Width="{Binding PortalWidth}" Height="{Binding PortalHeight}"
-                ClipToBounds="True" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1"
-                Background="{DynamicResource CanvasBrush}">
-          <views:ImmersiveDetailSurface Width="{Binding DetailViewportWidth}" Height="{Binding DetailViewportHeight}"
-                                        Opacity="{Binding PortalContentOpacity}"
-                                        HorizontalAlignment="Left" VerticalAlignment="Top">
-            <views:ImmersiveDetailSurface.RenderTransform>
-              <TranslateTransform X="{Binding PortalInnerOffsetX}" Y="{Binding PortalInnerOffsetY}"/>
-            </views:ImmersiveDetailSurface.RenderTransform>
-          </views:ImmersiveDetailSurface>
-        </Border>
-      </Canvas>
-      <views:SemanticIndexView Opacity="{Binding SemanticIndexOpacity}"/>
-      <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoading}" Height="3" VerticalAlignment="Top"/>
+      <views:SemanticIndexView ZIndex="30" Opacity="{Binding SemanticIndexOpacity}"/>
+      <ProgressBar ZIndex="40" IsIndeterminate="True" IsVisible="{Binding IsLoading}" Height="3" VerticalAlignment="Top"/>
     </Grid>
   </Grid>
 </UserControl>

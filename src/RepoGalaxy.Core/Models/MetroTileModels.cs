@@ -56,7 +56,11 @@ public sealed record TileBoardState(
     double SemanticViewportY,
     int ExtentColumns,
     int ExtentRows,
-    IReadOnlyList<TilePlacement> Placements);
+    IReadOnlyList<TilePlacement> Placements,
+    string WorldSeed = "",
+    double SemanticViewportWidth = 0,
+    double SemanticViewportHeight = 0,
+    bool SemanticViewportUserPositioned = false);
 
 public enum SemanticIndexKind { Language, Framework }
 
@@ -80,7 +84,41 @@ public sealed record SemanticIndexCatalogResult(
     IReadOnlyList<SemanticIndexItem> Items,
     int RejectedSignalCount);
 
-public readonly record struct SemanticViewportState(double X, double Y);
+public readonly record struct SemanticViewportState(
+    double X,
+    double Y,
+    double ViewportWidth = 0,
+    double ViewportHeight = 0,
+    bool IsUserPositioned = false);
+
+public readonly record struct TileChunkCoordinate(int X, int Y);
+
+public readonly record struct TileWorldWindow(double X, double Y, double Width, double Height)
+{
+    public double CenterX => X + Width / 2;
+    public double CenterY => Y + Height / 2;
+}
+
+public sealed record VirtualTileSlot(
+    string Key,
+    TileChunkCoordinate Chunk,
+    int Column,
+    int Row,
+    int ColumnSpan,
+    int RowSpan,
+    TileContent Content);
+
+public sealed record TileSearchCandidate(
+    string Key,
+    MetroTileKind Kind,
+    string Title,
+    string Subtitle,
+    string Language,
+    IReadOnlyList<string> Topics,
+    string Reason,
+    TileWorldRect Bounds);
+
+public sealed record SpatialTileSearchResult(string Query, IReadOnlyList<TileSearchCandidate> Matches);
 
 public sealed record SemanticIndexItem(
     string Key,
@@ -128,7 +166,7 @@ public readonly record struct TileWorldRect(double X, double Y, double Width, do
 
 public enum ZoomVisualMode { SemanticIndex, TileBoard, DetailTransition, Detail }
 
-public enum DetailPresentationState { Board, Portal, Snapping, Full, Exiting }
+public enum DetailPresentationState { Board, Peek, Portal, Snapping, Full, Exiting }
 
 public readonly record struct DetailPortalGeometry(double X, double Y, double Width, double Height)
 {

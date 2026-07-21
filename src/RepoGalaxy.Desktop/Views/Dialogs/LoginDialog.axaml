@@ -17,7 +17,7 @@
       <Grid ColumnDefinitions="Auto,*,46">
         <PathIcon Data="{StaticResource IconCode}" Width="16" Height="16" Margin="14,0,9,0" Foreground="{DynamicResource AccentBrush}"/>
         <TextBlock Grid.Column="1" Text="连接 GitHub" VerticalAlignment="Center" FontWeight="SemiBold"/>
-        <Button x:Name="LoginCloseButton" Grid.Column="2" Padding="0" Classes="caption-close" Click="OnCloseClicked"><PathIcon Data="M3,3 L17,17 M17,3 L3,17" Width="12" Height="12"/></Button>
+        <Button x:Name="LoginCloseButton" Grid.Column="2" Width="46" Height="42" Padding="0" Classes="caption-close" Click="OnCloseClicked"><Grid Width="20" Height="20"><Path Data="M3,3 L17,17 M17,3 L3,17" Stroke="{DynamicResource PrimaryTextBrush}" StrokeThickness="1" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid></Button>
       </Grid>
     </Border>
     <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" Margin="18" CornerRadius="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="30">

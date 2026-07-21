@@ -23,6 +23,7 @@ public class RepoGalaxyDbContext : DbContext
     public DbSet<RepositoryMetricSnapshotEntity> RepositoryMetricSnapshots => Set<RepositoryMetricSnapshotEntity>();
     public DbSet<RankingBatchEntity> RankingBatches => Set<RankingBatchEntity>();
     public DbSet<RankingDecisionEntity> RankingDecisions => Set<RankingDecisionEntity>();
+    public DbSet<RankingTuningProfileEntity> RankingTuningProfiles => Set<RankingTuningProfileEntity>();
     public DbSet<FeedImpressionEntity> FeedImpressions => Set<FeedImpressionEntity>();
     public DbSet<RepositoryTopicEntity> RepositoryTopics => Set<RepositoryTopicEntity>();
     public DbSet<RepositoryLanguageEntity> RepositoryLanguages => Set<RepositoryLanguageEntity>();
@@ -81,6 +82,7 @@ public class RepoGalaxyDbContext : DbContext
         modelBuilder.Entity<UserRepositoryRelationEntity>().HasIndex(x => new { x.AccountId, x.RepositoryId, x.Relation }).IsUnique();
         modelBuilder.Entity<RepositoryMetricSnapshotEntity>().HasIndex(x => new { x.RepositoryId, x.SnapshotDate }).IsUnique();
         modelBuilder.Entity<RankingBatchEntity>().HasIndex(x => x.BatchId).IsUnique();
+        modelBuilder.Entity<RankingTuningProfileEntity>().HasIndex(x => x.ScopeKey).IsUnique();
         modelBuilder.Entity<RankingDecisionEntity>().HasIndex(x => new { x.RankingBatchId, x.RepositoryId }).IsUnique();
         modelBuilder.Entity<RepositoryTopicEntity>().HasIndex(x => new { x.RepositoryId, x.Topic }).IsUnique();
         modelBuilder.Entity<RepositoryLanguageEntity>().HasIndex(x => new { x.RepositoryId, x.Language }).IsUnique();

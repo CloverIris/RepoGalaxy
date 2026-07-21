@@ -8,12 +8,14 @@ public class User
     public long Id { get; set; }
     public string GitHubId { get; set; } = string.Empty;
     public string Login { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
     public string AvatarUrl { get; set; } = string.Empty;
     public string Bio { get; set; } = string.Empty;
     public string Company { get; set; } = string.Empty;
     public string Location { get; set; } = string.Empty;
     public string Blog { get; set; } = string.Empty;
     public string TwitterUsername { get; set; } = string.Empty;
+    public string ProfileUrl { get; set; } = string.Empty;
     
     // GitHub 统计
     public int PublicRepos { get; set; }
@@ -80,3 +82,5 @@ public class UserPreference
     public int NewsCacheTtlMinutes { get; set; } = 30;
     public string CachePreset { get; set; } = "均衡";
 }
+
+public sealed record UserSocialAccount(string Provider, string Url);

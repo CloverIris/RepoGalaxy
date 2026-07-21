@@ -113,7 +113,25 @@ public class ReleaseNotificationEntity
 }
 
 [Table("Users")]
-public class UserEntity { [Key] public long Id { get; set; } public string GitHubId { get; set; } = string.Empty; [Required] public string Login { get; set; } = string.Empty; public string? AvatarUrl { get; set; } public string? Bio { get; set; } public int PublicRepos { get; set; } public int Followers { get; set; } public DateTimeOffset? LastLoginAt { get; set; } }
+public class UserEntity
+{
+    [Key] public long Id { get; set; }
+    public string GitHubId { get; set; } = string.Empty;
+    [Required] public string Login { get; set; } = string.Empty;
+    public string? DisplayName { get; set; }
+    public string? AvatarUrl { get; set; }
+    public string? Bio { get; set; }
+    public string? Company { get; set; }
+    public string? Location { get; set; }
+    public string? Blog { get; set; }
+    public string? TwitterUsername { get; set; }
+    public string? ProfileUrl { get; set; }
+    public int PublicRepos { get; set; }
+    public int Followers { get; set; }
+    public int Following { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? LastLoginAt { get; set; }
+}
 [Table("LocalRepositories")]
 public class LocalRepositoryEntity { [Key] public long Id { get; set; } [Required] public string Name { get; set; } = string.Empty; [Required] public string LocalPath { get; set; } = string.Empty; public string? GitHubUrl { get; set; } public bool IsTracked { get; set; } public DateTimeOffset AddedAt { get; set; } }
 [Table("UserPreferences")]
