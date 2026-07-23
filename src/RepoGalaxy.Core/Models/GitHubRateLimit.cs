@@ -35,7 +35,8 @@ public sealed record GitHubBudgetSnapshot(
     GitHubBudgetSessionKind SessionKind,
     string ScopeKey,
     GitHubRateWindow? Core,
-    GitHubRateWindow? Search);
+    GitHubRateWindow? Search,
+    GitHubRateWindow? GraphQl = null);
 
 public sealed record ApiRequestObservation(
     string ScopeKey,

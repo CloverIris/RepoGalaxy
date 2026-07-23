@@ -16,6 +16,12 @@ using RepoGalaxy.Recommendation.Services;
 
 namespace RepoGalaxy.Desktop.ViewModels;
 
+public enum RightRailMode
+{
+    Dashboard,
+    RepositoryDetails
+}
+
 public sealed partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IAuthenticationSessionService _session;
@@ -40,11 +46,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public AccountProfileViewModel AccountProfile { get; }
     public ObservableCollection<SearchSuggestion> SearchSuggestions { get; } = [];
     public ObservableCollection<string> RecentSearches { get; } = [];
-    public ViewModelBase RightRailContent => Details.IsOpen ? Details : DashboardRail;
+    [ObservableProperty] private RightRailMode _rightRailMode = RightRailMode.Dashboard;
+    public ViewModelBase RightRailContent => RightRailMode == RightRailMode.RepositoryDetails ? Details : DashboardRail;
+    public bool IsRepositoryDetailsMode => RightRailMode == RightRailMode.RepositoryDetails;
+    public string RightRailTitle => IsRepositoryDetailsMode ? "仓库详情" : "工作台概览";
     private bool _isDashboardRailInline = true;
     private bool _isDashboardRailRequested;
-    public bool IsRightRailOpen => !Discover.ShouldSuppressRightRail && (Details.IsOpen || ReferenceEquals(CurrentView, Discover) && (_isDashboardRailInline || _isDashboardRailRequested));
-    public bool CanToggleRightRail => ReferenceEquals(CurrentView, Discover) && !_isDashboardRailInline;
+    public bool IsRightRailOpen => !Discover.ShouldSuppressRightRail && (IsRepositoryDetailsMode || _isDashboardRailInline || _isDashboardRailRequested);
+    public bool CanToggleRightRail => !_isDashboardRailInline;
 
     public IReadOnlyList<NavigationItemViewModel> PrimaryNavigation { get; }
     public IReadOnlyList<NavigationItemViewModel> WorkspaceNavigation { get; }
@@ -115,6 +124,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             if (args.PropertyName == nameof(RepositoryDetailsViewModel.IsOpen))
             {
+                RightRailMode = Details.IsOpen ? RightRailMode.RepositoryDetails : RightRailMode.Dashboard;
+                if (Details.IsOpen && !_isDashboardRailInline) _isDashboardRailRequested = true;
                 OnPropertyChanged(nameof(RightRailContent));
                 OnPropertyChanged(nameof(IsRightRailOpen));
             }
@@ -172,6 +183,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             await _quota.RestoreAndCalibrateAsync(
                 session.IsAuthenticated ? GitHubBudgetSessionKind.Authenticated : GitHubBudgetSessionKind.Guest,
                 session.User?.GitHubId ?? "guest");
+            await DashboardRail.LoadAsync();
             ConnectionStatus = session.IsAuthenticated ? "GitHub 已连接" : "游客模式 · 使用本地缓存";
             if (session.IsAuthenticated)
                 await Discover.LoadAsync();
@@ -190,7 +202,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         foreach (var navigation in PrimaryNavigation.Concat(WorkspaceNavigation).Append(SettingsNavigation))
             navigation.IsSelected = navigation == item;
 
-        Details.Close();
+        CloseRepositoryDetails();
         SearchText = string.Empty;
         CurrentView = item.Key switch
         {
@@ -272,6 +284,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         CurrentUserLogin = string.Empty;
         await AccountProfile.SetUserAsync(null);
         await _quota.RestoreAndCalibrateAsync(GitHubBudgetSessionKind.Guest, "guest");
+        CloseRepositoryDetails();
+        await DashboardRail.LoadAsync(forceContributions: true);
         ConnectionStatus = "游客模式 · 使用本地缓存";
         _audit.Record("session", "signed-out");
         SyncStatus = "已退出登录";
@@ -282,6 +296,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         SyncStatus = "正在同步…";
         await Discover.SyncAsync();
+    }
+
+    [RelayCommand]
+    private void CloseRepositoryDetails()
+    {
+        var repositoryId = Details.Repository?.Id;
+        Details.Close();
+        Discover.ClearDetailSelection(repositoryId);
+        Library.ClearDetailSelection(repositoryId);
+        Notifications.ClearDetailSelection(repositoryId);
+        MyRepos.ClearDetailSelection(repositoryId);
+        RightRailMode = RightRailMode.Dashboard;
+        OnPropertyChanged(nameof(RightRailContent));
+        OnPropertyChanged(nameof(IsRightRailOpen));
     }
 
     [RelayCommand]
@@ -430,5 +458,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             "Settings" => "设置页无需搜索",
             _ => "搜索当前 Feed"
         };
+    }
+
+    partial void OnRightRailModeChanged(RightRailMode value)
+    {
+        OnPropertyChanged(nameof(RightRailContent));
+        OnPropertyChanged(nameof(IsRepositoryDetailsMode));
+        OnPropertyChanged(nameof(RightRailTitle));
+        OnPropertyChanged(nameof(IsRightRailOpen));
     }
 }

@@ -173,6 +173,7 @@ class Program
         
         // 单独注册接口映射
         services.AddSingleton<IGitHubClient>(sp => sp.GetRequiredService<GitHubApiClient>());
+        services.AddSingleton<IGitHubContributionService>(sp => sp.GetRequiredService<GitHubApiClient>());
 
         // 推荐引擎
         services.AddSingleton<IRankingPipeline, RankingPipeline>();

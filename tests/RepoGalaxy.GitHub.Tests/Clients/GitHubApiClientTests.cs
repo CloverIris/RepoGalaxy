@@ -82,6 +82,56 @@ public sealed class GitHubApiClientTests
         budget.Snapshot.SessionKind.Should().Be(RepoGalaxy.Core.Models.GitHubBudgetSessionKind.Authenticated);
     }
 
+    [Fact]
+    public async Task Contribution_calendar_uses_viewer_maps_days_and_tracks_graphql_budget()
+    {
+        var handler = new RecordingHandler(request =>
+        {
+            request.Method.Should().Be(HttpMethod.Post);
+            request.RequestUri!.AbsolutePath.Should().Be("/graphql");
+            request.Headers.Authorization!.Scheme.Should().Be("Bearer");
+            return Response(HttpStatusCode.OK, """
+                {
+                  "data": {
+                    "viewer": {
+                      "contributionsCollection": {
+                        "contributionCalendar": {
+                          "totalContributions": 9,
+                          "weeks": [
+                            { "contributionDays": [
+                              { "date": "2026-07-22", "contributionCount": 4 },
+                              { "date": "2026-07-23", "contributionCount": 5 }
+                            ] }
+                          ]
+                        }
+                      }
+                    },
+                    "rateLimit": {
+                      "cost": 1,
+                      "limit": 5000,
+                      "remaining": 4999,
+                      "resetAt": "2026-07-23T12:00:00Z"
+                    }
+                  }
+                }
+                """);
+        });
+        using var orchestrator = new SyncOrchestrator();
+        var budget = new GitHubRequestBudget();
+        var client = Client(handler, budget, orchestrator);
+        client.SetAccessToken("test-token", "account-1");
+
+        var calendar = await client.GetCalendarAsync();
+
+        calendar.Should().NotBeNull();
+        calendar!.TotalContributions.Should().Be(9);
+        calendar.Days.Should().HaveCount(365);
+        calendar.Days.Single(x => x.Date == new DateOnly(2026, 7, 23)).Count.Should().Be(5);
+        calendar.Source.Should().Be(RepoGalaxy.Core.Models.ContributionDataSource.GitHubFresh);
+        budget.Snapshot.GraphQl.Should().NotBeNull();
+        budget.Snapshot.GraphQl!.Remaining.Should().Be(4999);
+    }
+
     private static GitHubApiClient Client(HttpMessageHandler handler, GitHubRequestBudget budget, SyncOrchestrator orchestrator)
     {
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com/") };

@@ -46,9 +46,7 @@ public class ZoomableTileCanvas : Control
     private readonly Queue<(int ContentId, byte Part, int ValueHash, int MaxLength, int Size, uint Color)> _textLru = new();
     private readonly Dictionary<(uint Accent, bool Dark), SkeletonStyle> _skeletonStyles = [];
     private readonly DispatcherTimer _cameraIdleTimer;
-    private readonly DispatcherTimer _exploreHoverTimer;
-    private CanvasExploreTarget? _pendingExploreTarget;
-    private Rect _exploreButtonBounds;
+    private string? _hoveredExploreSlotKey;
 
     private static readonly Geometry LikeIcon =
         Geometry.Parse("M3,9 L7,9 L9,4 C9,2 12,2 12,5 L12,7 L17,7 C18,7 18,8 18,9 L16,16 C16,17 15,18 14,18 L7,18 L7,10 L3,10 Z");
@@ -72,13 +70,6 @@ public class ZoomableTileCanvas : Control
         {
             _cameraIdleTimer.Stop();
             if (DataContext is DiscoverViewModel vm) _ = vm.SaveCameraAsync();
-        };
-        _exploreHoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
-        _exploreHoverTimer.Tick += (_, _) =>
-        {
-            _exploreHoverTimer.Stop();
-            if (DataContext is DiscoverViewModel vm && !_mousePressed && _pendingExploreTarget is { } target)
-                vm.SetExploreTarget(target);
         };
         Focusable = true;
         ClipToBounds = true;
@@ -129,6 +120,11 @@ public class ZoomableTileCanvas : Control
 
             var accent = SkeletonColor(slot.Content.AccentKey);
             var style = GetSkeletonStyle(accent, ActualThemeVariant == ThemeVariant.Dark);
+            if (slot.Content.Kind == MetroTileKind.Explore)
+            {
+                RenderExploreTile(context, vm, slot, bounds, style);
+                continue;
+            }
             context.DrawRectangle(style.Fill, null, bounds);
             if (width < 54 || height < 40) continue;
             var inset = Math.Max(6, 10 * Zoom);
@@ -152,7 +148,6 @@ public class ZoomableTileCanvas : Control
         }
 
         RenderRealTiles(context, viewport, vm);
-        RenderExplorePrompt(context, vm);
         TilePerformanceMetrics.Allocation(
             GC.GetAllocatedBytesForCurrentThread() - allocatedBefore,
             GC.CollectionCount(0) - gen0,
@@ -160,37 +155,38 @@ public class ZoomableTileCanvas : Control
             GC.CollectionCount(2) - gen2);
     }
 
-    private void RenderExplorePrompt(DrawingContext context, DiscoverViewModel vm)
+    private void RenderExploreTile(
+        DrawingContext context,
+        DiscoverViewModel vm,
+        VirtualTileSlot slot,
+        Rect bounds,
+        SkeletonStyle style)
     {
-        _exploreButtonBounds = default;
-        if (vm.ExploreTarget is not { } target) return;
-        var tileBounds = new Rect(
-            (target.WorldX - CameraX) * Zoom,
-            (target.WorldY - CameraY) * Zoom,
-            (target.ColumnSpan * 96d + (target.ColumnSpan - 1) * 4d) * Zoom,
-            (target.RowSpan * 96d + (target.RowSpan - 1) * 4d) * Zoom);
-        if (!new Rect(Bounds.Size).Intersects(tileBounds)) return;
-        var width = Math.Min(tileBounds.Width - 12, Math.Max(72, 104 * Zoom));
-        var height = Math.Min(tileBounds.Height - 12, Math.Max(24, 32 * Zoom));
-        if (width < 54 || height < 20) return;
-        _exploreButtonBounds = new Rect(
-            tileBounds.Center.X - width / 2,
-            tileBounds.Center.Y - height / 2,
-            width,
-            height);
-        var fill = new SolidColorBrush(Color.FromArgb(232, 0, 120, 212));
-        context.DrawRectangle(fill, null, _exploreButtonBounds);
-        var label = vm.IsExploring ? "正在探索…" : "探索此处";
-        var text = GetText(
-            StringComparer.Ordinal.GetHashCode(target.SlotKey),
-            12,
-            label,
-            10,
-            Math.Clamp((int)Math.Round(11 * Zoom), 10, 14),
-            Colors.White);
-        context.DrawText(text, new Point(
-            _exploreButtonBounds.X + Math.Max(8, (_exploreButtonBounds.Width - text.Width) / 2),
-            _exploreButtonBounds.Y + Math.Max(4, (_exploreButtonBounds.Height - text.Height) / 2)));
+        var isActive = vm.ExploreTarget?.SlotKey == slot.Key;
+        var isHovered = _hoveredExploreSlotKey == slot.Key;
+        var fill = isActive
+            ? new SolidColorBrush(Color.FromArgb(255, 0, 104, 184))
+            : isHovered
+                ? new SolidColorBrush(Color.FromArgb(255, 15, 94, 156))
+                : new SolidColorBrush(Color.FromArgb(255, 20, 53, 78));
+        context.DrawRectangle(fill, null, bounds);
+
+        var inset = Math.Max(9, 13 * Zoom);
+        var contentId = StringComparer.Ordinal.GetHashCode(slot.Key);
+        var category = GetText(contentId, 20, isActive ? "DISCOVER · LOADING" : "DISCOVER",
+            20, Math.Clamp((int)Math.Round(8 * Zoom), 8, 11), Color.FromArgb(220, 168, 220, 255));
+        var title = GetText(contentId, 21, isActive ? "正在探索…" : slot.Content.Title,
+            18, Math.Clamp((int)Math.Round(15 * Zoom), 11, 20), Colors.White);
+        var subtitle = GetText(contentId, 22,
+            isActive ? "正在获取并计算附近的新项目" : slot.Content.Subtitle,
+            38, Math.Clamp((int)Math.Round(9 * Zoom), 8, 13), Color.FromArgb(220, 220, 235, 247));
+        using (context.PushClip(bounds.Deflate(inset)))
+        {
+            context.DrawText(category, new Point(bounds.X + inset, bounds.Y + inset));
+            context.DrawText(title, new Point(bounds.X + inset, bounds.Y + inset + Math.Max(20, 25 * Zoom)));
+            if (bounds.Height >= 116)
+                context.DrawText(subtitle, new Point(bounds.X + inset, bounds.Bottom - inset - subtitle.Height));
+        }
     }
 
     private void RenderRealTiles(DrawingContext context, Rect viewport, DiscoverViewModel vm)
@@ -638,13 +634,9 @@ public class ZoomableTileCanvas : Control
             return;
         Focus();
         _pressPoint = e.GetPosition(this);
-        if (_exploreButtonBounds.Width > 0
-            && _exploreButtonBounds.Height > 0
-            && _exploreButtonBounds.Contains(_pressPoint)
-            && DataContext is DiscoverViewModel exploreVm
-            && exploreVm.ExploreTarget is { } exploreTarget)
+        if (DataContext is DiscoverViewModel exploreVm
+            && TryHitExploreTile(_pressPoint, exploreVm, out var exploreTarget))
         {
-            ClearExploreTarget();
             _ = exploreVm.ExploreAtAsync(exploreTarget);
             e.Handled = true;
             return;
@@ -680,11 +672,13 @@ public class ZoomableTileCanvas : Control
             e.Handled = true;
             return;
         }
-        if (!_mousePressed || DataContext is not DiscoverViewModel vm)
+        if (DataContext is not DiscoverViewModel vm)
+            return;
+        if (!_mousePressed)
         {
             UpdateHoveredAction(current);
             UpdateHoveredRankingItem(current);
-            UpdateExploreHover(current);
+            UpdateHoveredExploreTile(current, vm);
             return;
         }
 
@@ -701,54 +695,41 @@ public class ZoomableTileCanvas : Control
         e.Handled = true;
     }
 
-    private void UpdateExploreHover(Point point)
+    private void UpdateHoveredExploreTile(Point point, DiscoverViewModel vm)
     {
-        if (DataContext is not DiscoverViewModel vm
-            || vm.IsExploring
-            || vm.IsImmersiveDetail
-            || vm.IsSemanticIndexInteractive
-            || GetTileAt(point) is not null)
-        {
-            ClearExploreTarget();
-            return;
-        }
+        var next = !vm.IsImmersiveDetail && !vm.IsSemanticIndexInteractive
+            && TryHitExploreTile(point, vm, out var target)
+                ? target.SlotKey
+                : null;
+        if (next == _hoveredExploreSlotKey) return;
+        _hoveredExploreSlotKey = next;
+        InvalidateVisual();
+    }
 
-        CanvasExploreTarget? nearest = null;
-        var nearestDistance = double.MaxValue;
-        foreach (var slot in vm.RenderedSkeletonSlots)
+    private void ClearExploreTarget()
+    {
+        _hoveredExploreSlotKey = null;
+        if (DataContext is DiscoverViewModel vm && !vm.IsExploring && vm.ExploreTarget is not null)
+            vm.SetExploreTarget(null);
+    }
+
+    private bool TryHitExploreTile(Point point, DiscoverViewModel vm, out CanvasExploreTarget target)
+    {
+        for (var index = vm.RenderedSkeletonSlots.Count - 1; index >= 0; index--)
         {
+            var slot = vm.RenderedSkeletonSlots[index];
+            if (slot.Content.Kind != MetroTileKind.Explore) continue;
             var bounds = new Rect(
                 (slot.Column * 100d - CameraX) * Zoom,
                 (slot.Row * 100d - CameraY) * Zoom,
                 (slot.ColumnSpan * 96d + (slot.ColumnSpan - 1) * 4d) * Zoom,
                 (slot.RowSpan * 96d + (slot.RowSpan - 1) * 4d) * Zoom);
-            if (bounds.Contains(point) || !new Rect(Bounds.Size).Intersects(bounds)) continue;
-            var dx = bounds.Center.X - point.X;
-            var dy = bounds.Center.Y - point.Y;
-            var distance = dx * dx + dy * dy;
-            if (distance >= nearestDistance || distance > 260 * 260) continue;
-            nearestDistance = distance;
-            nearest = new(slot.Key, slot.Column, slot.Row, slot.ColumnSpan, slot.RowSpan, vm.SelectedSource.Source);
+            if (!bounds.Contains(point)) continue;
+            target = new(slot.Key, slot.Column, slot.Row, slot.ColumnSpan, slot.RowSpan, vm.SelectedSource.Source);
+            return true;
         }
-
-        if (nearest is null)
-        {
-            ClearExploreTarget();
-            return;
-        }
-        if (_pendingExploreTarget?.SlotKey == nearest.SlotKey || vm.ExploreTarget?.SlotKey == nearest.SlotKey) return;
-        _pendingExploreTarget = nearest;
-        _exploreHoverTimer.Stop();
-        _exploreHoverTimer.Start();
-    }
-
-    private void ClearExploreTarget()
-    {
-        _exploreHoverTimer.Stop();
-        _pendingExploreTarget = null;
-        _exploreButtonBounds = default;
-        if (DataContext is DiscoverViewModel vm && vm.ExploreTarget is not null)
-            vm.SetExploreTarget(null);
+        target = default!;
+        return false;
     }
 
     private void UpdateHoveredAction(Point point)

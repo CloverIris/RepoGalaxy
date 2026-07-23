@@ -51,4 +51,19 @@ public sealed class GitHubRequestBudgetTests
         searchReset.Should().Be(reset);
         budget.CanCore(out _).Should().BeTrue();
     }
+
+    [Fact]
+    public void Graphql_window_is_independent_from_core_and_search()
+    {
+        var budget = new GitHubRequestBudget();
+        var reset = DateTimeOffset.UtcNow.AddHours(1);
+
+        budget.Update(new GitHubRateWindow("core", 5000, 4900, reset));
+        budget.Update(new GitHubRateWindow("search", 30, 20, reset));
+        budget.Update(new GitHubRateWindow("graphql", 5000, 4800, reset));
+
+        budget.Snapshot.Core!.Remaining.Should().Be(4900);
+        budget.Snapshot.Search!.Remaining.Should().Be(20);
+        budget.Snapshot.GraphQl!.Remaining.Should().Be(4800);
+    }
 }

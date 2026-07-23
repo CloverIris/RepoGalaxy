@@ -73,6 +73,10 @@ public sealed partial class MyReposViewModel : ViewModelBase, ISearchablePage
     partial void OnSelectedLanguageChanged(string value) => ApplyFilter();
     partial void OnSelectedSortChanged(string value) => ApplyFilter();
     partial void OnSelectedRepositoryChanged(RepositoryViewModel? value) { if (value is not null) _details.Show(value.Repository); }
+    public void ClearDetailSelection(long? repositoryId)
+    {
+        if (repositoryId is null || SelectedRepository?.Repository.Id == repositoryId) SelectedRepository = null;
+    }
     private void ApplyFilter()
     {
         IEnumerable<RepositoryViewModel> query = _allRepositories;

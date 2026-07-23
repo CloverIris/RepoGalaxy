@@ -9,7 +9,7 @@ using RepoGalaxy.GitHub.Services;
 
 namespace RepoGalaxy.GitHub.Clients;
 
-public sealed class GitHubApiClient : IGitHubClient, IDisposable
+public sealed class GitHubApiClient : IGitHubClient, IGitHubContributionService, IDisposable
 {
     private readonly HttpClient _http;
     private readonly GitHubRequestBudget _budget;
@@ -95,6 +95,158 @@ public sealed class GitHubApiClient : IGitHubClient, IDisposable
         if (response.Data is not { Encoding: "base64" } readme || string.IsNullOrWhiteSpace(readme.Content)) return null;
         try { return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(readme.Content.Replace("\n", string.Empty, StringComparison.Ordinal))); }
         catch (FormatException) { return null; }
+    }
+
+    public async Task<ContributionCalendarSnapshot?> GetCalendarAsync(
+        bool forceRefresh = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_accessToken)) return null;
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var from = today.AddDays(-364);
+        var key = CacheKey.Create("github-contributions", _cachePartition, from, today);
+        var cached = _cache is null
+            ? CacheReadResult<ContributionCalendarSnapshot>.Miss()
+            : await _cache.GetAsync<ContributionCalendarSnapshot>(key, cancellationToken);
+
+        if (!forceRefresh && cached.State == CacheEntryState.Fresh && cached.Value is { } fresh)
+            return fresh with { Source = ContributionDataSource.GitHubFresh };
+
+        try
+        {
+            var result = await _orchestrator.EnqueueAsync(
+                SyncPriority.LoginInitialization,
+                token => SendContributionCalendarAsync(from, today, token),
+                cancellationToken);
+            if (result is { ErrorCode: null })
+            {
+                if (_cache is not null)
+                {
+                    await _cache.SetAsync(
+                        key,
+                        result,
+                        new CachePolicy(TimeSpan.FromMinutes(30), TimeSpan.FromDays(7), ["github", "private", "contributions"]),
+                        cancellationToken);
+                }
+                return result;
+            }
+
+            if (result?.ErrorCode == "unauthorized") return result;
+            if (cached.State == CacheEntryState.Stale && cached.Value is { } stale)
+                return stale with { Source = ContributionDataSource.GitHubStale, ErrorCode = result?.ErrorCode };
+            return result;
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException
+                                      && !cancellationToken.IsCancellationRequested)
+        {
+            if (cached.HasValue && cached.Value is { } stale)
+                return stale with { Source = ContributionDataSource.GitHubStale, ErrorCode = "network" };
+            throw;
+        }
+    }
+
+    private async Task<ContributionCalendarSnapshot> SendContributionCalendarAsync(
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken)
+    {
+        const string query = """
+            query RepoGalaxyContributionCalendar($from: DateTime!, $to: DateTime!) {
+              viewer {
+                contributionsCollection(from: $from, to: $to) {
+                  contributionCalendar {
+                    totalContributions
+                    weeks {
+                      contributionDays {
+                        date
+                        contributionCount
+                      }
+                    }
+                  }
+                }
+              }
+              rateLimit {
+                cost
+                limit
+                remaining
+                resetAt
+              }
+            }
+            """;
+        var payload = JsonSerializer.Serialize(new
+        {
+            query,
+            variables = new
+            {
+                from = $"{from:yyyy-MM-dd}T00:00:00Z",
+                to = $"{to:yyyy-MM-dd}T23:59:59Z"
+            }
+        }, JsonOptions);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "graphql");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+        request.Content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
+        var stopwatch = Stopwatch.StartNew();
+        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        var headerRate = ReadRate(response);
+        if (headerRate is not null) _budget.Update(headerRate with { Resource = "graphql" });
+        RecordTelemetry("graphql", "graphql", true, (int)response.StatusCode, stopwatch.ElapsedMilliseconds);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+            return ContributionCalendarSnapshot.Empty() with { ErrorCode = "unauthorized" };
+        if (!response.IsSuccessStatusCode)
+            return ContributionCalendarSnapshot.Empty() with { ErrorCode = $"http-{(int)response.StatusCode}" };
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        var body = await JsonSerializer.DeserializeAsync<GraphQlContributionResponse>(stream, JsonOptions, cancellationToken);
+        if (body?.Data?.RateLimit is { } graphRate)
+        {
+            _budget.Update(new GitHubRateWindow(
+                "graphql",
+                graphRate.Limit,
+                graphRate.Remaining,
+                graphRate.ResetAt,
+                Math.Max(0, graphRate.Limit - graphRate.Remaining),
+                DateTimeOffset.UtcNow));
+        }
+        if (body?.Errors is { Count: > 0 } || body?.Data?.Viewer?.ContributionsCollection?.ContributionCalendar is not { } calendar)
+            return ContributionCalendarSnapshot.Empty() with { ErrorCode = "graphql" };
+
+        var counts = calendar.Weeks
+            .SelectMany(x => x.ContributionDays)
+            .Where(x => DateOnly.TryParse(x.Date, out _))
+            .ToDictionary(x => DateOnly.Parse(x.Date), x => Math.Max(0, x.ContributionCount));
+        var days = Enumerable.Range(0, 365)
+            .Select(index =>
+            {
+                var date = from.AddDays(index);
+                return new ContributionDay(date, counts.GetValueOrDefault(date));
+            })
+            .ToArray();
+        var streak = CalculateStreak(days, to);
+        var week = days.Where(x => x.Date >= to.AddDays(-6)).Sum(x => x.Count);
+        return new ContributionCalendarSnapshot(
+            days,
+            calendar.TotalContributions,
+            streak,
+            week,
+            ContributionDataSource.GitHubFresh,
+            DateTimeOffset.UtcNow);
+    }
+
+    private static int CalculateStreak(IReadOnlyList<ContributionDay> days, DateOnly today)
+    {
+        var values = days.ToDictionary(x => x.Date, x => x.Count);
+        var cursor = today;
+        if (values.GetValueOrDefault(cursor) == 0) cursor = cursor.AddDays(-1);
+        var streak = 0;
+        while (values.GetValueOrDefault(cursor) > 0)
+        {
+            streak++;
+            cursor = cursor.AddDays(-1);
+        }
+        return streak;
     }
     public async Task<bool> StarRepositoryAsync(string owner, string name) { var success = (await SendAsync<object>(HttpMethod.Put, $"user/starred/{Esc(owner)}/{Esc(name)}", null, CancellationToken.None)).StatusCode is 204; if (success && _cache is not null) await _cache.InvalidateTagAsync("github:starred"); return success; }
     public async Task<bool> UnstarRepositoryAsync(string owner, string name) { var success = (await SendAsync<object>(HttpMethod.Delete, $"user/starred/{Esc(owner)}/{Esc(name)}", null, CancellationToken.None)).StatusCode is 204; if (success && _cache is not null) await _cache.InvalidateTagAsync("github:starred"); return success; }
@@ -200,7 +352,12 @@ public sealed class GitHubApiClient : IGitHubClient, IDisposable
     private void RecordTelemetry(string uri, string resource, bool network, int statusCode, long durationMilliseconds)
         => _telemetry?.Record(new(
             _cachePartition,
-            resource.Equals("search", StringComparison.OrdinalIgnoreCase) ? "search" : "core",
+            resource.ToLowerInvariant() switch
+            {
+                "search" => "search",
+                "graphql" => "graphql",
+                _ => "core"
+            },
             PriorityFor(uri).ToString(),
             network,
             statusCode,
@@ -239,4 +396,28 @@ public sealed class GitHubApiClient : IGitHubClient, IDisposable
     private sealed record ResourceDto([property: JsonPropertyName("limit")] int Limit, [property: JsonPropertyName("remaining")] int Remaining, [property: JsonPropertyName("reset")] long Reset, [property: JsonPropertyName("used")] int Used = 0);
     private sealed record ResourcesDto([property: JsonPropertyName("core")] ResourceDto Core, [property: JsonPropertyName("search")] ResourceDto Search);
     private sealed record RateLimitDto([property: JsonPropertyName("resources")] ResourcesDto Resources);
+    private sealed record GraphQlContributionResponse(
+        [property: JsonPropertyName("data")] GraphQlContributionData? Data,
+        [property: JsonPropertyName("errors")] List<GraphQlError>? Errors);
+    private sealed record GraphQlContributionData(
+        [property: JsonPropertyName("viewer")] GraphQlViewer? Viewer,
+        [property: JsonPropertyName("rateLimit")] GraphQlRateLimit? RateLimit);
+    private sealed record GraphQlViewer(
+        [property: JsonPropertyName("contributionsCollection")] GraphQlContributionCollection? ContributionsCollection);
+    private sealed record GraphQlContributionCollection(
+        [property: JsonPropertyName("contributionCalendar")] GraphQlContributionCalendar? ContributionCalendar);
+    private sealed record GraphQlContributionCalendar(
+        [property: JsonPropertyName("totalContributions")] int TotalContributions,
+        [property: JsonPropertyName("weeks")] List<GraphQlContributionWeek> Weeks);
+    private sealed record GraphQlContributionWeek(
+        [property: JsonPropertyName("contributionDays")] List<GraphQlContributionDay> ContributionDays);
+    private sealed record GraphQlContributionDay(
+        [property: JsonPropertyName("date")] string Date,
+        [property: JsonPropertyName("contributionCount")] int ContributionCount);
+    private sealed record GraphQlRateLimit(
+        [property: JsonPropertyName("cost")] int Cost,
+        [property: JsonPropertyName("limit")] int Limit,
+        [property: JsonPropertyName("remaining")] int Remaining,
+        [property: JsonPropertyName("resetAt")] DateTimeOffset ResetAt);
+    private sealed record GraphQlError([property: JsonPropertyName("type")] string? Type);
 }

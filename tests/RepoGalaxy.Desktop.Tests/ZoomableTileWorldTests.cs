@@ -268,6 +268,30 @@ public sealed class ZoomableTileWorldTests
     }
 
     [Fact]
+    public void Empty_virtual_chunks_contain_one_stable_clickable_explore_tile()
+    {
+        var service = new VirtualTileWorldService();
+        var tips = new[] { new TipDefinition("history", "TIP", "History", "Body", "C#", 1, 1) };
+        var window = new TileWorldWindow(0, 0, 1200, 800);
+
+        var first = service.Materialize("explore-board", window, [], tips);
+        var second = service.Materialize("explore-board", window, [], tips);
+
+        var firstExplore = first.Where(x => x.Content.Kind == MetroTileKind.Explore).ToArray();
+        Assert.NotEmpty(firstExplore);
+        Assert.All(firstExplore.GroupBy(x => x.Chunk), group => Assert.Single(group));
+        Assert.Equal(
+            firstExplore.Select(x => (x.Key, x.Column, x.Row, x.ColumnSpan, x.RowSpan)),
+            second.Where(x => x.Content.Kind == MetroTileKind.Explore)
+                .Select(x => (x.Key, x.Column, x.Row, x.ColumnSpan, x.RowSpan)));
+        Assert.All(firstExplore, tile =>
+        {
+            Assert.Equal(2, tile.ColumnSpan);
+            Assert.Equal(2, tile.RowSpan);
+        });
+    }
+
+    [Fact]
     public void Virtual_world_covers_every_visible_signed_cell_exactly_once()
     {
         var service = new VirtualTileWorldService();

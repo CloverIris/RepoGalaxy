@@ -7,7 +7,8 @@ public enum MetroTileKind
     Technology,
     Repository,
     FeaturedRepository,
-    RankingList
+    RankingList,
+    Explore
 }
 
 public readonly record struct TileSpan(int Columns, int Rows)
@@ -17,7 +18,7 @@ public readonly record struct TileSpan(int Columns, int Rows)
         MetroTileKind.Language => new(1, 1),
         MetroTileKind.Technology => new(2, 1),
         MetroTileKind.Repository => new(6, 1),
-        MetroTileKind.FeaturedRepository or MetroTileKind.RankingList => new(2, 2),
+        MetroTileKind.FeaturedRepository or MetroTileKind.RankingList or MetroTileKind.Explore => new(2, 2),
         _ => new(1, 1)
     };
 }

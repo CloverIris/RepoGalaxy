@@ -61,9 +61,12 @@ public sealed class GitHubQuotaService : IGitHubQuotaService, IDisposable
                 .ToListAsync(cancellationToken);
             foreach (var item in persisted)
             {
-                var observed = item.Resource.Equals("search", StringComparison.OrdinalIgnoreCase)
-                    ? _budget.Snapshot.Search
-                    : _budget.Snapshot.Core;
+                var observed = item.Resource.ToLowerInvariant() switch
+                {
+                    "search" => _budget.Snapshot.Search,
+                    "graphql" => _budget.Snapshot.GraphQl,
+                    _ => _budget.Snapshot.Core
+                };
                 if (observed?.ObservedAt > item.ObservedAt) continue;
                 _budget.Update(new GitHubRateWindow(
                     item.Resource,
@@ -119,6 +122,7 @@ public sealed class GitHubQuotaService : IGitHubQuotaService, IDisposable
             await using var db = await _factory.CreateDbContextAsync(cancellationToken);
             await UpsertAsync(db, snapshot.ScopeKey, snapshot.Core, cancellationToken);
             await UpsertAsync(db, snapshot.ScopeKey, snapshot.Search, cancellationToken);
+            await UpsertAsync(db, snapshot.ScopeKey, snapshot.GraphQl, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -141,7 +145,12 @@ public sealed class GitHubQuotaService : IGitHubQuotaService, IDisposable
         CancellationToken cancellationToken)
     {
         if (window is null) return;
-        var resource = window.Resource.Equals("search", StringComparison.OrdinalIgnoreCase) ? "search" : "core";
+        var resource = window.Resource.ToLowerInvariant() switch
+        {
+            "search" => "search",
+            "graphql" => "graphql",
+            _ => "core"
+        };
         var entity = await db.GitHubRateBudgetSnapshots
             .FirstOrDefaultAsync(x => x.ScopeKey == scopeKey && x.Resource == resource, cancellationToken);
         if (entity is null)

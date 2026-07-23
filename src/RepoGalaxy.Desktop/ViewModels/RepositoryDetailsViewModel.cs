@@ -45,7 +45,13 @@ public sealed partial class RepositoryDetailsViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    public void Close() => IsOpen = false;
+    public void Close()
+    {
+        IsOpen = false;
+        Repository = null;
+        Reason = null;
+        Feedback = string.Empty;
+    }
 
     [RelayCommand]
     private async Task OpenOnGitHubAsync()

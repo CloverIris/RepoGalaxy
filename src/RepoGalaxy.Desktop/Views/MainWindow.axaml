@@ -196,7 +196,35 @@
       </SplitView.Pane>
 
       <SplitView x:Name="DetailsSplit" PanePlacement="Right" DisplayMode="Inline" IsPaneOpen="{Binding IsRightRailOpen}" OpenPaneLength="300" CompactPaneLength="0">
-        <SplitView.Pane><ContentControl Content="{Binding RightRailContent}" Width="300"/></SplitView.Pane>
+        <SplitView.Pane>
+          <Border Width="300" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+            <Grid RowDefinitions="48,*">
+              <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10,0">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="4">
+                  <Button Classes="icon" Command="{Binding CloseRepositoryDetailsCommand}"
+                          IsVisible="{Binding IsRepositoryDetailsMode}" ToolTip.Tip="返回工作台">
+                    <PathIcon Data="{StaticResource IconBack}" Width="16" Height="16"/>
+                  </Button>
+                  <TextBlock Grid.Column="1" Text="{Binding RightRailTitle}" FontWeight="SemiBold"
+                             VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                  <Button Grid.Column="2" Classes="subtle" Command="{Binding SyncCommand}"
+                          IsEnabled="{Binding !DashboardRail.IsSyncing}" ToolTip.Tip="同步当前 Feed"
+                          Padding="8,4" MinHeight="30">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                      <PathIcon Data="{StaticResource IconSync}" Width="14" Height="14"/>
+                      <TextBlock Text="同步"/>
+                    </StackPanel>
+                  </Button>
+                  <Button Grid.Column="3" Classes="icon" Command="{Binding CloseRepositoryDetailsCommand}"
+                          IsVisible="{Binding IsRepositoryDetailsMode}" ToolTip.Tip="关闭详情">
+                    <PathIcon Data="{StaticResource IconClose}" Width="16" Height="16"/>
+                  </Button>
+                </Grid>
+              </Border>
+              <ContentControl Grid.Row="1" Content="{Binding RightRailContent}"/>
+            </Grid>
+          </Border>
+        </SplitView.Pane>
         <Grid RowDefinitions="40,*">
           <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16,0">
             <Grid ColumnDefinitions="*,Auto"><StackPanel Orientation="Horizontal" Spacing="12"><TextBlock Text="{Binding CurrentViewName}" FontWeight="SemiBold" VerticalAlignment="Center"/><TextBlock Text="{Binding SyncStatus}" Classes="meta" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="520"/></StackPanel><Button Grid.Column="1" Classes="subtle" Command="{Binding ToggleRightRailCommand}" Content="侧栏" IsVisible="{Binding CanToggleRightRail}" MinHeight="30" Padding="10,3" VerticalAlignment="Center"/></Grid>

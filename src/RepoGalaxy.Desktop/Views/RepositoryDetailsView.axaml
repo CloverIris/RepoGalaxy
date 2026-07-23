@@ -3,22 +3,11 @@
              xmlns:vm="using:RepoGalaxy.Desktop.ViewModels"
              x:Class="RepoGalaxy.Desktop.Views.RepositoryDetailsView"
              x:DataType="vm:RepositoryDetailsViewModel">
-  <Border Background="{DynamicResource SurfaceBrush}"
-          BorderBrush="{DynamicResource BorderBrush}"
-          BorderThickness="1,0,0,0">
-    <Grid RowDefinitions="Auto,*">
-      <Grid Margin="22,18,14,14" ColumnDefinitions="*,Auto">
-        <StackPanel Spacing="3">
-          <TextBlock Text="仓库详情" Classes="h2"/>
-          <TextBlock Text="选择、判断，再决定是否持续关注" Classes="meta"/>
-        </StackPanel>
-        <Button Grid.Column="1" Classes="icon" Command="{Binding CloseCommand}" ToolTip.Tip="关闭详情">
-          <PathIcon Data="{StaticResource IconClose}" Width="18" Height="18"/>
-        </Button>
-      </Grid>
-
-      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+  <Border Background="{DynamicResource SurfaceBrush}">
+    <Grid>
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="22,8,22,28" Spacing="18">
+          <TextBlock Text="选择、判断，再决定是否持续关注" Classes="meta"/>
           <Border Width="46" Height="46" CornerRadius="0" Background="{DynamicResource AccentSoftBrush}" HorizontalAlignment="Left">
             <TextBlock Text="&lt;/&gt;" Foreground="{DynamicResource AccentTextBrush}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>

@@ -435,6 +435,14 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
         if (!value.Item.IsRead) _ = RecordExposureAsync(value);
     }
 
+    public void ClearDetailSelection(long? repositoryId)
+    {
+        if (repositoryId is null || SelectedItem?.Item.Repository.Id == repositoryId)
+            SelectedItem = null;
+        if (repositoryId is null || FocusedTile?.RepositoryItem?.Item.Repository.Id == repositoryId)
+            SetFocusedTile(null);
+    }
+
     private async Task RecordExposureAsync(FeedItemViewModel value)
     {
         await _store.MarkReadAsync(value.Id);
@@ -765,6 +773,10 @@ public sealed partial class LibraryViewModel : ViewModelBase, ISearchablePage
     partial void OnSelectedLanguageChanged(string value) => ApplyFilter();
     partial void OnSelectedSortChanged(string value) => ApplyFilter();
     partial void OnSelectedItemChanged(RepositoryViewModel? value) { if (value is not null) _details.Show(value.Repository); }
+    public void ClearDetailSelection(long? repositoryId)
+    {
+        if (repositoryId is null || SelectedItem?.Repository.Id == repositoryId) SelectedItem = null;
+    }
     private void ApplyFilter()
     {
         IEnumerable<RepositoryViewModel> query = _allItems;
@@ -802,6 +814,10 @@ public sealed partial class NotificationsViewModel : ViewModelBase, ISearchableP
     partial void OnSelectedFilterChanged(string value) => ApplyFilter();
     partial void OnSearchTextChanged(string value) => ApplyFilter();
     partial void OnSelectedItemChanged(FeedItemViewModel? value) { if (value is not null) _details.Show(value.Item.Repository, value.Item.Reason); }
+    public void ClearDetailSelection(long? repositoryId)
+    {
+        if (repositoryId is null || SelectedItem?.Item.Repository.Id == repositoryId) SelectedItem = null;
+    }
     private void ApplyFilter()
     {
         IEnumerable<FeedItemViewModel> query = _allItems;

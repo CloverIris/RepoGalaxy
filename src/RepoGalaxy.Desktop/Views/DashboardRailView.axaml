@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="RepoGalaxy.Desktop.Views.DashboardRailView" x:CompileBindings="False">
-  <Border Width="300" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+  <Border Width="300" Background="{DynamicResource SurfaceBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="18,20" Spacing="18">
-        <Grid ColumnDefinitions="*,72"><StackPanel Spacing="3"><TextBlock Text="工作台概览" Classes="h2"/><TextBlock Text="本地贡献与开源动态" Classes="meta"/></StackPanel><ProgressBar Grid.Column="1" Height="3" IsIndeterminate="True" IsVisible="{Binding IsLoading}" VerticalAlignment="Center"/></Grid>
+        <Grid ColumnDefinitions="*,72"><StackPanel Spacing="3"><TextBlock Text="账号活动与开源动态" Classes="meta"/></StackPanel><ProgressBar Grid.Column="1" Height="3" IsIndeterminate="True" IsVisible="{Binding IsLoading}" VerticalAlignment="Center"/></Grid>
         <Border Classes="soft-card">
           <StackPanel Spacing="12">
             <Grid ColumnDefinitions="*,Auto">
@@ -19,14 +19,36 @@
               <ProgressBar Height="5" Minimum="0" Maximum="1" Value="{Binding SearchBudgetRatio}" Foreground="{Binding SearchBudgetColor}"/>
               <TextBlock Text="{Binding SearchResetText}" Classes="meta"/>
             </StackPanel>
+            <StackPanel Spacing="5" IsVisible="{Binding HasGraphQlBudget}">
+              <TextBlock Text="{Binding GraphQlBudgetText}"/>
+              <ProgressBar Height="5" Minimum="0" Maximum="1" Value="{Binding GraphQlBudgetRatio}" Foreground="{Binding GraphQlBudgetColor}"/>
+              <TextBlock Text="{Binding GraphQlResetText}" Classes="meta"/>
+            </StackPanel>
             <TextBlock Text="缓存命中不计入额度；网络响应头是日常计量事实。" Classes="meta" TextWrapping="Wrap"/>
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
-              <Button Classes="subtle" Content="刷新额度" Command="{Binding RefreshQuotaCommand}" IsEnabled="{Binding !IsQuotaRefreshing}"/>
-              <Button Grid.Column="1" Classes="primary" Content="同步当前 Feed" Command="{Binding SyncCurrentFeedCommand}" IsEnabled="{Binding !IsSyncing}"/>
-            </Grid>
+            <Button Classes="subtle" Content="刷新额度" Command="{Binding RefreshQuotaCommand}" IsEnabled="{Binding !IsQuotaRefreshing}"/>
           </StackPanel>
         </Border>
-        <Border Classes="soft-card"><StackPanel Spacing="12"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="贡献热力图" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="最近一年" Classes="meta"/></Grid><ItemsControl ItemsSource="{Binding Contributions}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="53" Rows="7"/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate><Border Width="4" Height="4" Margin=".7" CornerRadius="0" Background="{DynamicResource AccentBrush}" Opacity="{Binding Opacity}" ToolTip.Tip="{Binding ToolTip}"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding StreakText}" Classes="meta"/><TextBlock Grid.Column="1" Text="{Binding WeekText}" Classes="meta"/></Grid></StackPanel></Border>
+        <Border Classes="soft-card">
+          <StackPanel Spacing="10">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Spacing="3">
+                <TextBlock Text="贡献热力图" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding ContributionObservedText}" Classes="meta"/>
+              </StackPanel>
+              <Button Grid.Column="1" Classes="icon" Command="{Binding RefreshContributionsCommand}"
+                      IsEnabled="{Binding !IsContributionRefreshing}" ToolTip.Tip="刷新贡献数据">
+                <PathIcon Data="{StaticResource IconSync}" Width="14" Height="14"/>
+              </Button>
+            </Grid>
+            <Border Classes="badge" HorizontalAlignment="Left"><TextBlock Text="{Binding ContributionSourceText}"/></Border>
+            <ItemsControl ItemsSource="{Binding Contributions}">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="53" Rows="7"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate><DataTemplate><Border Width="4" Height="4" Margin=".7" CornerRadius="0" Background="{DynamicResource AccentBrush}" Opacity="{Binding Opacity}" ToolTip.Tip="{Binding ToolTip}"/></DataTemplate></ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{Binding TotalContributionText}" Classes="meta"/>
+            <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding StreakText}" Classes="meta"/><TextBlock Grid.Column="1" Text="{Binding WeekText}" Classes="meta"/></Grid>
+          </StackPanel>
+        </Border>
         <StackPanel Spacing="10"><TextBlock Text="Release 与开源动态" FontWeight="SemiBold"/><ItemsControl ItemsSource="{Binding News}"><ItemsControl.ItemTemplate><DataTemplate><Button Classes="ghost" HorizontalContentAlignment="Stretch" Command="{Binding DataContext.OpenNewsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"><StackPanel Spacing="3"><TextBlock Text="{Binding Title}" FontWeight="Medium" TextWrapping="Wrap" MaxLines="2"/><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Source}" Classes="meta"/><TextBlock Grid.Column="1" Text="{Binding PublishedAt, StringFormat='{}{0:MM-dd}'}" Classes="meta"/></Grid></StackPanel></Button></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel>
         <Border Classes="soft-card"><StackPanel Spacing="5"><TextBlock Text="数据健康" FontWeight="SemiBold"/><TextBlock Text="{Binding CacheHealth}" Classes="meta"/><TextBlock Text="{Binding Status}" Classes="meta" TextWrapping="Wrap"/></StackPanel></Border>
       </StackPanel>

@@ -5,7 +5,7 @@ namespace RepoGalaxy.GitHub.Services;
 public sealed class GitHubRequestBudget
 {
     private readonly object _gate = new();
-    private GitHubBudgetSnapshot _snapshot = new(GitHubBudgetSessionKind.Guest, "guest", null, null);
+    private GitHubBudgetSnapshot _snapshot = new(GitHubBudgetSessionKind.Guest, "guest", null, null, null);
 
     public event EventHandler<GitHubBudgetSnapshot>? Changed;
     public GitHubBudgetSnapshot Snapshot { get { lock (_gate) return _snapshot; } }
@@ -34,7 +34,8 @@ public sealed class GitHubRequestBudget
         {
             snapshot = _snapshot = new(kind, string.IsNullOrWhiteSpace(scopeKey) ? "guest" : scopeKey,
                 preserveObservedWindows ? _snapshot.Core : null,
-                preserveObservedWindows ? _snapshot.Search : null);
+                preserveObservedWindows ? _snapshot.Search : null,
+                preserveObservedWindows ? _snapshot.GraphQl : null);
         }
         Changed?.Invoke(this, snapshot);
     }
@@ -52,9 +53,12 @@ public sealed class GitHubRequestBudget
         GitHubBudgetSnapshot snapshot;
         lock (_gate)
         {
-            snapshot = _snapshot = window.Resource.Equals("search", StringComparison.OrdinalIgnoreCase)
-                ? _snapshot with { Search = window }
-                : _snapshot with { Core = window };
+            snapshot = _snapshot = window.Resource.ToLowerInvariant() switch
+            {
+                "search" => _snapshot with { Search = window },
+                "graphql" => _snapshot with { GraphQl = window },
+                _ => _snapshot with { Core = window }
+            };
         }
         Changed?.Invoke(this, snapshot);
     }

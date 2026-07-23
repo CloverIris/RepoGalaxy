@@ -14,48 +14,113 @@ using RepoGalaxy.Data.Entities;
 
 namespace RepoGalaxy.Desktop.Services;
 
-public sealed record DashboardSnapshot(IReadOnlyList<DashboardListItem> Growth, IReadOnlyList<DashboardListItem> Rookies, IReadOnlyList<DashboardListItem> Local, IReadOnlyList<ContributionDay> Contributions, IReadOnlyList<NewsArticle> Releases, IReadOnlyList<NewsArticle> News, int Streak, int WeekCommits);
+public sealed record DashboardSnapshot(
+    IReadOnlyList<DashboardListItem> Growth,
+    IReadOnlyList<DashboardListItem> Rookies,
+    IReadOnlyList<DashboardListItem> Local,
+    ContributionCalendarSnapshot ContributionCalendar,
+    IReadOnlyList<NewsArticle> Releases,
+    IReadOnlyList<NewsArticle> News);
 
 public sealed class DashboardDataService
 {
     private readonly IDbContextFactory<RepoGalaxyDbContext> _factory;
     private readonly ILazyRefreshCoordinator _refresh;
     private readonly IHttpClientFactory _http;
+    private readonly IGitHubContributionService _githubContributions;
+    private readonly IAuthenticationSessionService _session;
     private readonly ILogger<DashboardDataService> _logger;
 
     public DashboardDataService(
         IDbContextFactory<RepoGalaxyDbContext> factory,
         ILazyRefreshCoordinator refresh,
         IHttpClientFactory http,
+        IGitHubContributionService githubContributions,
+        IAuthenticationSessionService session,
         ILogger<DashboardDataService> logger)
     {
         _factory = factory;
         _refresh = refresh;
         _http = http;
+        _githubContributions = githubContributions;
+        _session = session;
         _logger = logger;
     }
 
-    public async Task<DashboardSnapshot> LoadAsync(CancellationToken ct = default)
+    public async Task<DashboardSnapshot> LoadAsync(bool forceContributions = false, CancellationToken ct = default)
     {
         var emptyLists = (
             Growth: (IReadOnlyList<DashboardListItem>)[],
             Rookies: (IReadOnlyList<DashboardListItem>)[],
             Local: (IReadOnlyList<DashboardListItem>)[]);
         var lists = await TryLoadAsync("榜单", LoadListsAsync, emptyLists, ct);
-        var contributions = await TryLoadAsync("本地贡献", token => _refresh.GetOrRefreshAsync(
-            CacheKey.Create("dashboard", "contributions"),
-            new CachePolicy(TimeSpan.FromMinutes(10), TimeSpan.FromDays(7), ["local"]),
-            ScanContributionsAsync,
-            token), (IReadOnlyList<ContributionDay>)[], ct);
+        var contributions = await LoadContributionCalendarAsync(forceContributions, ct);
         var news = await TryLoadAsync("官方资讯", token => _refresh.GetOrRefreshAsync(
             CacheKey.Create("dashboard", "official-news"),
             new CachePolicy(TimeSpan.FromMinutes(30), TimeSpan.FromDays(7), ["news"]),
             LoadNewsAsync,
             token), (IReadOnlyList<NewsArticle>)[], ct);
         var releases = await TryLoadAsync("Release", LoadReleasesAsync, (IReadOnlyList<NewsArticle>)[], ct);
-        var byDate = contributions.ToDictionary(x => x.Date, x => x.Count); var today = DateOnly.FromDateTime(DateTime.Today); var streak = 0; for (var day = today; byDate.GetValueOrDefault(day) > 0; day = day.AddDays(-1)) streak++;
-        var week = contributions.Where(x => x.Date >= today.AddDays(-6)).Sum(x => x.Count);
-        return new(lists.Growth, lists.Rookies, lists.Local, contributions, releases, news, streak, week);
+        return new(lists.Growth, lists.Rookies, lists.Local, contributions, releases, news);
+    }
+
+    private async Task<ContributionCalendarSnapshot> LoadContributionCalendarAsync(
+        bool forceRefresh,
+        CancellationToken cancellationToken)
+    {
+        if (_session.Current.IsAuthenticated)
+        {
+            try
+            {
+                var remote = await _githubContributions.GetCalendarAsync(forceRefresh, cancellationToken);
+                if (remote?.ErrorCode == "unauthorized")
+                {
+                    await _session.SignOutAsync(cancellationToken);
+                }
+                else if (remote is { Days.Count: > 0 })
+                {
+                    return remote;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception error)
+            {
+                _logger.LogWarning(error, "读取 GitHub 贡献日历失败，改用本地 Git 数据");
+            }
+        }
+
+        var localDays = forceRefresh
+            ? await ScanContributionsAsync(cancellationToken)
+            : await _refresh.GetOrRefreshAsync(
+                CacheKey.Create("dashboard", "local-contributions"),
+                new CachePolicy(TimeSpan.FromMinutes(10), TimeSpan.FromDays(7), ["local"]),
+                ScanContributionsAsync,
+                cancellationToken);
+        return CreateLocalCalendar(localDays);
+    }
+
+    private static ContributionCalendarSnapshot CreateLocalCalendar(IReadOnlyList<ContributionDay> days)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var byDate = days.ToDictionary(x => x.Date, x => x.Count);
+        var cursor = byDate.GetValueOrDefault(today) > 0 ? today : today.AddDays(-1);
+        var streak = 0;
+        while (byDate.GetValueOrDefault(cursor) > 0)
+        {
+            streak++;
+            cursor = cursor.AddDays(-1);
+        }
+        var week = days.Where(x => x.Date >= today.AddDays(-6)).Sum(x => x.Count);
+        return new(
+            days,
+            days.Sum(x => x.Count),
+            streak,
+            week,
+            ContributionDataSource.LocalGit,
+            DateTimeOffset.UtcNow);
     }
 
     private async Task<T> TryLoadAsync<T>(string section, Func<CancellationToken, Task<T>> loader, T fallback, CancellationToken ct)

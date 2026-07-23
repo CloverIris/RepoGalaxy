@@ -7,6 +7,13 @@ public interface IApiRequestTelemetry
     void Record(ApiRequestObservation observation);
 }
 
+public interface IGitHubContributionService
+{
+    Task<ContributionCalendarSnapshot?> GetCalendarAsync(
+        bool forceRefresh = false,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// GitHub API 客户端接口
 /// </summary>

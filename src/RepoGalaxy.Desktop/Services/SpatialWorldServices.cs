@@ -130,15 +130,37 @@ public sealed class VirtualTileWorldService : IVirtualTileWorldService
     private static IEnumerable<VirtualTileSlot> Slots(string seed, TileChunkCoordinate chunk, IReadOnlyList<TipDefinition> tips)
     {
         var spans = Template(chunk, seed);
+        var exploreCandidates = spans
+            .Select((span, index) => (span, index))
+            .Where(x => x.span.Columns == 2 && x.span.Rows == 2)
+            .Select(x => x.index)
+            .ToArray();
+        var exploreIndex = exploreCandidates.Length == 0
+            ? -1
+            : exploreCandidates[(int)(Stable(seed, chunk.X, chunk.Y, -2) % (ulong)exploreCandidates.Length)];
         for (var i = 0; i < spans.Count; i++)
         {
             var value = Stable(seed, chunk.X, chunk.Y, i);
-            var tip = tips[(int)(value % (ulong)tips.Count)];
             var span = spans[i];
             var accent = Accents[(int)((value >> 8) % (ulong)Accents.Length)];
             var column = chunk.X * ChunkColumns + span.Column;
             var row = chunk.Y * ChunkRows + span.Row;
             var key = $"virtual:{chunk.X}:{chunk.Y}:{i}";
+            if (i == exploreIndex)
+            {
+                yield return new(key, chunk, column, row, span.Columns, span.Rows,
+                    new TileContent(
+                        key,
+                        MetroTileKind.Explore,
+                        "探索未知区域",
+                        "从 GitHub 获取下一批项目，并从这里继续铺开。",
+                        "DISCOVER · 点击加载",
+                        accent,
+                        IsPlaceholder: true,
+                        PreferredSpan: new TileSpan(span.Columns, span.Rows)));
+                continue;
+            }
+            var tip = tips[(int)(value % (ulong)tips.Count)];
             yield return new(key, chunk, column, row, span.Columns, span.Rows,
                 new TileContent(key, MetroTileKind.Tip, tip.Title, tip.Body, $"{tip.Category} · 加载占位", accent, IsPlaceholder: true, SourceUrl: tip.SourceUrl));
         }
