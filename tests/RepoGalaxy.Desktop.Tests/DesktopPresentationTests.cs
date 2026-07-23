@@ -22,6 +22,70 @@ namespace RepoGalaxy.Desktop.Tests;
 public sealed class DesktopPresentationTests
 {
     [Fact]
+    public void Detail_section_defaults_to_readme_and_only_preserves_explicit_user_selection()
+    {
+        var baseline = new[]
+        {
+            new DetailSection("readme", "README", "正在加载 README", []),
+            new DetailSection("overview", "仓库概览", "overview", [])
+        };
+        var loaded = new[]
+        {
+            new DetailSection("readme", "README", "README loaded", [], Markdown: "# Loaded"),
+            new DetailSection("overview", "仓库概览", "overview", [])
+        };
+
+        Check(DetailSectionSelection.Select(baseline)?.Key == "readme",
+            "README must remain selected while its remote content is loading.");
+        Check(DetailSectionSelection.Select(loaded)?.Markdown == "# Loaded",
+            "Loaded README content must replace the baseline without a tab cycle.");
+        Check(DetailSectionSelection.Select(loaded, "overview")?.Key == "overview",
+            "An explicit user section selection must be preserved.");
+        Check(DetailSectionSelection.Select(
+                [new DetailSection("overview", "仓库概览", "overview", [])])?.Key == "overview",
+            "Repositories without a README must fall back to overview.");
+    }
+
+    [Fact]
+    public void TipCatalog_LoadsAuditedYamlWithMixedSpans()
+    {
+        var tips = new TipCatalog().GetTips(new DateOnly(2026, 7, 23));
+
+        Check(tips.Count >= 25, "The YAML knowledge catalog should provide a useful offline pool.");
+        Check(tips.Select(x => x.Key).Distinct(StringComparer.Ordinal).Count() == tips.Count,
+            "Tip keys must be unique.");
+        Check(tips.Any(x => x.Title.Contains("Git", StringComparison.OrdinalIgnoreCase)),
+            "The catalog should contain technical knowledge rather than empty placeholders.");
+        Check(tips.SelectMany(x => x.SpanOptions ?? []).Distinct().Count() >= 5,
+            "Knowledge cards should support several mosaic sizes.");
+    }
+
+    [Fact]
+    public void TileMosaicPolicy_IsStableAndProducesMixedRepositoryGeometry()
+    {
+        var policy = new TileMosaicPolicy();
+        var repositories = Enumerable.Range(1, 160)
+            .Select(index => new Repository
+            {
+                GitHubId = index.ToString(),
+                Owner = "owner",
+                Name = $"repository-{index}",
+                Stars = index % 9 == 0 ? 120_000 : index * 100
+            })
+            .ToArray();
+
+        var first = repositories.Select(x => policy.GetRepositorySpan(x, FeedSource.Trending)).ToArray();
+        var second = repositories.Select(x => policy.GetRepositorySpan(x, FeedSource.Trending)).ToArray();
+
+        Check(first.SequenceEqual(second), "Mosaic spans must remain stable across refreshes.");
+        Check(first.Distinct().Count() >= 5, "Repository geometry should not collapse into a regular grid.");
+        Check(first.Any(x => x.Rows == 1) && first.Any(x => x.Rows > 1),
+            "The mosaic must combine horizontal and multi-row repository cards.");
+        Check(policy.GetRankingSpan(0) == new TileSpan(4, 8), "The primary ranking should be a 4x8 anchor.");
+        Check(policy.GetRankingSpan(1) == new TileSpan(2, 8), "Secondary rankings should be 2x8 anchors.");
+    }
+
+    [Fact]
     public void ExternalLinkService_OnlyAcceptsHttpsLinks()
     {
         var service = new ExternalLinkService();
@@ -197,6 +261,8 @@ public sealed class DesktopPresentationTests
         Check(window.FindControl<Avalonia.Controls.Shapes.Path>("MaximizeIcon")?.Stroke is not null, "Maximize icon must use a visible stroke path.");
         Check(window.FindControl<Avalonia.Controls.Shapes.Path>("CloseIcon")?.Stroke is not null, "Close icon must use a visible stroke path.");
         Check(window.FindControl<Button>("NavigationToggleButton") is not null, "Hamburger button must live in the navigation pane.");
+        Check(window.Icon is not null, "Main window must use the RepoGalaxy application icon.");
+        Check(window.FindControl<RepoGalaxyMark>("HeaderBrandMark") is not null, "Header must render the RepoGalaxy vector mark.");
 
         var login = new LoginDialog();
         var configureLogin = typeof(LoginDialog).GetMethod("ConfigureWindowChrome", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
@@ -205,6 +271,12 @@ public sealed class DesktopPresentationTests
         Check(login.WindowDecorations == WindowDecorations.None, "Login window must use the same custom chrome model.");
         var loginTitle = login.FindControl<Control>("LoginTitleBar") ?? throw new InvalidOperationException("Login title bar was not found.");
         Check(WindowDecorationProperties.GetElementRole(loginTitle) == WindowDecorationsElementRole.TitleBar, "Login title bar role is incorrect.");
+        Check(login.Icon is not null, "Login window must use the RepoGalaxy application icon.");
+        Check(login.FindControl<RepoGalaxyMark>("LoginBrandMark") is not null, "Login header must render the RepoGalaxy vector mark.");
+
+        var startup = new StartupWindow();
+        Check(startup.Icon is not null, "Startup window must use the RepoGalaxy application icon.");
+        Check(startup.FindControl<RepoGalaxyMark>("StartupBrandMark") is not null, "Startup header must render the RepoGalaxy vector mark.");
     }
 
     [Fact]
@@ -213,8 +285,12 @@ public sealed class DesktopPresentationTests
         TestAppBuilder.EnsureInitialized();
         var view = new SemanticIndexView();
         Check(SemanticMosaicItemViewModel.Unit == 88, "Semantic index unit must remain 88 screen pixels.");
-        Check(view.FindControl<SemanticMosaicViewport>("SemanticViewport") is not null,
+        var viewport = view.FindControl<SemanticMosaicViewport>("SemanticViewport");
+        Check(viewport is not null,
             "Semantic index must use the dedicated fixed-pixel pannable viewport.");
+        var scroll = viewport!.GestureRecognizers.OfType<Avalonia.Input.GestureRecognizers.ScrollGestureRecognizer>().Single();
+        Check(scroll.CanHorizontallyScroll && !scroll.CanVerticallyScroll,
+            "Semantic index must allow horizontal exploration while keeping its vertical position locked.");
     }
 
     [Fact]

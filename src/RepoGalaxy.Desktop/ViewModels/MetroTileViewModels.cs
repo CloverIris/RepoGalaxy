@@ -106,6 +106,17 @@ public sealed partial class MetroTileViewModel : ObservableObject
         OnPropertyChanged(nameof(DisplayOpacity));
     }
 
+    public bool MatchesSearch(string value)
+    {
+        var query = value.Trim();
+        return query.Length > 0
+            && (Title.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || Subtitle.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || Caption.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || Language.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || RepositoryItem?.Repository.Topics.Any(x => x.Contains(query, StringComparison.OrdinalIgnoreCase)) == true);
+    }
+
     public void SetPointerHeld(bool held)
     {
         _heldBackgroundOpacity = held ? .2 : 1;
@@ -183,7 +194,7 @@ public sealed partial class MetroTileViewModel : ObservableObject
         actions[1] = new(TileActionKind.Bookmark, new(right - actionSize, height - inset - actionSize, actionSize, actionSize));
         right -= actionSize + actionGap;
         actions[0] = new(TileActionKind.Like, new(right - actionSize, height - inset - actionSize, actionSize, actionSize));
-        var wide = placement.ColumnSpan == 6 && placement.RowSpan == 1;
+        var wide = placement.RowSpan == 1;
         var cover = usesCover
             ? wide ? new TileWorldRect(0, 0, height, height) : new TileWorldRect(0, 0, width, height)
             : new TileWorldRect(0, 0, 0, 0);

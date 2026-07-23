@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="RepoGalaxy.Desktop.Controls.RepoGalaxyMark"
+             x:CompileBindings="False"
+             IsHitTestVisible="False">
+  <Viewbox Stretch="Uniform">
+    <Canvas Width="160" Height="160" Background="#0D1117">
+      <Path Fill="#58A6FF" Data="M12,12 H60 V60 H12 Z M66,12 H148 V60 H66 Z M12,66 H94 V148 H12 Z M100,66 H148 V148 H100 Z"/>
+      <Path Fill="#B80D1117" Data="M23,32 H49 V40 H23 Z M77,32 H137 V40 H77 Z"/>
+      <Path Data="M31,91 L19,107 L31,123 M75,91 L87,107 L75,123 M60,84 L46,130"
+            Fill="Transparent" Stroke="White" StrokeThickness="8"
+            StrokeLineCap="Square" StrokeJoin="Miter"/>
+      <Path Fill="White" Data="M112,86 H136 V94 H112 Z M112,103 H136 V111 H112 Z M112,120 H128 V128 H112 Z"/>
+      <Path Fill="#47FFFFFF" Data="M12,12 H148 V16 H12 Z"/>
+    </Canvas>
+  </Viewbox>
+</UserControl>

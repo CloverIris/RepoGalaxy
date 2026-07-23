@@ -32,7 +32,8 @@ public sealed record TileContent(
     long? RepositoryId = null,
     string ImageUrl = "",
     bool IsPlaceholder = false,
-    string SourceUrl = "");
+    string SourceUrl = "",
+    TileSpan? PreferredSpan = null);
 
 public sealed record TilePlacement(
     long Id,
@@ -138,6 +139,18 @@ public sealed record VirtualTileSlot(
     int ColumnSpan,
     int RowSpan,
     TileContent Content);
+
+public sealed record CanvasExploreTarget(
+    string SlotKey,
+    int Column,
+    int Row,
+    int ColumnSpan,
+    int RowSpan,
+    FeedSource Source)
+{
+    public double WorldX => Column * 100d;
+    public double WorldY => Row * 100d;
+}
 
 public sealed record TileSearchCandidate(
     string Key,
@@ -263,4 +276,5 @@ public sealed record TipDefinition(
     int? Month = null,
     int? Day = null,
     string Attribution = "",
-    string SourceUrl = "");
+    string SourceUrl = "",
+    IReadOnlyList<TileSpan>? SpanOptions = null);

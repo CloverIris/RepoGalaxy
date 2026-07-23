@@ -80,6 +80,7 @@ class Program
         services.AddDbContextFactory<RepoGalaxyDbContext>(options => options.UseSqlite($"Data Source={GetDatabasePath()};Cache=Shared;Pooling=True;Foreign Keys=True;Default Timeout=5"));
         services.AddSingleton(sp => new DatabaseLifecycleService(sp.GetRequiredService<IDbContextFactory<RepoGalaxyDbContext>>(), GetDatabasePath()));
         services.AddSingleton<IApplicationStartupCoordinator, ApplicationStartupCoordinator>();
+        services.AddSingleton<IAppearanceService, AppearanceService>();
 
         // 安全存储
         services.AddSingleton<ISecureStorage, SecureStorage>();
@@ -97,6 +98,7 @@ class Program
         services.AddSingleton<ISemanticMosaicLayoutService, SemanticMosaicLayoutService>();
         services.AddSingleton<ISemanticIndexCatalogService, SemanticIndexCatalogService>();
         services.AddSingleton<ISpatialTileSearchService, SpatialTileSearchService>();
+        services.AddSingleton<ILocalSearchSuggestionProvider, LocalSearchSuggestionProvider>();
         services.AddSingleton<IVirtualTileWorldService, VirtualTileWorldService>();
         services.AddSingleton<ITileWorldPresentationService, TileWorldPresentationService>();
         services.AddSingleton<IRepositoryTileActionService, RepositoryTileActionService>();
@@ -190,6 +192,9 @@ class Program
         services.AddSingleton<IDesktopNotificationService, DesktopNotificationService>();
         services.AddSingleton<IAuthenticationAuditService, AuthenticationAuditService>();
         services.AddSingleton<IAuthenticationSessionService, AuthenticationSessionService>();
+        services.AddSingleton<ApiRequestTelemetryService>();
+        services.AddSingleton<IApiRequestTelemetry>(sp => sp.GetRequiredService<ApiRequestTelemetryService>());
+        services.AddSingleton<IGitHubQuotaService, GitHubQuotaService>();
         services.AddSingleton<IExternalLinkService, ExternalLinkService>();
         services.AddSingleton<DashboardDataService>();
 

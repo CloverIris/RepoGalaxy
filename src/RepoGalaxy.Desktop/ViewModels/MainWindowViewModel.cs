@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.Collections.ObjectModel;
 using RepoGalaxy.Core.Interfaces;
 using RepoGalaxy.Core.Models;
 using RepoGalaxy.Desktop.Services;
@@ -18,13 +19,14 @@ namespace RepoGalaxy.Desktop.ViewModels;
 public sealed partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IAuthenticationSessionService _session;
-    private readonly GitHubApiClient _github;
     private readonly GitHubAuthService _deviceFlow;
     private readonly OAuthCodeFlowService _loopback;
     private readonly DiscoverySyncService _sync;
     private readonly IDesktopNotificationService _notifications;
     private readonly IAuthenticationAuditService _audit;
-    private readonly GitHubRequestBudget _budget;
+    private readonly IGitHubQuotaService _quota;
+    private readonly ILocalSearchSuggestionProvider _searchSuggestionProvider;
+    private CancellationTokenSource? _searchDebounce;
 
     public DiscoverViewModel Discover { get; }
     public SubscriptionsViewModel Subscriptions { get; }
@@ -36,6 +38,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public RepositoryDetailsViewModel Details { get; }
     public DashboardRailViewModel DashboardRail { get; }
     public AccountProfileViewModel AccountProfile { get; }
+    public ObservableCollection<SearchSuggestion> SearchSuggestions { get; } = [];
+    public ObservableCollection<string> RecentSearches { get; } = [];
     public ViewModelBase RightRailContent => Details.IsOpen ? Details : DashboardRail;
     private bool _isDashboardRailInline = true;
     private bool _isDashboardRailRequested;
@@ -56,20 +60,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _syncStatus = "正在读取本地内容";
     [ObservableProperty] private string _connectionStatus = "游客模式";
     [ObservableProperty] private bool _isNavigationOpen = true;
-    [ObservableProperty] private double _coreBudgetRatio;
-    [ObservableProperty] private double _searchBudgetRatio;
-    [ObservableProperty] private string _coreBudgetText = "Core · 等待首次请求";
-    [ObservableProperty] private string _searchBudgetText = "Search · 等待首次请求";
-    [ObservableProperty] private string _budgetSessionText = "游客额度";
+    [ObservableProperty] private bool _isSearchPanelOpen;
+    [ObservableProperty] private int _selectedSearchSuggestionIndex = -1;
+    public bool HasSearchSuggestions => SearchSuggestions.Count > 0;
+    public bool HasSearchText => SearchText.Length > 0;
+    public bool HasRecentSearches => RecentSearches.Count > 0;
+    public bool ShowSearchEmptyState => HasSearchText && !HasSearchSuggestions;
+    public string SearchMatchText => SearchText.Length == 0 ? string.Empty : $"{SearchSuggestions.Count} 个本地结果";
 
     public string AccountLabel => IsAuthenticated ? CurrentUserLogin : "登录 GitHub";
     public string AccountInitial => string.IsNullOrWhiteSpace(CurrentUserLogin) ? "G" : CurrentUserLogin[..1].ToUpperInvariant();
-    public string CoreBudgetColor => BudgetColor(CoreBudgetRatio);
-    public string SearchBudgetColor => BudgetColor(SearchBudgetRatio);
 
     public MainWindowViewModel(
         IAuthenticationSessionService session,
-        GitHubApiClient github,
         GitHubAuthService deviceFlow,
         OAuthCodeFlowService loopback,
         DiscoverySyncService sync,
@@ -85,10 +88,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         RepositoryDetailsViewModel details,
         DashboardRailViewModel dashboardRail,
         AccountProfileViewModel accountProfile,
-        GitHubRequestBudget budget)
+        IGitHubQuotaService quota,
+        ILocalSearchSuggestionProvider searchSuggestionProvider)
     {
         _session = session;
-        _github = github;
         _deviceFlow = deviceFlow;
         _loopback = loopback;
         _sync = sync;
@@ -104,9 +107,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Details = details;
         DashboardRail = dashboardRail;
         AccountProfile = accountProfile;
-        _budget = budget;
-        _budget.Changed += (_, snapshot) => Dispatcher.UIThread.Post(() => ApplyBudget(snapshot));
-        ApplyBudget(_budget.Snapshot);
+        _quota = quota;
+        _searchSuggestionProvider = searchSuggestionProvider;
         Discover.ImmersiveDetailChanged += (_, _) => OnPropertyChanged(nameof(IsRightRailOpen));
         _currentView = discover;
         Details.PropertyChanged += (_, args) =>
@@ -146,6 +148,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             _notifications.ShowFeedNotification(item);
         };
         _sync.StatusChanged += (_, status) => SyncStatus = status;
+        DashboardRail.SyncCurrentFeedAsync = SyncAsync;
     }
 
     private bool _hasInitialized;
@@ -166,6 +169,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             IsAuthenticated = session.IsAuthenticated;
             CurrentUserLogin = session.User?.Login ?? string.Empty;
             await AccountProfile.SetUserAsync(session.User);
+            await _quota.RestoreAndCalibrateAsync(
+                session.IsAuthenticated ? GitHubBudgetSessionKind.Authenticated : GitHubBudgetSessionKind.Guest,
+                session.User?.GitHubId ?? "guest");
             ConnectionStatus = session.IsAuthenticated ? "GitHub 已连接" : "游客模式 · 使用本地缓存";
             if (session.IsAuthenticated)
                 await Discover.LoadAsync();
@@ -248,6 +254,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             IsAuthenticated = session.IsAuthenticated;
             CurrentUserLogin = session.User?.Login ?? string.Empty;
             await AccountProfile.SetUserAsync(session.User);
+            await _quota.RestoreAndCalibrateAsync(
+                session.IsAuthenticated ? GitHubBudgetSessionKind.Authenticated : GitHubBudgetSessionKind.Guest,
+                session.User?.GitHubId ?? "guest");
             ConnectionStatus = session.IsAuthenticated ? "GitHub 已连接" : "游客模式";
             await Discover.LoadAsync();
             await DashboardRail.LoadAsync();
@@ -262,6 +271,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IsAuthenticated = false;
         CurrentUserLogin = string.Empty;
         await AccountProfile.SetUserAsync(null);
+        await _quota.RestoreAndCalibrateAsync(GitHubBudgetSessionKind.Guest, "guest");
         ConnectionStatus = "游客模式 · 使用本地缓存";
         _audit.Record("session", "signed-out");
         SyncStatus = "已退出登录";
@@ -277,42 +287,122 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task OpenAccountProfileAsync() => await AccountProfile.EnsureSocialAccountsAsync();
 
-    [RelayCommand]
-    private async Task RefreshRateLimitAsync()
-    {
-        SyncStatus = "正在读取 GitHub API 额度…";
-        var rate = await _github.GetRateLimitAsync();
-        if (rate is not null) _budget.Update(rate);
-        SyncStatus = rate is null ? "额度读取失败，保留最近观测值" : "API 额度已更新";
-    }
-
     public void MoveToNextSearchMatch()
     {
         if (ReferenceEquals(CurrentView, Discover)) Discover.MoveToNextSearchMatch();
     }
 
-    private void ApplyBudget(GitHubBudgetSnapshot snapshot)
-    {
-        BudgetSessionText = snapshot.SessionKind == GitHubBudgetSessionKind.Authenticated ? "登录额度" : "游客额度";
-        CoreBudgetRatio = snapshot.Core?.UsedRatio ?? 0;
-        SearchBudgetRatio = snapshot.Search?.UsedRatio ?? 0;
-        CoreBudgetText = FormatBudget("Core", snapshot.Core);
-        SearchBudgetText = FormatBudget("Search", snapshot.Search);
-    }
-
-    private static string FormatBudget(string name, GitHubRateWindow? window)
-        => window is null
-            ? $"{name} · 等待首次请求"
-            : $"{name} · {window.EffectiveUsed:N0} / {window.Limit:N0} · {window.Remaining:N0} 剩余 · {window.ResetAt.LocalDateTime:HH:mm} 重置";
-
-    private static string BudgetColor(double ratio) => ratio >= .95 ? "#E81123" : ratio >= .80 ? "#FFB900" : "#4C9AFF";
-
-    partial void OnCoreBudgetRatioChanged(double value) => OnPropertyChanged(nameof(CoreBudgetColor));
-    partial void OnSearchBudgetRatioChanged(double value) => OnPropertyChanged(nameof(SearchBudgetColor));
-
     partial void OnSearchTextChanged(string value)
     {
         if (CurrentView is ISearchablePage searchable) searchable.SearchText = value;
+        OnPropertyChanged(nameof(SearchMatchText));
+        OnPropertyChanged(nameof(HasSearchText));
+        OnPropertyChanged(nameof(ShowSearchEmptyState));
+        ScheduleSearchSuggestions(value);
+    }
+
+    public void OpenSearchPanel()
+    {
+        if (CanSearch) IsSearchPanelOpen = true;
+    }
+
+    public void CloseSearchPanel() => IsSearchPanelOpen = false;
+
+    public void MoveSearchSuggestionSelection(int delta)
+    {
+        if (SearchSuggestions.Count == 0) return;
+        SelectedSearchSuggestionIndex =
+            (SelectedSearchSuggestionIndex + delta + SearchSuggestions.Count) % SearchSuggestions.Count;
+    }
+
+    public async Task ActivateSelectedSearchSuggestionAsync()
+    {
+        if (SelectedSearchSuggestionIndex >= 0 && SelectedSearchSuggestionIndex < SearchSuggestions.Count)
+            await ActivateSearchSuggestionAsync(SearchSuggestions[SelectedSearchSuggestionIndex]);
+        else
+            MoveToNextSearchMatch();
+    }
+
+    [RelayCommand]
+    private void ClearSearch()
+    {
+        SearchText = string.Empty;
+        SearchSuggestions.Clear();
+        SelectedSearchSuggestionIndex = -1;
+        OnPropertyChanged(nameof(HasSearchSuggestions));
+        OnPropertyChanged(nameof(SearchMatchText));
+        OnPropertyChanged(nameof(ShowSearchEmptyState));
+    }
+
+    [RelayCommand]
+    private async Task ActivateSearchSuggestionAsync(SearchSuggestion suggestion)
+    {
+        RememberSearch(suggestion.Query);
+        SearchText = suggestion.Query;
+        IsSearchPanelOpen = false;
+        if (ReferenceEquals(CurrentView, Discover))
+            await Discover.NavigateToSearchSuggestionAsync(suggestion.Key);
+    }
+
+    [RelayCommand]
+    private void UseRecentSearch(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return;
+        SearchText = query;
+        IsSearchPanelOpen = true;
+    }
+
+    private void RememberSearch(string query)
+    {
+        query = query.Trim();
+        if (query.Length == 0) return;
+        var existing = RecentSearches.FirstOrDefault(x => x.Equals(query, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null) RecentSearches.Remove(existing);
+        RecentSearches.Insert(0, query);
+        while (RecentSearches.Count > 5) RecentSearches.RemoveAt(RecentSearches.Count - 1);
+        OnPropertyChanged(nameof(HasRecentSearches));
+    }
+
+    private void ScheduleSearchSuggestions(string value)
+    {
+        _searchDebounce?.Cancel();
+        _searchDebounce?.Dispose();
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            SearchSuggestions.Clear();
+            SelectedSearchSuggestionIndex = -1;
+            OnPropertyChanged(nameof(HasSearchSuggestions));
+            OnPropertyChanged(nameof(ShowSearchEmptyState));
+            return;
+        }
+
+        var cancellation = _searchDebounce = new CancellationTokenSource();
+        _ = UpdateSearchSuggestionsAfterDelayAsync(value, cancellation);
+    }
+
+    private async Task UpdateSearchSuggestionsAfterDelayAsync(string query, CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(300, cancellation.Token);
+            var suggestions = _searchSuggestionProvider.GetSuggestions(CurrentView, query);
+            if (cancellation.IsCancellationRequested || !SearchText.Equals(query, StringComparison.Ordinal)) return;
+            SearchSuggestions.Clear();
+            foreach (var suggestion in suggestions) SearchSuggestions.Add(suggestion);
+            SelectedSearchSuggestionIndex = suggestions.Count > 0 ? 0 : -1;
+            IsSearchPanelOpen = true;
+            OnPropertyChanged(nameof(HasSearchSuggestions));
+            OnPropertyChanged(nameof(SearchMatchText));
+            OnPropertyChanged(nameof(ShowSearchEmptyState));
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            if (ReferenceEquals(_searchDebounce, cancellation)) _searchDebounce = null;
+            cancellation.Dispose();
+        }
     }
 
     partial void OnIsAuthenticatedChanged(bool value)

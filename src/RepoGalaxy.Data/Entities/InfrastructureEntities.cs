@@ -240,3 +240,31 @@ public sealed class IdePreferenceEntity
     [Required, MaxLength(200)] public string IdeKey { get; set; } = string.Empty;
     public DateTimeOffset UpdatedAt { get; set; }
 }
+
+[Table("GitHubRateBudgetSnapshots")]
+public sealed class GitHubRateBudgetSnapshotEntity
+{
+    [Key] public long Id { get; set; }
+    [Required, MaxLength(120)] public string ScopeKey { get; set; } = "guest";
+    [Required, MaxLength(24)] public string Resource { get; set; } = "core";
+    public int Limit { get; set; }
+    public int Used { get; set; }
+    public int Remaining { get; set; }
+    public DateTimeOffset ResetAt { get; set; }
+    public DateTimeOffset ObservedAt { get; set; }
+    public DateTimeOffset? RetryAfter { get; set; }
+}
+
+[Table("ApiRequestAggregates")]
+public sealed class ApiRequestAggregateEntity
+{
+    [Key] public long Id { get; set; }
+    [Required, MaxLength(120)] public string ScopeKey { get; set; } = "guest";
+    public DateTimeOffset HourBucket { get; set; }
+    [Required, MaxLength(24)] public string Resource { get; set; } = "core";
+    [Required, MaxLength(48)] public string Operation { get; set; } = "other";
+    public bool IsNetwork { get; set; }
+    public int StatusClass { get; set; }
+    public long RequestCount { get; set; }
+    public long TotalDurationMilliseconds { get; set; }
+}

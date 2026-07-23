@@ -64,12 +64,6 @@
                   Command="{Binding ReturnToMiddleCommand}"/>
           <Button Classes="subtle" Content="查看索引" ToolTip.Tip="缩放到语言与框架索引"
                   Command="{Binding ShowSemanticIndexCommand}"/>
-          <Button Classes="primary" Command="{Binding SyncCommand}">
-            <StackPanel Orientation="Horizontal" Spacing="7">
-              <PathIcon Data="{StaticResource IconRefresh}" Width="15" Height="15"/>
-              <TextBlock Text="同步"/>
-            </StackPanel>
-          </Button>
         </StackPanel>
       </Grid>
     </Border>
@@ -109,7 +103,7 @@
              IsLightDismissEnabled="True">
         <Border Width="220"
                 Padding="8"
-                Background="{DynamicResource ElevatedSurfaceBrush}"
+                Background="{DynamicResource SurfaceElevatedBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1">
           <StackPanel Spacing="4">

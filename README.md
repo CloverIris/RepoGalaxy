@@ -23,6 +23,8 @@ RepoGalaxy 希望把“偶然刷到一个好仓库”变成一套可以持续使
 
 当前产品以 Windows 桌面为首要平台，使用 Avalonia 官方 FluentTheme 作为控件基础，并以 Windows 10 Metro / Fluent 1 的方角视觉构建空间化信息流。
 
+<img src="assets/lable.png" width="2000">
+
 ## 核心能力
 
 - **三尺度发现体验**：在技术索引、二维 Tile 世界和沉浸式仓库详情之间连续缩放；X/Y 平移与 Z 轴缩放相互独立。

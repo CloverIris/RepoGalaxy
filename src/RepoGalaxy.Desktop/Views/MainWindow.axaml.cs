@@ -21,7 +21,11 @@ public partial class MainWindow : Window
         InitializeComponent();
         _navigationSplit = this.FindControl<SplitView>("NavigationSplit");
         _detailsSplit = this.FindControl<SplitView>("DetailsSplit");
-        if (this.FindControl<TextBox>("SearchBox") is { } searchBox) searchBox.KeyDown += OnSearchKeyDown;
+        if (this.FindControl<TextBox>("SearchBox") is { } searchBox)
+        {
+            searchBox.KeyDown += OnSearchKeyDown;
+            searchBox.GotFocus += (_, _) => (DataContext as MainWindowViewModel)?.OpenSearchPanel();
+        }
         SizeChanged += OnWindowSizeChanged;
         Opened += OnWindowOpened;
         PropertyChanged += (_, args) =>
@@ -38,12 +42,29 @@ public partial class MainWindow : Window
 
     private void OnWindowSizeChanged(object? sender, SizeChangedEventArgs e) => ApplyResponsiveLayout(e.NewSize.Width);
 
-    private void OnSearchKeyDown(object? sender, KeyEventArgs e)
+    private async void OnSearchKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter || DataContext is not MainWindowViewModel vm) return;
+        if (DataContext is not MainWindowViewModel vm) return;
         if (sender is TextBox textBox) vm.SearchText = textBox.Text ?? string.Empty;
-        vm.MoveToNextSearchMatch();
-        e.Handled = true;
+        switch (e.Key)
+        {
+            case Key.Down:
+                vm.MoveSearchSuggestionSelection(1);
+                e.Handled = true;
+                break;
+            case Key.Up:
+                vm.MoveSearchSuggestionSelection(-1);
+                e.Handled = true;
+                break;
+            case Key.Enter:
+                await vm.ActivateSelectedSearchSuggestionAsync();
+                e.Handled = true;
+                break;
+            case Key.Escape:
+                vm.CloseSearchPanel();
+                e.Handled = true;
+                break;
+        }
     }
 
     private void ApplyResponsiveLayout(double width)

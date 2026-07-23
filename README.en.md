@@ -23,6 +23,8 @@ It is not a thin wrapper around the GitHub website. RepoGalaxy follows a local-f
 
 Windows desktop is the primary platform today. The interface uses Avalonia's official FluentTheme as its control foundation, with a square Windows 10 Metro / Fluent 1 visual language for the spatial feed.
 
+<img src="assets/lable.png" width="2000">
+
 ## Highlights
 
 - **Three-scale discovery** — move continuously between a semantic technology index, a two-dimensional Tile world, and immersive repository details; X/Y panning and Z-axis zoom remain independent.

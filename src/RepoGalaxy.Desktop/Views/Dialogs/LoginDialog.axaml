@@ -1,9 +1,11 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:RepoGalaxy.Desktop.ViewModels.Dialogs"
+        xmlns:controls="using:RepoGalaxy.Desktop.Controls"
         x:Class="RepoGalaxy.Desktop.Views.Dialogs.LoginDialog"
         x:DataType="vm:LoginDialogViewModel"
         Title="连接 GitHub"
+        Icon="/Assets/repogalaxy.ico"
         Width="520" Height="620"
         MinWidth="460" MinHeight="560"
         CanResize="False"
@@ -15,7 +17,7 @@
   <Grid Background="{DynamicResource CanvasBrush}" RowDefinitions="42,*">
     <Border x:Name="LoginTitleBar" Background="{DynamicResource SurfaceElevatedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,46">
-        <PathIcon Data="{StaticResource IconCode}" Width="16" Height="16" Margin="14,0,9,0" Foreground="{DynamicResource AccentBrush}"/>
+        <controls:RepoGalaxyMark x:Name="LoginBrandMark" Width="20" Height="20" Margin="14,0,9,0"/>
         <TextBlock Grid.Column="1" Text="连接 GitHub" VerticalAlignment="Center" FontWeight="SemiBold"/>
         <Button x:Name="LoginCloseButton" Grid.Column="2" Width="46" Height="42" Padding="0" Classes="caption-close" Click="OnCloseClicked"><Grid Width="20" Height="20"><Path Data="M3,3 L17,17 M17,3 L3,17" Stroke="{DynamicResource PrimaryTextBrush}" StrokeThickness="1" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid></Button>
       </Grid>
@@ -23,7 +25,7 @@
     <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" Margin="18" CornerRadius="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="30">
       <Grid RowDefinitions="Auto,*,Auto">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
-          <Border Width="46" Height="46" CornerRadius="0" Background="{DynamicResource AccentBrush}"><TextBlock Text="G" Foreground="White" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+          <controls:RepoGalaxyMark Width="46" Height="46"/>
           <StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="连接 GitHub" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="登录后获得完整发现 Feed 与持续同步。" Classes="muted"/></StackPanel>
         </Grid>
 

@@ -5,6 +5,7 @@
         x:Class="RepoGalaxy.Desktop.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="RepoGalaxy"
+        Icon="/Assets/repogalaxy.ico"
         Width="1440" Height="900"
         WindowStartupLocation="CenterScreen"
         MinWidth="900" MinHeight="640"
@@ -24,48 +25,119 @@
     <Style Selector="Button.caption"><Setter Property="Width" Value="46"/><Setter Property="Height" Value="48"/><Setter Property="MinHeight" Value="48"/><Setter Property="Padding" Value="0"/><Setter Property="CornerRadius" Value="0"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/></Style>
     <Style Selector="Button.caption:pointerover"><Setter Property="Background" Value="#287F8C9B"/></Style>
     <Style Selector="Button.caption.close:pointerover"><Setter Property="Background" Value="#E81123"/><Setter Property="Foreground" Value="White"/></Style>
+    <Style Selector="ListBox.search-results">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style Selector="ListBox.search-results > ListBoxItem">
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="Margin" Value="0,0,0,3"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="ListBox.search-results > ListBoxItem:pointerover">
+      <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}"/>
+    </Style>
+    <Style Selector="ListBox.search-results > ListBoxItem:selected">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+    </Style>
   </Window.Styles>
 
   <Grid RowDefinitions="48,*" Background="{DynamicResource CanvasBrush}">
     <Border x:Name="TitleBarDragRegion" Grid.Row="0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,Auto,138">
         <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center" Margin="16,0,12,0" IsHitTestVisible="False">
-          <Border Width="28" Height="28" Background="{DynamicResource AccentBrush}"><TextBlock Text="R" Foreground="White" FontWeight="Bold" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+          <controls:RepoGalaxyMark x:Name="HeaderBrandMark" Width="28" Height="28"/>
           <TextBlock Text="RepoGalaxy" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
         </StackPanel>
 
-        <Grid x:Name="SearchRegion" Grid.Column="1" MaxWidth="620" MinWidth="180" RowDefinitions="38,4" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="18,0">
-          <TextBox x:Name="SearchBox" Classes="search" Text="{Binding SearchText}" PlaceholderText="{Binding SearchPlaceholder}" IsEnabled="{Binding CanSearch}" Padding="36,6,10,6" MinHeight="34"/>
+        <Grid x:Name="SearchRegion" Grid.Column="1" MaxWidth="680" MinWidth="180" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="18,0">
+          <Border Background="{DynamicResource SurfaceMutedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            <TextBox x:Name="SearchBox" Classes="search" Text="{Binding SearchText}" PlaceholderText="{Binding SearchPlaceholder}" IsEnabled="{Binding CanSearch}" Padding="36,6,112,6" MinHeight="34" Background="Transparent" BorderThickness="0"/>
+          </Border>
           <PathIcon Data="{StaticResource IconSearch}" Width="16" Height="16" Margin="12,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" Foreground="{DynamicResource SecondaryTextBrush}" IsHitTestVisible="False"/>
-          <Button Grid.Row="1" Classes="ghost" Padding="0" MinHeight="4" Height="4" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="3">
-              <ProgressBar Height="3" Minimum="0" Maximum="1" Value="{Binding CoreBudgetRatio}" Foreground="{Binding CoreBudgetColor}" ToolTip.Tip="{Binding CoreBudgetText}"/>
-              <ProgressBar Grid.Column="1" Height="3" Minimum="0" Maximum="1" Value="{Binding SearchBudgetRatio}" Foreground="{Binding SearchBudgetColor}" ToolTip.Tip="{Binding SearchBudgetText}"/>
-            </Grid>
-            <Button.Flyout>
-              <Flyout Placement="BottomEdgeAlignedLeft">
-                <Border Width="360" Padding="16" Background="{DynamicResource ElevatedSurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                  <StackPanel Spacing="12">
-                    <Grid ColumnDefinitions="*,Auto"><TextBlock Text="GitHub API 额度" FontSize="16" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding BudgetSessionText}" Classes="meta"/></Grid>
-                    <StackPanel Spacing="4"><TextBlock Text="{Binding CoreBudgetText}"/><ProgressBar Height="5" Maximum="1" Value="{Binding CoreBudgetRatio}" Foreground="{Binding CoreBudgetColor}"/></StackPanel>
-                    <StackPanel Spacing="4"><TextBlock Text="{Binding SearchBudgetText}"/><ProgressBar Height="5" Maximum="1" Value="{Binding SearchBudgetRatio}" Foreground="{Binding SearchBudgetColor}"/></StackPanel>
-                    <TextBlock Text="缓存命中不会改变额度；实际网络响应头是唯一计量事实。" Classes="meta" TextWrapping="Wrap"/>
-                    <Button Classes="subtle" Content="手动刷新额度" HorizontalAlignment="Right" Command="{Binding RefreshRateLimitCommand}"/>
+          <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="4" Margin="0,0,6,0">
+            <TextBlock Text="{Binding SearchMatchText}" Classes="meta" VerticalAlignment="Center"/>
+            <Button Classes="icon" IsVisible="{Binding HasSearchText}" Command="{Binding ClearSearchCommand}" ToolTip.Tip="清除搜索" Width="28" Height="28"><PathIcon Data="{StaticResource IconClose}" Width="12" Height="12"/></Button>
+          </StackPanel>
+          <Popup IsOpen="{Binding IsSearchPanelOpen, Mode=TwoWay}" PlacementTarget="{Binding #SearchBox}" Placement="BottomEdgeAlignedLeft" IsLightDismissEnabled="True">
+            <Border Width="640" MaxHeight="460" Margin="0,7,0,0"
+                    Background="{DynamicResource SurfaceElevatedBrush}"
+                    BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1">
+              <Grid RowDefinitions="3,Auto,*">
+                <Border Background="{DynamicResource AccentBrush}"/>
+                <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="16,12,16,10">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="搜索当前页面" FontSize="15" FontWeight="SemiBold"/>
+                    <TextBlock Text="仅检索已经加载到本地的内容" Classes="meta"/>
+                  </StackPanel>
+                  <TextBlock Grid.Column="1" Text="↑↓ 选择  ·  Enter 定位  ·  Esc 关闭"
+                             Classes="meta" VerticalAlignment="Center"/>
+                </Grid>
+                <StackPanel Grid.Row="2" Spacing="7" Margin="10,0,10,10">
+                <StackPanel IsVisible="{Binding !HasSearchText}" Spacing="7" Margin="6,2">
+                  <TextBlock Text="最近搜索" Classes="meta" IsVisible="{Binding HasRecentSearches}"/>
+                  <ItemsControl ItemsSource="{Binding RecentSearches}" IsVisible="{Binding HasRecentSearches}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Button Classes="subtle" Margin="0,0,6,6" Padding="10,5"
+                                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).UseRecentSearchCommand}"
+                                CommandParameter="{Binding}">
+                          <TextBlock Text="{Binding}"/>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+                <ListBox Classes="search-results"
+                         ItemsSource="{Binding SearchSuggestions}"
+                         SelectedIndex="{Binding SelectedSearchSuggestionIndex, Mode=TwoWay}"
+                         MaxHeight="330">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <Button Classes="ghost" Padding="10,9" HorizontalContentAlignment="Stretch"
+                              Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ActivateSearchSuggestionCommand}"
+                              CommandParameter="{Binding}">
+                        <Grid ColumnDefinitions="72,*,Auto" ColumnSpacing="11">
+                          <Border Background="{DynamicResource SurfaceMutedBrush}" Padding="7,4" VerticalAlignment="Top">
+                            <TextBlock Text="{Binding Kind}" Foreground="{DynamicResource AccentTextBrush}" FontSize="11" FontWeight="SemiBold"/>
+                          </Border>
+                          <StackPanel Grid.Column="1" Spacing="3">
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Subtitle}" Classes="meta" TextTrimming="CharacterEllipsis"/>
+                          </StackPanel>
+                          <PathIcon Grid.Column="2" Data="{StaticResource IconChevronRight}" Width="14" Height="14"
+                                    VerticalAlignment="Center" Foreground="{DynamicResource TertiaryTextBrush}"/>
+                        </Grid>
+                      </Button>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <Border IsVisible="{Binding ShowSearchEmptyState}"
+                        Background="{DynamicResource SurfaceMutedBrush}" Padding="14,12" Margin="6,2">
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="没有找到匹配内容" FontWeight="SemiBold"/>
+                    <TextBlock Text="可以尝试仓库名、语言、Topic 或推荐理由；这里不会发起 GitHub 请求。"
+                               Classes="meta" TextWrapping="Wrap"/>
                   </StackPanel>
                 </Border>
-              </Flyout>
-            </Button.Flyout>
-          </Button>
+                </StackPanel>
+              </Grid>
+            </Border>
+          </Popup>
         </Grid>
 
         <StackPanel x:Name="AccountRegion" Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="8,0">
           <Border Classes="badge" VerticalAlignment="Center"><StackPanel Orientation="Horizontal" Spacing="6"><Ellipse Width="6" Height="6" Fill="{DynamicResource SuccessBrush}"/><TextBlock x:Name="ConnectionStatusText" Text="{Binding ConnectionStatus}"/></StackPanel></Border>
-          <Button Classes="icon" Command="{Binding SyncCommand}" ToolTip.Tip="同步"><PathIcon Data="{StaticResource IconRefresh}" Width="17" Height="17"/></Button>
           <Button Classes="subtle" Command="{Binding LoginCommand}" IsVisible="{Binding !IsAuthenticated}" Content="登录 GitHub"/>
           <Button IsVisible="{Binding IsAuthenticated}" Classes="ghost" Padding="4" ToolTip.Tip="账户资料" Command="{Binding OpenAccountProfileCommand}">
             <Button.Flyout>
               <Flyout Placement="BottomEdgeAlignedRight">
-                <Border Width="360" Padding="18" Background="{DynamicResource ElevatedSurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <Border Width="360" Padding="18" Background="{DynamicResource SurfaceElevatedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                   <StackPanel Spacing="12">
                     <Grid ColumnDefinitions="64,*" ColumnSpacing="14">
                       <Grid Width="64" Height="64">

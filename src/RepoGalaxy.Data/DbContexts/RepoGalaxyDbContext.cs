@@ -36,6 +36,8 @@ public class RepoGalaxyDbContext : DbContext
     public DbSet<SemanticIndexPlacementEntity> SemanticIndexPlacements => Set<SemanticIndexPlacementEntity>();
     public DbSet<CloneOperationEntity> CloneOperations => Set<CloneOperationEntity>();
     public DbSet<IdePreferenceEntity> IdePreferences => Set<IdePreferenceEntity>();
+    public DbSet<GitHubRateBudgetSnapshotEntity> GitHubRateBudgetSnapshots => Set<GitHubRateBudgetSnapshotEntity>();
+    public DbSet<ApiRequestAggregateEntity> ApiRequestAggregates => Set<ApiRequestAggregateEntity>();
 
     // A single options constructor is required for IDbContextFactory. Keeping a
     // path-based constructor makes dependency injection unable to select an
@@ -94,6 +96,10 @@ public class RepoGalaxyDbContext : DbContext
         modelBuilder.Entity<SemanticIndexPlacementEntity>().HasIndex(x => new { x.BoardId, x.ItemKey }).IsUnique();
         modelBuilder.Entity<CloneOperationEntity>().HasIndex(x => x.UpdatedAt);
         modelBuilder.Entity<IdePreferenceEntity>().HasIndex(x => new { x.ScopeKey, x.TechnologyKey }).IsUnique();
+        modelBuilder.Entity<GitHubRateBudgetSnapshotEntity>().HasIndex(x => new { x.ScopeKey, x.Resource }).IsUnique();
+        modelBuilder.Entity<ApiRequestAggregateEntity>()
+            .HasIndex(x => new { x.ScopeKey, x.HourBucket, x.Resource, x.Operation, x.IsNetwork, x.StatusClass })
+            .IsUnique();
 
         modelBuilder.Entity<UserRepositoryRelationEntity>().HasOne(x => x.Repository).WithMany().HasForeignKey(x => x.RepositoryId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<RepositoryMetricSnapshotEntity>().HasOne<RepositoryEntity>().WithMany().HasForeignKey(x => x.RepositoryId).OnDelete(DeleteBehavior.Cascade);

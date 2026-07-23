@@ -101,6 +101,92 @@ namespace RepoGalaxy.Data.Migrations
                     b.ToTable("AuthenticationAuditEvents");
                 });
 
+            modelBuilder.Entity("RepoGalaxy.Data.Entities.ApiRequestAggregateEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("HourBucket")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsNetwork")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Resource")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RequestCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("StatusClass")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("TotalDurationMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ScopeKey", "HourBucket", "Resource", "Operation", "IsNetwork", "StatusClass")
+                        .IsUnique();
+
+                    b.ToTable("ApiRequestAggregates");
+                });
+
+            modelBuilder.Entity("RepoGalaxy.Data.Entities.GitHubRateBudgetSnapshotEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Limit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ObservedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Remaining")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Resource")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ResetAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("RetryAfter")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Used")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ScopeKey", "Resource")
+                        .IsUnique();
+
+                    b.ToTable("GitHubRateBudgetSnapshots");
+                });
+
             modelBuilder.Entity("RepoGalaxy.Data.Entities.BookmarkEntity", b =>
                 {
                     b.Property<long>("Id")

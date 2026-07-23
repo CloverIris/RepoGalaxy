@@ -29,7 +29,7 @@ public sealed class SemanticMosaicViewport : ContentControl
     {
         Focusable = true;
         ClipToBounds = true;
-        GestureRecognizers.Add(new ScrollGestureRecognizer { CanHorizontallyScroll = true, CanVerticallyScroll = true, IsScrollInertiaEnabled = true });
+        GestureRecognizers.Add(new ScrollGestureRecognizer { CanHorizontallyScroll = true, CanVerticallyScroll = false, IsScrollInertiaEnabled = true });
         AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -87,7 +87,7 @@ public sealed class SemanticMosaicViewport : ContentControl
         var delta = current - _pressPoint;
         if (!_dragging && Math.Sqrt(delta.X * delta.X + delta.Y * delta.Y) < 6) return;
         _dragging = true;
-        vm.PanSemanticBy(delta.X, delta.Y, Bounds.Width, Bounds.Height);
+        vm.PanSemanticBy(delta.X, 0, Bounds.Width, Bounds.Height);
         _pressPoint = current;
         e.Handled = true;
     }
@@ -111,7 +111,7 @@ public sealed class SemanticMosaicViewport : ContentControl
     private void OnScrollGesture(object? sender, ScrollGestureEventArgs e)
     {
         if (_pressed || DataContext is not DiscoverViewModel vm) return;
-        vm.PanSemanticBy(-e.Delta.X, -e.Delta.Y, Bounds.Width, Bounds.Height);
+        vm.PanSemanticBy(-e.Delta.X, 0, Bounds.Width, Bounds.Height);
         e.Handled = true;
     }
 

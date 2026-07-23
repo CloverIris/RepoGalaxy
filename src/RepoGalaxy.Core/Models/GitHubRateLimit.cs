@@ -8,6 +8,9 @@ public sealed class GitHubRateLimit
     public int SearchRemaining { get; init; }
     public int SearchLimit { get; init; }
     public DateTimeOffset SearchResetAt { get; init; }
+    public int CoreUsed { get; init; } = -1;
+    public int SearchUsed { get; init; } = -1;
+    public DateTimeOffset ObservedAt { get; init; } = DateTimeOffset.UtcNow;
     public bool IsExhausted => CoreRemaining <= 0 || SearchRemaining <= 0;
 }
 
@@ -33,3 +36,12 @@ public sealed record GitHubBudgetSnapshot(
     string ScopeKey,
     GitHubRateWindow? Core,
     GitHubRateWindow? Search);
+
+public sealed record ApiRequestObservation(
+    string ScopeKey,
+    string Resource,
+    string Operation,
+    bool IsNetwork,
+    int StatusCode,
+    long DurationMilliseconds,
+    DateTimeOffset OccurredAt);

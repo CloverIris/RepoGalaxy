@@ -101,6 +101,48 @@ public sealed class MetroTileLayoutServiceTests
     }
 
     [Fact]
+    public async Task Preferred_spans_trigger_one_coherent_mosaic_refresh_and_remain_stable()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var service = new MetroTileLayoutService(database.Factory);
+        var regular = Enumerable.Range(0, 12)
+            .Select(index => new TileContent(
+                $"repository:{index}",
+                MetroTileKind.Repository,
+                $"owner/repository-{index}"))
+            .ToList();
+        await service.SynchronizeAsync("guest", FeedSource.Trending, regular, 18, 10);
+
+        var mixed = regular.Select((item, index) => item with
+        {
+            Kind = index % 3 == 0 ? MetroTileKind.FeaturedRepository : MetroTileKind.Repository,
+            PreferredSpan = (index % 4) switch
+            {
+                0 => new TileSpan(2, 2),
+                1 => new TileSpan(3, 1),
+                2 => new TileSpan(4, 1),
+                _ => new TileSpan(3, 2)
+            }
+        }).ToList();
+        mixed.Insert(4, new TileContent(
+            "tip:mosaic:git",
+            MetroTileKind.Tip,
+            "Git 保存的是快照",
+            PreferredSpan: new TileSpan(2, 2)));
+
+        var refreshed = await service.SynchronizeAsync("guest", FeedSource.Trending, mixed, 18, 10);
+        var stable = await service.SynchronizeAsync("guest", FeedSource.Trending, mixed, 18, 10);
+
+        refreshed.Placements.Should().HaveCount(mixed.Count);
+        refreshed.Placements.Select(x => (x.Content.Key, x.ColumnSpan, x.RowSpan))
+            .Should().BeEquivalentTo(mixed.Select(x =>
+                (x.Key, x.PreferredSpan!.Value.Columns, x.PreferredSpan.Value.Rows)));
+        stable.Placements.Select(x => (x.Content.Key, x.Column, x.Row))
+            .Should().BeEquivalentTo(refreshed.Placements.Select(x => (x.Content.Key, x.Column, x.Row)));
+        AssertNoOverlap(refreshed.Placements);
+    }
+
+    [Fact]
     public async Task Fresh_layout_uses_a_stable_compact_sixteen_by_ten_data_island()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -152,6 +194,38 @@ public sealed class MetroTileLayoutServiceTests
         reordered.Placements.Select(x => (x.Column, x.Row, x.ColumnSpan, x.RowSpan)).Order().Should().Equal(geometry);
         restored.Placements.OrderBy(x => Math.Pow(x.Column * 100 + 298 - focus.CenterX, 2) + Math.Pow(x.Row * 100 + 48 - focus.CenterY, 2))
             .First().Content.RepositoryId.Should().Be(firstId);
+    }
+
+    [Fact]
+    public async Task Place_near_fills_anchor_region_without_moving_existing_tiles()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var service = new MetroTileLayoutService(database.Factory);
+        var initial = Enumerable.Range(0, 8)
+            .Select(index => new TileContent(
+                $"repository:existing-{index}",
+                MetroTileKind.Repository,
+                $"owner/existing-{index}",
+                PreferredSpan: new TileSpan(2, 1)))
+            .ToList();
+        var board = await service.SynchronizeAsync("guest", FeedSource.Trending, initial, 12, 8);
+        var original = board.Placements.ToDictionary(x => x.Content.Key, x => (x.Column, x.Row));
+        var anchor = new TileWorldWindow(4000, -2200, 96, 96);
+
+        var updated = await service.PlaceNearAsync(board.Id,
+        [
+            new TileContent("repository:explored-1", MetroTileKind.Repository, "new/one", PreferredSpan: new TileSpan(2, 1)),
+            new TileContent("repository:explored-2", MetroTileKind.Repository, "new/two", PreferredSpan: new TileSpan(2, 1))
+        ], anchor);
+
+        foreach (var item in original)
+        {
+            var placement = updated.Placements.Single(x => x.Content.Key == item.Key);
+            (placement.Column, placement.Row).Should().Be(item.Value);
+        }
+        updated.Placements.Should().Contain(x => x.Content.Key == "repository:explored-1");
+        updated.Placements.Should().Contain(x => x.Content.Key == "repository:explored-2");
+        AssertNoOverlap(updated.Placements);
     }
 
     private static void AssertNoOverlap(IEnumerable<TilePlacement> placements)

@@ -1,5 +1,17 @@
 namespace RepoGalaxy.Core.Models;
 
+public sealed record DiscoveryExploreRequest(
+    FeedSource Source,
+    double AnchorWorldX,
+    double AnchorWorldY);
+
+public sealed record DiscoveryExploreResult(
+    FeedSource Source,
+    IReadOnlyList<long> AddedRepositoryIds,
+    bool RateLimited = false,
+    DateTimeOffset? RetryAt = null,
+    string Status = "");
+
 public enum FeedSource { ForYou, Subscription, Trending, Release }
 public sealed class FeedReason
 {

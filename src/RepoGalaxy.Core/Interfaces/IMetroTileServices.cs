@@ -7,6 +7,7 @@ public interface IMetroTileLayoutService
     Task<TileBoardState> LoadAsync(string scopeKey, FeedSource source, CancellationToken cancellationToken = default);
     Task<TileBoardState> SynchronizeAsync(string scopeKey, FeedSource source, IReadOnlyList<TileContent> content, int minimumColumns, int minimumRows, bool reflow = false, CancellationToken cancellationToken = default);
     Task<TileBoardState> ReorderRepositoriesAsync(long boardId, IReadOnlyList<long> repositoryIds, TileWorldWindow preferredWindow, CancellationToken cancellationToken = default);
+    Task<TileBoardState> PlaceNearAsync(long boardId, IReadOnlyList<TileContent> additions, TileWorldWindow preferredWindow, CancellationToken cancellationToken = default);
     Task SaveCameraAsync(long boardId, CameraState camera, CancellationToken cancellationToken = default);
     Task SaveSemanticViewportAsync(long boardId, SemanticViewportState viewport, CancellationToken cancellationToken = default);
     Task ResetAsync(string? scopeKey = null, CancellationToken cancellationToken = default);

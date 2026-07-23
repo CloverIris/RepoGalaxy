@@ -38,12 +38,17 @@ public class ZoomableTileCanvas : Control
     private MetroTileViewModel? _actionTile;
     private TileActionKind _hoveredAction;
     private MetroTileViewModel? _hoveredActionTile;
+    private DashboardListItem? _pressedRankingItem;
+    private DashboardListItem? _hoveredRankingItem;
     private readonly ICameraFrameScheduler _frameScheduler;
     private readonly CameraInputAccumulator _input = new();
     private readonly Dictionary<(int ContentId, byte Part, int ValueHash, int MaxLength, int Size, uint Color), FormattedText> _textCache = [];
     private readonly Queue<(int ContentId, byte Part, int ValueHash, int MaxLength, int Size, uint Color)> _textLru = new();
     private readonly Dictionary<(uint Accent, bool Dark), SkeletonStyle> _skeletonStyles = [];
     private readonly DispatcherTimer _cameraIdleTimer;
+    private readonly DispatcherTimer _exploreHoverTimer;
+    private CanvasExploreTarget? _pendingExploreTarget;
+    private Rect _exploreButtonBounds;
 
     private static readonly Geometry LikeIcon =
         Geometry.Parse("M3,9 L7,9 L9,4 C9,2 12,2 12,5 L12,7 L17,7 C18,7 18,8 18,9 L16,16 C16,17 15,18 14,18 L7,18 L7,10 L3,10 Z");
@@ -67,6 +72,13 @@ public class ZoomableTileCanvas : Control
         {
             _cameraIdleTimer.Stop();
             if (DataContext is DiscoverViewModel vm) _ = vm.SaveCameraAsync();
+        };
+        _exploreHoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        _exploreHoverTimer.Tick += (_, _) =>
+        {
+            _exploreHoverTimer.Stop();
+            if (DataContext is DiscoverViewModel vm && !_mousePressed && _pendingExploreTarget is { } target)
+                vm.SetExploreTarget(target);
         };
         Focusable = true;
         ClipToBounds = true;
@@ -140,11 +152,45 @@ public class ZoomableTileCanvas : Control
         }
 
         RenderRealTiles(context, viewport, vm);
+        RenderExplorePrompt(context, vm);
         TilePerformanceMetrics.Allocation(
             GC.GetAllocatedBytesForCurrentThread() - allocatedBefore,
             GC.CollectionCount(0) - gen0,
             GC.CollectionCount(1) - gen1,
             GC.CollectionCount(2) - gen2);
+    }
+
+    private void RenderExplorePrompt(DrawingContext context, DiscoverViewModel vm)
+    {
+        _exploreButtonBounds = default;
+        if (vm.ExploreTarget is not { } target) return;
+        var tileBounds = new Rect(
+            (target.WorldX - CameraX) * Zoom,
+            (target.WorldY - CameraY) * Zoom,
+            (target.ColumnSpan * 96d + (target.ColumnSpan - 1) * 4d) * Zoom,
+            (target.RowSpan * 96d + (target.RowSpan - 1) * 4d) * Zoom);
+        if (!new Rect(Bounds.Size).Intersects(tileBounds)) return;
+        var width = Math.Min(tileBounds.Width - 12, Math.Max(72, 104 * Zoom));
+        var height = Math.Min(tileBounds.Height - 12, Math.Max(24, 32 * Zoom));
+        if (width < 54 || height < 20) return;
+        _exploreButtonBounds = new Rect(
+            tileBounds.Center.X - width / 2,
+            tileBounds.Center.Y - height / 2,
+            width,
+            height);
+        var fill = new SolidColorBrush(Color.FromArgb(232, 0, 120, 212));
+        context.DrawRectangle(fill, null, _exploreButtonBounds);
+        var label = vm.IsExploring ? "正在探索…" : "探索此处";
+        var text = GetText(
+            StringComparer.Ordinal.GetHashCode(target.SlotKey),
+            12,
+            label,
+            10,
+            Math.Clamp((int)Math.Round(11 * Zoom), 10, 14),
+            Colors.White);
+        context.DrawText(text, new Point(
+            _exploreButtonBounds.X + Math.Max(8, (_exploreButtonBounds.Width - text.Width) / 2),
+            _exploreButtonBounds.Y + Math.Max(4, (_exploreButtonBounds.Height - text.Height) / 2)));
     }
 
     private void RenderRealTiles(DrawingContext context, Rect viewport, DiscoverViewModel vm)
@@ -173,6 +219,17 @@ public class ZoomableTileCanvas : Control
 
     private void RenderInformationalTile(DrawingContext context, MetroTileViewModel tile, Rect bounds)
     {
+        if (tile.IsRanking)
+        {
+            RenderRankingTile(context, tile, bounds);
+            return;
+        }
+        if (tile.IsTip)
+        {
+            RenderKnowledgeTile(context, tile, bounds);
+            return;
+        }
+
         using (context.PushOpacity(tile.BackgroundLayerOpacity))
             context.DrawRectangle(tile.Background, null, bounds);
 
@@ -199,6 +256,114 @@ public class ZoomableTileCanvas : Control
         }
     }
 
+    private void RenderRankingTile(DrawingContext context, MetroTileViewModel tile, Rect bounds)
+    {
+        using (context.PushOpacity(tile.BackgroundLayerOpacity))
+            context.DrawRectangle(tile.Background, null, bounds);
+
+        var inset = Math.Max(8, 14 * Zoom);
+        var clip = bounds.Deflate(inset);
+        if (clip.Width <= 1 || clip.Height <= 1) return;
+        using (context.PushClip(clip))
+        {
+            var kind = GetText(tile.RenderId, 4, "TOP 5", 12,
+                Math.Clamp((int)Math.Round(9 * Zoom), 8, 13), BrushColor(tile.SecondaryForeground));
+            context.DrawText(kind, new Point(clip.X, clip.Y));
+            var title = GetText(tile.RenderId, 1, tile.Title, 30,
+                Math.Clamp((int)Math.Round(23 * Zoom), 14, 32), BrushColor(tile.Foreground));
+            context.DrawText(title, new Point(clip.X, clip.Y + Math.Max(22, 28 * Zoom)));
+            var subtitle = GetText(tile.RenderId, 2, tile.Subtitle, 38,
+                Math.Clamp((int)Math.Round(10 * Zoom), 8, 14), BrushColor(tile.SecondaryForeground));
+            context.DrawText(subtitle, new Point(clip.X, clip.Y + Math.Max(54, 66 * Zoom)));
+
+            var items = tile.Ranking?.Items;
+            if (items is null || items.Count == 0)
+            {
+                var empty = GetText(tile.RenderId, 10, "正在积累有效数据", 20,
+                    Math.Clamp((int)Math.Round(11 * Zoom), 9, 16), BrushColor(tile.SecondaryForeground));
+                context.DrawText(empty, new Point(clip.X, clip.Y + Math.Max(102, 120 * Zoom)));
+                return;
+            }
+
+            var (listTop, rowHeight, count) = RankingRows(clip, items.Count);
+            for (var index = 0; index < count; index++)
+            {
+                var item = items[index];
+                var y = listTop + rowHeight * index;
+                var rowBounds = new Rect(clip.X, y + 2 * Zoom, clip.Width, Math.Max(1, rowHeight - 4 * Zoom));
+                using (context.PushOpacity(Equals(item, _hoveredRankingItem) ? .30 : index % 2 == 0 ? .14 : .08))
+                    context.DrawRectangle(tile.Scrim, null, rowBounds);
+                var rowInset = Math.Max(8, 10 * Zoom);
+                var rank = GetText(tile.RenderId, (byte)(20 + index * 3), $"{item.Rank}", 2,
+                    Math.Clamp((int)Math.Round(18 * Zoom), 12, 26), BrushColor(tile.SecondaryForeground));
+                context.DrawText(rank, new Point(clip.X + rowInset, y + Math.Max(9, 12 * Zoom)));
+                var name = GetText(tile.RenderId, (byte)(21 + index * 3), item.FullName,
+                    bounds.Width > 300 ? 42 : 22,
+                    Math.Clamp((int)Math.Round(12 * Zoom), 9, 18), BrushColor(tile.Foreground));
+                context.DrawText(name, new Point(clip.X + Math.Max(38, 44 * Zoom), y + Math.Max(9, 12 * Zoom)));
+                if (rowHeight >= 52)
+                {
+                    var caption = GetText(tile.RenderId, (byte)(22 + index * 3), item.Caption,
+                        bounds.Width > 300 ? 52 : 24,
+                        Math.Clamp((int)Math.Round(9 * Zoom), 8, 13), BrushColor(tile.SecondaryForeground));
+                    context.DrawText(caption, new Point(
+                        clip.X + Math.Max(38, 44 * Zoom),
+                        y + Math.Max(29, 35 * Zoom)));
+                }
+            }
+
+            var hint = GetText(tile.RenderId, 40, "点击项目查看详情", 12,
+                Math.Clamp((int)Math.Round(9 * Zoom), 8, 13), BrushColor(tile.SecondaryForeground));
+            context.DrawText(hint, new Point(clip.X, Math.Max(listTop + rowHeight * count + 8 * Zoom, clip.Bottom - hint.Height)));
+        }
+    }
+
+    private (double ListTop, double RowHeight, int Count) RankingRows(Rect clip, int itemCount)
+    {
+        var count = Math.Min(5, itemCount);
+        var listTop = clip.Y + Math.Max(98, 118 * Zoom);
+        var available = Math.Max(1, clip.Bottom - listTop - Math.Max(20, 28 * Zoom));
+        var rowHeight = count == 0
+            ? 0
+            : Math.Clamp(available / count, Math.Max(48, 54 * Zoom), Math.Max(68, 88 * Zoom));
+        return (listTop, rowHeight, count);
+    }
+
+    private void RenderKnowledgeTile(DrawingContext context, MetroTileViewModel tile, Rect bounds)
+    {
+        using (context.PushOpacity(tile.BackgroundLayerOpacity))
+            context.DrawRectangle(tile.Background, null, bounds);
+
+        var inset = Math.Max(7, 11 * Zoom);
+        var clip = bounds.Deflate(inset);
+        if (clip.Width <= 1 || clip.Height <= 1) return;
+        using (context.PushClip(clip))
+        {
+            var category = GetText(tile.RenderId, 4, tile.Caption, 28,
+                Math.Clamp((int)Math.Round(8 * Zoom), 7, 11), BrushColor(tile.SecondaryForeground));
+            context.DrawText(category, new Point(clip.X, clip.Y));
+            var titleY = clip.Y + Math.Max(22, 27 * Zoom);
+            var title = GetText(tile.RenderId, 1, tile.Title, bounds.Width > 300 ? 46 : 26,
+                Math.Clamp((int)Math.Round(16 * Zoom), 10, 23), BrushColor(tile.Foreground));
+            context.DrawText(title, new Point(clip.X, titleY));
+            if (bounds.Height >= 150 && !string.IsNullOrEmpty(tile.SubtitleLine1))
+            {
+                var bodySize = Math.Clamp((int)Math.Round(10 * Zoom), 8, 15);
+                var first = GetText(tile.RenderId, 7, tile.SubtitleLine1,
+                    bounds.Width > 300 ? 58 : 30, bodySize, BrushColor(tile.SecondaryForeground));
+                context.DrawText(first, new Point(clip.X, titleY + Math.Max(28, 34 * Zoom)));
+                if (!string.IsNullOrEmpty(tile.SubtitleLine2))
+                {
+                    var second = GetText(tile.RenderId, 8, tile.SubtitleLine2,
+                        bounds.Width > 300 ? 58 : 30, bodySize, BrushColor(tile.SecondaryForeground));
+                    context.DrawText(second, new Point(
+                        clip.X,
+                        titleY + Math.Max(46, 56 * Zoom)));
+                }
+            }
+        }
+    }
+
     private void RenderRepositoryTile(DrawingContext context, MetroTileViewModel tile, Rect bounds)
     {
         var layout = tile.RepositoryLayout!;
@@ -214,7 +379,7 @@ public class ZoomableTileCanvas : Control
                 DrawFallbackCover(context, tile, cover);
         }
 
-        if (tile.IsFeatured)
+        if (!layout.UsesWideLayout)
         {
             var scrim = new Rect(bounds.X, bounds.Y + bounds.Height * .38, bounds.Width, bounds.Height * .62);
             using (context.PushOpacity(.72))
@@ -429,6 +594,7 @@ public class ZoomableTileCanvas : Control
 
     public void QueuePan(double screenDeltaX, double screenDeltaY)
     {
+        ClearExploreTarget();
         TilePerformanceMetrics.InputQueued();
         _input.AddPan(screenDeltaX, screenDeltaY);
         ScheduleCameraFrame();
@@ -436,6 +602,7 @@ public class ZoomableTileCanvas : Control
 
     public void QueueZoom(double wheelDelta, double anchorX, double anchorY, MetroTileViewModel? tile = null)
     {
+        ClearExploreTarget();
         TilePerformanceMetrics.InputQueued();
         _input.AddWheel(wheelDelta, new(anchorX, anchorY), tile);
         ScheduleCameraFrame();
@@ -443,6 +610,7 @@ public class ZoomableTileCanvas : Control
 
     public void QueueZoomFactor(double factor, double anchorX, double anchorY, MetroTileViewModel? tile = null)
     {
+        ClearExploreTarget();
         TilePerformanceMetrics.InputQueued();
         _input.AddZoomFactor(factor, new(anchorX, anchorY), tile);
         ScheduleCameraFrame();
@@ -470,6 +638,17 @@ public class ZoomableTileCanvas : Control
             return;
         Focus();
         _pressPoint = e.GetPosition(this);
+        if (_exploreButtonBounds.Width > 0
+            && _exploreButtonBounds.Height > 0
+            && _exploreButtonBounds.Contains(_pressPoint)
+            && DataContext is DiscoverViewModel exploreVm
+            && exploreVm.ExploreTarget is { } exploreTarget)
+        {
+            ClearExploreTarget();
+            _ = exploreVm.ExploreAtAsync(exploreTarget);
+            e.Handled = true;
+            return;
+        }
         if (TryHitAction(_pressPoint, out var actionTile, out var action))
         {
             _pressedAction = action;
@@ -485,6 +664,7 @@ public class ZoomableTileCanvas : Control
         _mousePressed = true;
         _mouseDragging = false;
         _pressedTile = GetTileAt(_pressPoint);
+        _pressedRankingItem = TryHitRankingItem(_pressPoint, out var rankingItem) ? rankingItem : null;
         if (DataContext is DiscoverViewModel vm) vm.BeginTilePointerInteraction(_pressedTile);
         InvalidateVisual();
         e.Pointer.Capture(this);
@@ -503,6 +683,8 @@ public class ZoomableTileCanvas : Control
         if (!_mousePressed || DataContext is not DiscoverViewModel vm)
         {
             UpdateHoveredAction(current);
+            UpdateHoveredRankingItem(current);
+            UpdateExploreHover(current);
             return;
         }
 
@@ -512,10 +694,61 @@ public class ZoomableTileCanvas : Control
         {
             _mouseDragging = true;
             vm.MarkTilePointerDragging();
+            ClearExploreTarget();
         }
         QueuePan(delta.X, delta.Y);
         _pressPoint = current;
         e.Handled = true;
+    }
+
+    private void UpdateExploreHover(Point point)
+    {
+        if (DataContext is not DiscoverViewModel vm
+            || vm.IsExploring
+            || vm.IsImmersiveDetail
+            || vm.IsSemanticIndexInteractive
+            || GetTileAt(point) is not null)
+        {
+            ClearExploreTarget();
+            return;
+        }
+
+        CanvasExploreTarget? nearest = null;
+        var nearestDistance = double.MaxValue;
+        foreach (var slot in vm.RenderedSkeletonSlots)
+        {
+            var bounds = new Rect(
+                (slot.Column * 100d - CameraX) * Zoom,
+                (slot.Row * 100d - CameraY) * Zoom,
+                (slot.ColumnSpan * 96d + (slot.ColumnSpan - 1) * 4d) * Zoom,
+                (slot.RowSpan * 96d + (slot.RowSpan - 1) * 4d) * Zoom);
+            if (bounds.Contains(point) || !new Rect(Bounds.Size).Intersects(bounds)) continue;
+            var dx = bounds.Center.X - point.X;
+            var dy = bounds.Center.Y - point.Y;
+            var distance = dx * dx + dy * dy;
+            if (distance >= nearestDistance || distance > 260 * 260) continue;
+            nearestDistance = distance;
+            nearest = new(slot.Key, slot.Column, slot.Row, slot.ColumnSpan, slot.RowSpan, vm.SelectedSource.Source);
+        }
+
+        if (nearest is null)
+        {
+            ClearExploreTarget();
+            return;
+        }
+        if (_pendingExploreTarget?.SlotKey == nearest.SlotKey || vm.ExploreTarget?.SlotKey == nearest.SlotKey) return;
+        _pendingExploreTarget = nearest;
+        _exploreHoverTimer.Stop();
+        _exploreHoverTimer.Start();
+    }
+
+    private void ClearExploreTarget()
+    {
+        _exploreHoverTimer.Stop();
+        _pendingExploreTarget = null;
+        _exploreButtonBounds = default;
+        if (DataContext is DiscoverViewModel vm && vm.ExploreTarget is not null)
+            vm.SetExploreTarget(null);
     }
 
     private void UpdateHoveredAction(Point point)
@@ -525,6 +758,31 @@ public class ZoomableTileCanvas : Control
         _hoveredActionTile = tile;
         _hoveredAction = action;
         InvalidateVisual();
+    }
+
+    private void UpdateHoveredRankingItem(Point point)
+    {
+        _ = TryHitRankingItem(point, out var item);
+        if (Equals(_hoveredRankingItem, item)) return;
+        _hoveredRankingItem = item;
+        InvalidateVisual();
+    }
+
+    private bool TryHitRankingItem(Point point, out DashboardListItem? item)
+    {
+        item = null;
+        var tile = GetTileAt(point);
+        var items = tile?.Ranking?.Items;
+        if (tile is null || !tile.IsRanking || items is null || items.Count == 0) return false;
+        var bounds = Project(tile);
+        var inset = Math.Max(8, 14 * Zoom);
+        var clip = bounds.Deflate(inset);
+        var (listTop, rowHeight, count) = RankingRows(clip, items.Count);
+        if (rowHeight <= 0 || point.X < clip.X || point.X > clip.Right || point.Y < listTop) return false;
+        var index = (int)((point.Y - listTop) / rowHeight);
+        if (index < 0 || index >= count) return false;
+        item = items[index];
+        return true;
     }
 
     private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -549,17 +807,26 @@ public class ZoomableTileCanvas : Control
         if (!_mousePressed) return;
         var wasDragging = _mouseDragging;
         var tile = _pressedTile;
+        var pressedRankingItem = _pressedRankingItem;
+        var releasePoint = e.GetPosition(this);
         _mousePressed = false;
         if (DataContext is DiscoverViewModel discover)
         {
             discover.EndTilePointerInteraction();
             discover.CommitCamera();
-            if (!wasDragging && tile is not null) discover.ActivateTileFromPointer(tile);
+            if (!wasDragging
+                && pressedRankingItem is not null
+                && TryHitRankingItem(releasePoint, out var releasedRankingItem)
+                && Equals(pressedRankingItem, releasedRankingItem))
+                _ = discover.OpenRankingItemFromPointerAsync(pressedRankingItem);
+            else if (!wasDragging && tile is not null)
+                discover.ActivateTileFromPointer(tile);
         }
         e.Pointer.Capture(null);
         e.Handled = true;
         _mouseDragging = false;
         _pressedTile = null;
+        _pressedRankingItem = null;
         InvalidateVisual();
     }
 
@@ -588,7 +855,9 @@ public class ZoomableTileCanvas : Control
         _mousePressed = false;
         _mouseDragging = false;
         _pressedTile = null;
+        _pressedRankingItem = null;
         ClearActionPress();
+        ClearExploreTarget();
         InvalidateVisual();
     }
 

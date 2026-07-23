@@ -26,15 +26,16 @@ public sealed class DatabaseLifecycleTests
     }
 
     [Fact]
-    public async Task Current_data_generation_has_one_fresh_baseline()
+    public async Task Current_data_generation_has_fresh_baseline_and_quota_increment()
     {
         await using var fixture = new DatabaseFixture();
         await using var db = await fixture.Factory.CreateDbContextAsync();
 
         var migrations = db.Database.GetMigrations().ToArray();
 
-        migrations.Should().ContainSingle();
+        migrations.Should().HaveCount(2);
         migrations[0].Should().EndWith("_InitialFresh");
+        migrations[1].Should().EndWith("_AddGitHubQuotaPersistence");
     }
 
     [Fact]

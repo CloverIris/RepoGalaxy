@@ -1,59 +1,328 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="RepoGalaxy.Desktop.Views.SettingsView" x:CompileBindings="False">
-  <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="28,22,28,34" Spacing="18" MaxWidth="860" HorizontalAlignment="Left">
-    <StackPanel Spacing="5"><TextBlock Text="设置" Classes="h1"/><TextBlock Text="管理外观、同步、缓存和本地数据。更改会自动保存。" Classes="muted"/></StackPanel>
-    <TextBlock Text="外观与通知" Classes="h2"/>
-    <Border Classes="card"><Grid ColumnDefinitions="*,220"><StackPanel Spacing="5"><TextBlock Text="主题" FontWeight="SemiBold"/><TextBlock Text="跟随 Windows，或固定浅色与深色。" Classes="muted"/></StackPanel><ComboBox Grid.Column="1" ItemsSource="{Binding ThemeOptions}" SelectedItem="{Binding SelectedTheme}"/></Grid></Border>
-    <Border Classes="card"><Grid RowDefinitions="Auto,Auto" RowSpacing="12"><Grid ColumnDefinitions="*,Auto"><StackPanel><TextBlock Text="通知阈值" FontWeight="SemiBold"/><TextBlock Text="只提醒高匹配度的新发现。" Classes="muted"/></StackPanel><TextBlock Grid.Column="1" Text="{Binding ThresholdText}" Foreground="{DynamicResource AccentTextBrush}"/></Grid><Slider Grid.Row="1" Value="{Binding NotificationThreshold}" Minimum="0.5" Maximum="1" TickFrequency="0.05"/></Grid></Border>
-    <Border Classes="card"><Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="4"><TextBlock Text="首页 Tile 布局" FontWeight="SemiBold"/><TextBlock Text="仅重新生成当前账号的发现画布，不删除 Feed、收藏或偏好。" Classes="muted"/><TextBlock Text="{Binding TileLayoutStatus}" Classes="meta" Foreground="{DynamicResource SuccessBrush}"/></StackPanel><Button Grid.Column="1" Classes="subtle" Content="重置 Tile 布局" Command="{Binding ResetTileLayoutCommand}" VerticalAlignment="Center"/></Grid></Border>
-    <TextBlock Text="推荐与排序" Classes="h2"/>
-    <Border Classes="card">
-      <StackPanel Spacing="14">
-        <Grid ColumnDefinitions="*,220" ColumnSpacing="16">
-          <StackPanel Spacing="4"><TextBlock Text="两阶段推荐参数" FontWeight="SemiBold"/><TextBlock Text="{Binding RankingScopeText}" Classes="meta"/><TextBlock Text="参数只影响本地排序，不会额外请求 GitHub 或重新发送通知。" Classes="muted" TextWrapping="Wrap"/></StackPanel>
-          <ComboBox Grid.Column="1" ItemsSource="{Binding RankingPresets}" SelectedItem="{Binding SelectedRankingPreset}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:RepoGalaxy.Desktop.Controls"
+             x:Class="RepoGalaxy.Desktop.Views.SettingsView"
+             x:CompileBindings="False">
+  <UserControl.Styles>
+    <Style Selector="Border.settings-section">
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="22"/>
+    </Style>
+    <Style Selector="Border.settings-row">
+      <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}"/>
+      <Setter Property="Padding" Value="16"/>
+    </Style>
+    <Style Selector="Border.settings-summary">
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1,0,0,0"/>
+      <Setter Property="Padding" Value="16,13"/>
+    </Style>
+    <Style Selector="TextBlock.settings-kicker">
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}"/>
+    </Style>
+    <Style Selector="TextBlock.settings-title">
+      <Setter Property="FontSize" Value="20"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="TextBlock.field-label">
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+    </Style>
+    <Style Selector="NumericUpDown.compact">
+      <Setter Property="Width" Value="104"/>
+      <Setter Property="HorizontalAlignment" Value="Right"/>
+    </Style>
+  </UserControl.Styles>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="30,26,30,44" Spacing="16" MaxWidth="1080" HorizontalAlignment="Center">
+      <!-- Product header -->
+      <Border Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="4,0,0,0" Padding="22">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
+          <controls:RepoGalaxyMark Width="48" Height="48" VerticalAlignment="Top"/>
+          <StackPanel Grid.Column="1" Spacing="5">
+            <TextBlock Text="设置" FontSize="28" FontWeight="SemiBold"/>
+            <TextBlock Text="让 RepoGalaxy 按你的阅读习惯、设备资源与发现偏好工作。" Classes="muted" TextWrapping="Wrap"/>
+            <TextBlock Text="{Binding SaveStatus}" Classes="meta" Foreground="{DynamicResource SuccessBrush}"/>
+          </StackPanel>
+          <Border Grid.Column="2" Classes="badge" VerticalAlignment="Top">
+            <TextBlock Text="更改自动保存"/>
+          </Border>
         </Grid>
-        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-          <StackPanel><TextBlock Text="高级参数" FontWeight="SemiBold"/><TextBlock Text="展开后可调整粗排、精排、探索和多样性。" Classes="meta"/></StackPanel>
-          <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsRankingAdvanced}" OnContent="已展开" OffContent="已收起"/>
-        </Grid>
-        <StackPanel IsVisible="{Binding IsRankingAdvanced}" Spacing="14">
-          <Separator/>
-          <Grid ColumnDefinitions="*,*" ColumnSpacing="18">
-            <StackPanel Spacing="8">
-              <Grid ColumnDefinitions="*,Auto"><TextBlock Text="粗排权重" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding CoarseWeightTotalText}" Classes="meta"/></Grid>
-              <Grid ColumnDefinitions="*,100" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="7"><TextBlock Text="规则匹配"/><NumericUpDown Grid.Column="1" Minimum="0" Maximum="100" Increment="1" Value="{Binding CoarseRuleMatch}"/><TextBlock Grid.Row="1" Text="新鲜度"/><NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding CoarseFreshness}"/><TextBlock Grid.Row="2" Text="Stars 增速"/><NumericUpDown Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding CoarseStarVelocity}"/><TextBlock Grid.Row="3" Text="仓库质量"/><NumericUpDown Grid.Row="3" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding CoarseQuality}"/><TextBlock Grid.Row="4" Text="语言/主题偏好"/><NumericUpDown Grid.Row="4" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding CoarsePreference}"/></Grid>
-            </StackPanel>
-            <StackPanel Grid.Column="1" Spacing="8">
-              <Grid ColumnDefinitions="*,Auto"><TextBlock Text="精排权重" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding FineWeightTotalText}" Classes="meta"/></Grid>
-              <Grid ColumnDefinitions="*,100" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="7"><TextBlock Text="粗排分"/><NumericUpDown Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding FineCoarse}"/><TextBlock Grid.Row="1" Text="内容画像"/><NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding FineContentProfile}"/><TextBlock Grid.Row="2" Text="行为反馈"/><NumericUpDown Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding FineBehavior}"/><TextBlock Grid.Row="3" Text="新颖度"/><NumericUpDown Grid.Row="3" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding FineNovelty}"/><TextBlock Grid.Row="4" Text="本地技术栈"/><NumericUpDown Grid.Row="4" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding FineLocalRelevance}"/></Grid>
+      </Border>
+
+      <!-- At-a-glance status -->
+      <Grid ColumnDefinitions="*,*,*">
+        <Border Classes="settings-summary" BorderThickness="0">
+          <StackPanel Spacing="3"><TextBlock Text="外观" Classes="settings-kicker"/><TextBlock Text="{Binding SelectedTheme}" FontSize="16" FontWeight="SemiBold"/></StackPanel>
+        </Border>
+        <Border Grid.Column="1" Classes="settings-summary">
+          <StackPanel Spacing="3"><TextBlock Text="后台更新" Classes="settings-kicker"/><TextBlock Text="{Binding SelectedSyncInterval.Label}" FontSize="16" FontWeight="SemiBold"/></StackPanel>
+        </Border>
+        <Border Grid.Column="2" Classes="settings-summary">
+          <StackPanel Spacing="3"><TextBlock Text="推荐作用域" Classes="settings-kicker"/><TextBlock Text="{Binding RankingScopeText}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/></StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- Appearance -->
+      <Border Classes="settings-section">
+        <StackPanel Spacing="18">
+          <Grid ColumnDefinitions="40,*" ColumnSpacing="12">
+            <Border Width="36" Height="36" Background="{DynamicResource AccentSoftBrush}">
+              <PathIcon Data="{StaticResource IconDiscover}" Width="18" Height="18" Foreground="{DynamicResource AccentTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="3">
+              <TextBlock Text="外观与提醒" Classes="settings-title"/>
+              <TextBlock Text="主题会立即应用；提醒只发送真正值得打断你的项目。" Classes="muted"/>
             </StackPanel>
           </Grid>
-          <Separator/>
-          <Grid ColumnDefinitions="*,110,*,110" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="8">
-            <TextBlock Text="探索位比例（%）"/><NumericUpDown Grid.Column="1" Minimum="0" Maximum="30" Value="{Binding ExplorationRatio}"/>
-            <TextBlock Grid.Column="2" Text="探索温度"/><NumericUpDown Grid.Column="3" Minimum="0.25" Maximum="2.5" Increment="0.05" FormatString="0.00" Value="{Binding RankingTemperature}"/>
-            <TextBlock Grid.Row="1" Text="新鲜度半衰期（天）"/><NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="30" Maximum="365" Value="{Binding FreshnessHalfLifeDays}"/>
-            <TextBlock Grid.Row="1" Grid.Column="2" Text="每 10 条同语言上限"/><NumericUpDown Grid.Row="1" Grid.Column="3" Minimum="1" Maximum="5" Value="{Binding SameLanguagePerTen}"/>
-            <TextBlock Grid.Row="2" Text="每 10 条同 Owner 上限"/><NumericUpDown Grid.Row="2" Grid.Column="1" Minimum="1" Maximum="3" Value="{Binding SameOwnerPerTen}"/>
-            <TextBlock Grid.Row="2" Grid.Column="2" Text="粗排候选数"/><NumericUpDown Grid.Row="2" Grid.Column="3" Minimum="50" Maximum="500" Increment="25" Value="{Binding CoarseCandidateCount}"/>
-            <TextBlock Grid.Row="3" Text="精排输出数"/><NumericUpDown Grid.Row="3" Grid.Column="1" Minimum="20" Maximum="100" Increment="10" Value="{Binding FineResultCount}"/>
+
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+            <Border Classes="settings-row">
+              <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,190" RowSpacing="12">
+                <StackPanel Spacing="3">
+                  <TextBlock Text="应用主题" FontWeight="SemiBold"/>
+                  <TextBlock Text="跟随 Windows，或固定为浅色 / 深色。" Classes="meta"/>
+                </StackPanel>
+                <ComboBox Grid.Column="1" ItemsSource="{Binding ThemeOptions}" SelectedItem="{Binding SelectedTheme}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Text="系统模式会实时响应 Windows 外观变化。" Classes="meta" VerticalAlignment="Center"/>
+              </Grid>
+            </Border>
+            <Border Grid.Column="1" Classes="settings-row">
+              <Grid RowDefinitions="Auto,Auto" RowSpacing="12">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="新发现通知阈值" FontWeight="SemiBold"/>
+                    <TextBlock Text="匹配度越高，提醒越克制。" Classes="meta"/>
+                  </StackPanel>
+                  <Border Grid.Column="1" Classes="badge"><TextBlock Text="{Binding NotificationThreshold, StringFormat={}{0:P0}}"/></Border>
+                </Grid>
+                <Slider Grid.Row="1" Value="{Binding NotificationThreshold}" Minimum="0.5" Maximum="1" TickFrequency="0.05"/>
+              </Grid>
+            </Border>
           </Grid>
-          <Button Classes="subtle" Content="按比例归一化权重" Command="{Binding NormalizeRankingWeightsCommand}" HorizontalAlignment="Left"/>
+
+          <Border Background="Transparent" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="0,16,0,0">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+              <StackPanel Spacing="3">
+                <TextBlock Text="首页 Tile 布局" FontWeight="SemiBold"/>
+                <TextBlock Text="仅重建当前账号的空间布局；Feed、收藏、订阅与阅读反馈保持不变。" Classes="meta" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding TileLayoutStatus}" Classes="meta" Foreground="{DynamicResource SuccessBrush}"/>
+              </StackPanel>
+              <Button Grid.Column="1" Classes="subtle" Content="重置空间布局" Command="{Binding ResetTileLayoutCommand}" VerticalAlignment="Center"/>
+            </Grid>
+          </Border>
         </StackPanel>
-        <ProgressBar Minimum="0" Maximum="100" Value="{Binding RankingProgress}" IsVisible="{Binding IsRankingRebuilding}" Height="4"/>
-        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-          <TextBlock Text="{Binding RankingStatus}" Classes="meta" TextWrapping="Wrap" VerticalAlignment="Center"/>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"><Button Classes="ghost" Content="取消" Command="{Binding CancelRankingRebuildCommand}" IsVisible="{Binding IsRankingRebuilding}"/><Button Classes="subtle" Content="保存参数" Command="{Binding SaveRankingProfileCommand}" IsEnabled="{Binding !IsRankingRebuilding}"/><Button Classes="primary" Content="重新排序当前 Feed" Command="{Binding RebuildCurrentFeedCommand}" IsEnabled="{Binding !IsRankingRebuilding}"/></StackPanel>
-        </Grid>
-      </StackPanel>
-    </Border>
-    <TextBlock Text="缓存与更新" Classes="h2"/>
-    <Border Classes="card"><StackPanel Spacing="14"><Grid ColumnDefinitions="*,220"><StackPanel><TextBlock Text="缓存预设" FontWeight="SemiBold"/><TextBlock Text="均衡模式适合大多数仓库规模。" Classes="muted"/></StackPanel><ComboBox Grid.Column="1" ItemsSource="{Binding CachePresets}" SelectedItem="{Binding SelectedCachePreset}"/></Grid><Separator/><Grid ColumnDefinitions="*,160" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10"><TextBlock Text="内存缓存上限（MB）"/><NumericUpDown Grid.Column="1" Minimum="64" Maximum="1024" Increment="64" Value="{Binding MemoryCacheSizeMb}"/><TextBlock Grid.Row="1" Text="磁盘响应缓存（MB）"/><NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="256" Maximum="4096" Increment="256" Value="{Binding PersistentCacheSizeMb}"/><TextBlock Grid.Row="2" Text="Feed 有效期（分钟）"/><NumericUpDown Grid.Row="2" Grid.Column="1" Minimum="5" Maximum="1440" Value="{Binding FeedCacheTtlMinutes}"/><TextBlock Grid.Row="3" Text="详情 / Release 有效期（分钟）"/><NumericUpDown Grid.Row="3" Grid.Column="1" Minimum="5" Maximum="1440" Value="{Binding DetailCacheTtlMinutes}"/><TextBlock Grid.Row="4" Text="资讯有效期（分钟）"/><NumericUpDown Grid.Row="4" Grid.Column="1" Minimum="5" Maximum="1440" Value="{Binding NewsCacheTtlMinutes}"/></Grid><Separator/><Grid ColumnDefinitions="*,Auto"><StackPanel><TextBlock Text="{Binding CacheStatus}" Classes="meta"/><TextBlock Text="仅清除可重建的网络响应；Feed、收藏、订阅、阅读历史和 Tile 坐标均会保留。" Classes="meta"/></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"><Button Classes="subtle" Content="刷新统计" Command="{Binding RefreshCacheStatisticsCommand}"/><Button Classes="danger" Content="立即清理缓存" Command="{Binding ClearCacheCommand}"/></StackPanel></Grid></StackPanel></Border>
-    <Border Classes="card"><Grid ColumnDefinitions="*,220"><StackPanel><TextBlock Text="后台更新" FontWeight="SemiBold"/><TextBlock Text="仅在应用打开期间运行，支持手动刷新。" Classes="muted"/></StackPanel><ComboBox Grid.Column="1" ItemsSource="{Binding SyncIntervals}" SelectedItem="{Binding SelectedSyncInterval}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid></Border>
-    <TextBlock Text="本地贡献身份" Classes="h2"/>
-    <Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="用 Git 提交中的姓名或邮箱识别你的贡献；默认也会读取全局与仓库 Git 配置。" Classes="muted" TextWrapping="Wrap"/><Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="8"><TextBox PlaceholderText="提交者姓名" Text="{Binding IdentityName}"/><TextBox Grid.Column="1" PlaceholderText="提交者邮箱" Text="{Binding IdentityEmail}"/><Button Grid.Column="2" Classes="primary" Content="添加" Command="{Binding AddIdentityAliasCommand}"/></Grid><ItemsControl ItemsSource="{Binding IdentityAliases}"><ItemsControl.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto" Margin="0,3"><TextBlock Text="{Binding Display}"/><Button Grid.Column="1" Classes="ghost" Content="移除" Command="{Binding DataContext.RemoveIdentityAliasCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Id}"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl><TextBlock Text="{Binding IdentityStatus}" Classes="meta"/></StackPanel></Border>
-    <TextBlock Text="账户、数据与隐私" Classes="h2"/>
-    <Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="本地数据保护" FontWeight="SemiBold"/><TextBlock Text="GitHub 凭证使用当前 Windows 用户的 DPAPI 加密。数据库每日备份并保留 7 份；退出登录会清除私有仓库及其派生缓存。" Classes="muted" TextWrapping="Wrap"/><TextBlock Text="{Binding BackupStatus}" Classes="meta"/><StackPanel Orientation="Horizontal" Spacing="8"><Button Classes="subtle" Content="立即备份" Command="{Binding CreateBackupCommand}"/><Button Classes="danger" Content="从最近备份恢复" Command="{Binding RestoreBackupCommand}"/></StackPanel></StackPanel></Border>
-    <TextBlock Text="{Binding SaveStatus}" Classes="meta" Foreground="{DynamicResource SuccessBrush}"/>
-  </StackPanel></ScrollViewer>
+      </Border>
+
+      <!-- Ranking -->
+      <Border Classes="settings-section">
+        <StackPanel Spacing="18">
+          <Grid ColumnDefinitions="40,*,220" ColumnSpacing="12">
+            <Border Width="36" Height="36" Background="{DynamicResource AccentSoftBrush}">
+              <PathIcon Data="{StaticResource IconRefresh}" Width="18" Height="18" Foreground="{DynamicResource AccentTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="3">
+              <TextBlock Text="推荐与排序" Classes="settings-title"/>
+              <TextBlock Text="先用粗排筛选候选，再用精排与多样性策略生成当前 Feed。" Classes="muted" TextWrapping="Wrap"/>
+            </StackPanel>
+            <ComboBox Grid.Column="2" ItemsSource="{Binding RankingPresets}" SelectedItem="{Binding SelectedRankingPreset}" VerticalAlignment="Center">
+              <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
+
+          <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+            <Border Classes="settings-row">
+              <StackPanel Spacing="3"><TextBlock Text="粗排" Classes="settings-kicker"/><TextBlock Text="{Binding CoarseWeightTotalText}" FontWeight="SemiBold"/><TextBlock Text="召回与质量信号" Classes="meta"/></StackPanel>
+            </Border>
+            <Border Grid.Column="1" Classes="settings-row">
+              <StackPanel Spacing="3"><TextBlock Text="精排" Classes="settings-kicker"/><TextBlock Text="{Binding FineWeightTotalText}" FontWeight="SemiBold"/><TextBlock Text="画像与行为信号" Classes="meta"/></StackPanel>
+            </Border>
+            <Border Grid.Column="2" Classes="settings-row">
+              <StackPanel Spacing="3"><TextBlock Text="探索" Classes="settings-kicker"/><TextBlock Text="{Binding ExplorationRatio, StringFormat={}{0:N0}% 探索位}" FontWeight="SemiBold"/><TextBlock Text="{Binding RankingTemperature, StringFormat=温度 {0:N2}}" Classes="meta"/></StackPanel>
+            </Border>
+          </Grid>
+
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+            <StackPanel Spacing="3">
+              <TextBlock Text="高级参数" FontWeight="SemiBold"/>
+              <TextBlock Text="适合希望精确控制候选、探索概率与多样性约束的用户。" Classes="meta"/>
+            </StackPanel>
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsRankingAdvanced}" OnContent="显示" OffContent="隐藏"/>
+          </Grid>
+
+          <Border IsVisible="{Binding IsRankingAdvanced}" Background="{DynamicResource CanvasBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="18">
+            <StackPanel Spacing="18">
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="24">
+                <StackPanel Spacing="10">
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="粗排权重" FontSize="16" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding CoarseWeightTotalText}" Classes="meta"/></Grid>
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="规则匹配" Classes="field-label"/><NumericUpDown Grid.Column="1" Classes="compact" Minimum="0" Maximum="100" Value="{Binding CoarseRuleMatch}"/></Grid>
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="新鲜度" Classes="field-label"/><NumericUpDown Grid.Column="1" Classes="compact" Minimum="0" Maximum="100" Value="{Binding CoarseFreshness}"/></Grid>
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Stars 增速" Classes="field-label"/><NumericUpDown Grid.Column="1" Classes="compact" Minimum="0" Maximum="100" Value="{Binding CoarseStarVelocity}"/></Grid>
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="仓库质量" Classes="field-label"/><NumericUpDown Grid.Column="1" Classes="compact" Minimum="0" Maximum="100" Value="{Binding CoarseQuality}"/></Grid>
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="语言 / 主题偏好" Classes="field-label"/><NumericUpDown Grid.Column="1" Classes="compact" Minimum="0" Maximum="100" Value="{Binding CoarsePreference}"/></Grid>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="10">
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="精排权重" FontSize="16" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding FineWeightTotalText}" Classes="meta"/></Grid>
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="粗排分" Classes="field-label"/><NumericUpDown Grid.Column="1" Classes="compact" Minimum="0" Maximum="100" Value="{Binding FineCoarse}"/></Grid>
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="内容画像" Classes="field-label"/><NumericUpDown Grid.Column="1" Classes="compact" Minimum="0" Maximum="100" Value="{Binding FineContentProfile}"/></Grid>
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="行为反馈" Classes="field-label"/><NumericUpDown Grid.Column="1" Classes="compact" Minimum="0" Maximum="100" Value="{Binding FineBehavior}"/></Grid>
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="新颖度" Classes="field-label"/><NumericUpDown Grid.Column="1" Classes="compact" Minimum="0" Maximum="100" Value="{Binding FineNovelty}"/></Grid>
+                  <Grid ColumnDefinitions="*,Auto"><TextBlock Text="本地技术栈" Classes="field-label"/><NumericUpDown Grid.Column="1" Classes="compact" Minimum="0" Maximum="100" Value="{Binding FineLocalRelevance}"/></Grid>
+                </StackPanel>
+              </Grid>
+
+              <Separator/>
+              <Grid ColumnDefinitions="*,104,*,104" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                <TextBlock Text="探索位比例（%）" Classes="field-label"/><NumericUpDown Grid.Column="1" Minimum="0" Maximum="30" Value="{Binding ExplorationRatio}"/>
+                <TextBlock Grid.Column="2" Text="探索温度" Classes="field-label"/><NumericUpDown Grid.Column="3" Minimum="0.25" Maximum="2.5" Increment="0.05" FormatString="0.00" Value="{Binding RankingTemperature}"/>
+                <TextBlock Grid.Row="1" Text="新鲜度半衰期（天）" Classes="field-label"/><NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="30" Maximum="365" Value="{Binding FreshnessHalfLifeDays}"/>
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="每 10 条同语言上限" Classes="field-label"/><NumericUpDown Grid.Row="1" Grid.Column="3" Minimum="1" Maximum="5" Value="{Binding SameLanguagePerTen}"/>
+                <TextBlock Grid.Row="2" Text="每 10 条同 Owner 上限" Classes="field-label"/><NumericUpDown Grid.Row="2" Grid.Column="1" Minimum="1" Maximum="3" Value="{Binding SameOwnerPerTen}"/>
+                <TextBlock Grid.Row="2" Grid.Column="2" Text="粗排候选数" Classes="field-label"/><NumericUpDown Grid.Row="2" Grid.Column="3" Minimum="50" Maximum="500" Increment="25" Value="{Binding CoarseCandidateCount}"/>
+                <TextBlock Grid.Row="3" Text="精排输出数" Classes="field-label"/><NumericUpDown Grid.Row="3" Grid.Column="1" Minimum="20" Maximum="100" Increment="10" Value="{Binding FineResultCount}"/>
+              </Grid>
+              <Button Classes="subtle" Content="按比例归一化权重" Command="{Binding NormalizeRankingWeightsCommand}" HorizontalAlignment="Left"/>
+            </StackPanel>
+          </Border>
+
+          <ProgressBar Minimum="0" Maximum="100" Value="{Binding RankingProgress}" IsVisible="{Binding IsRankingRebuilding}" Height="4"/>
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <TextBlock Text="{Binding RankingStatus}" Classes="meta" TextWrapping="Wrap" VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+              <Button Classes="ghost" Content="取消" Command="{Binding CancelRankingRebuildCommand}" IsVisible="{Binding IsRankingRebuilding}"/>
+              <Button Classes="subtle" Content="保存参数" Command="{Binding SaveRankingProfileCommand}" IsEnabled="{Binding !IsRankingRebuilding}"/>
+              <Button Classes="primary" Content="重新排序当前 Feed" Command="{Binding RebuildCurrentFeedCommand}" IsEnabled="{Binding !IsRankingRebuilding}"/>
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Cache and synchronization -->
+      <Border Classes="settings-section">
+        <StackPanel Spacing="18">
+          <Grid ColumnDefinitions="40,*" ColumnSpacing="12">
+            <Border Width="36" Height="36" Background="{DynamicResource AccentSoftBrush}">
+              <PathIcon Data="{StaticResource IconCloudRepo}" Width="18" Height="18" Foreground="{DynamicResource AccentTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="3">
+              <TextBlock Text="缓存与更新" Classes="settings-title"/>
+              <TextBlock Text="控制本地资源占用、内容新鲜度与后台同步节奏。" Classes="muted"/>
+            </StackPanel>
+          </Grid>
+
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+            <Border Classes="settings-row">
+              <Grid ColumnDefinitions="*,180">
+                <StackPanel Spacing="3"><TextBlock Text="缓存预设" FontWeight="SemiBold"/><TextBlock Text="可从预设开始，再调整高级容量。" Classes="meta"/></StackPanel>
+                <ComboBox Grid.Column="1" ItemsSource="{Binding CachePresets}" SelectedItem="{Binding SelectedCachePreset}"/>
+              </Grid>
+            </Border>
+            <Border Grid.Column="1" Classes="settings-row">
+              <Grid ColumnDefinitions="*,180">
+                <StackPanel Spacing="3"><TextBlock Text="后台更新" FontWeight="SemiBold"/><TextBlock Text="仅在应用运行期间执行。" Classes="meta"/></StackPanel>
+                <ComboBox Grid.Column="1" ItemsSource="{Binding SyncIntervals}" SelectedItem="{Binding SelectedSyncInterval}">
+                  <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
+                </ComboBox>
+              </Grid>
+            </Border>
+          </Grid>
+
+          <Expander Header="高级缓存参数">
+            <Border Background="{DynamicResource CanvasBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="18" Margin="0,10,0,0">
+              <Grid ColumnDefinitions="*,120,*,120" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                <TextBlock Text="内存缓存上限（MB）" Classes="field-label"/><NumericUpDown Grid.Column="1" Minimum="64" Maximum="1024" Increment="64" Value="{Binding MemoryCacheSizeMb}"/>
+                <TextBlock Grid.Column="2" Text="磁盘响应缓存（MB）" Classes="field-label"/><NumericUpDown Grid.Column="3" Minimum="256" Maximum="4096" Increment="256" Value="{Binding PersistentCacheSizeMb}"/>
+                <TextBlock Grid.Row="1" Text="Feed 有效期（分钟）" Classes="field-label"/><NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="5" Maximum="1440" Value="{Binding FeedCacheTtlMinutes}"/>
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="详情 / Release（分钟）" Classes="field-label"/><NumericUpDown Grid.Row="1" Grid.Column="3" Minimum="5" Maximum="1440" Value="{Binding DetailCacheTtlMinutes}"/>
+                <TextBlock Grid.Row="2" Text="资讯有效期（分钟）" Classes="field-label"/><NumericUpDown Grid.Row="2" Grid.Column="1" Minimum="5" Maximum="1440" Value="{Binding NewsCacheTtlMinutes}"/>
+              </Grid>
+            </Border>
+          </Expander>
+
+          <Border Background="{DynamicResource SurfaceMutedBrush}" Padding="16">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+              <StackPanel Spacing="4">
+                <TextBlock Text="当前缓存状态" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding CacheStatus}" Classes="meta" TextWrapping="Wrap"/>
+                <TextBlock Text="清理只移除可重建的网络响应，不会删除 Feed、收藏、订阅、历史或 Tile 坐标。" Classes="meta" TextWrapping="Wrap"/>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button Classes="subtle" Content="刷新统计" Command="{Binding RefreshCacheStatisticsCommand}"/>
+                <Button Classes="danger" Content="清理缓存" Command="{Binding ClearCacheCommand}"/>
+              </StackPanel>
+            </Grid>
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <!-- Local contribution identity -->
+      <Border Classes="settings-section">
+        <StackPanel Spacing="16">
+          <Grid ColumnDefinitions="40,*" ColumnSpacing="12">
+            <Border Width="36" Height="36" Background="{DynamicResource AccentSoftBrush}">
+              <PathIcon Data="{StaticResource IconLocalRepo}" Width="18" Height="18" Foreground="{DynamicResource AccentTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="3">
+              <TextBlock Text="本地贡献身份" Classes="settings-title"/>
+              <TextBlock Text="用 Git 提交中的姓名或邮箱识别贡献；全局与仓库 Git 配置仍会自动读取。" Classes="muted" TextWrapping="Wrap"/>
+            </StackPanel>
+          </Grid>
+          <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="8">
+            <TextBox PlaceholderText="提交者姓名" Text="{Binding IdentityName}"/>
+            <TextBox Grid.Column="1" PlaceholderText="提交者邮箱" Text="{Binding IdentityEmail}"/>
+            <Button Grid.Column="2" Classes="primary" Content="添加身份" Command="{Binding AddIdentityAliasCommand}"/>
+          </Grid>
+          <ItemsControl ItemsSource="{Binding IdentityAliases}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Background="{DynamicResource SurfaceMutedBrush}" Padding="12" Margin="0,0,0,4">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{Binding Display}" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Classes="ghost" Content="移除" Command="{Binding DataContext.RemoveIdentityAliasCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Id}"/>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="{Binding IdentityStatus}" Classes="meta"/>
+        </StackPanel>
+      </Border>
+
+      <!-- Data safety -->
+      <Border Classes="settings-section">
+        <StackPanel Spacing="16">
+          <Grid ColumnDefinitions="40,*" ColumnSpacing="12">
+            <Border Width="36" Height="36" Background="{DynamicResource AccentSoftBrush}">
+              <PathIcon Data="{StaticResource IconSettings}" Width="18" Height="18" Foreground="{DynamicResource AccentTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="3">
+              <TextBlock Text="账户、数据与隐私" Classes="settings-title"/>
+              <TextBlock Text="凭证使用当前 Windows 用户的 DPAPI 加密；数据库备份只服务于当前数据世代。" Classes="muted" TextWrapping="Wrap"/>
+            </StackPanel>
+          </Grid>
+          <Border Classes="settings-row">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+              <StackPanel Spacing="5">
+                <TextBlock Text="本地数据保护" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding BackupStatus}" Classes="meta"/>
+                <TextBlock Text="退出登录会清除私有仓库及派生缓存；公开收藏、订阅和偏好保持不变。" Classes="meta" TextWrapping="Wrap"/>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button Classes="subtle" Content="立即备份" Command="{Binding CreateBackupCommand}"/>
+                <Button Classes="danger" Content="从最近备份恢复" Command="{Binding RestoreBackupCommand}"/>
+              </StackPanel>
+            </Grid>
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <TextBlock Text="所有更改均保存在本机；排序调整不会改变 GitHub 权限或发送额外通知。" Classes="meta" TextAlignment="Center" Margin="0,6"/>
+    </StackPanel>
+  </ScrollViewer>
 </UserControl>

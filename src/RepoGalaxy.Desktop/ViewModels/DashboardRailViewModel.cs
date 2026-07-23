@@ -6,6 +6,7 @@ using RepoGalaxy.Desktop.Services;
 using RepoGalaxy.Core.Interfaces;
 using RepoGalaxy.GitHub.Services;
 using Microsoft.Extensions.Logging;
+using Avalonia.Threading;
 
 namespace RepoGalaxy.Desktop.ViewModels;
 
@@ -30,8 +31,9 @@ public sealed partial class DashboardRailViewModel : ViewModelBase
     private readonly DashboardDataService _data;
     private readonly IExternalLinkService _links;
     private readonly ICacheService _cache;
-    private readonly GitHubRequestBudget _budget;
+    private readonly IGitHubQuotaService _quota;
     private readonly ILogger<DashboardRailViewModel> _logger;
+    private readonly DispatcherTimer _quotaTimer;
     public ObservableCollection<DashboardListViewModel> TopLists { get; } = [];
     public ObservableCollection<ContributionCell> Contributions { get; } = [];
     public ObservableCollection<NewsArticle> News { get; } = [];
@@ -40,9 +42,30 @@ public sealed partial class DashboardRailViewModel : ViewModelBase
     [ObservableProperty] private int _streak;
     [ObservableProperty] private int _weekCommits;
     [ObservableProperty] private string _cacheHealth = "本地缓存就绪";
+    [ObservableProperty] private double _coreBudgetRatio;
+    [ObservableProperty] private double _searchBudgetRatio;
+    [ObservableProperty] private string _coreBudgetText = "等待首次 Core 请求";
+    [ObservableProperty] private string _searchBudgetText = "等待首次 Search 请求";
+    [ObservableProperty] private string _coreResetText = "尚未观测";
+    [ObservableProperty] private string _searchResetText = "尚未观测";
+    [ObservableProperty] private string _budgetSessionText = "游客额度";
+    [ObservableProperty] private string _budgetObservedText = "尚未从 GitHub 校准";
+    [ObservableProperty] private bool _isQuotaRefreshing;
+    [ObservableProperty] private bool _isSyncing;
+    public string CoreBudgetColor => BudgetColor(CoreBudgetRatio);
+    public string SearchBudgetColor => BudgetColor(SearchBudgetRatio);
+    public Func<Task>? SyncCurrentFeedAsync { get; set; }
     public string StreakText => Streak == 0 ? "今天还没有提交" : $"连续贡献 {Streak} 天";
     public string WeekText => $"本周 {WeekCommits} 次提交";
-    public DashboardRailViewModel(DashboardDataService data, IExternalLinkService links, ICacheService cache, GitHubRequestBudget budget, ILogger<DashboardRailViewModel> logger) { _data = data; _links = links; _cache = cache; _budget = budget; _logger = logger; }
+    public DashboardRailViewModel(DashboardDataService data, IExternalLinkService links, ICacheService cache, IGitHubQuotaService quota, ILogger<DashboardRailViewModel> logger)
+    {
+        _data = data; _links = links; _cache = cache; _quota = quota; _logger = logger;
+        _quota.Changed += (_, snapshot) => Dispatcher.UIThread.Post(() => ApplyBudget(snapshot));
+        ApplyBudget(_quota.Snapshot);
+        _quotaTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _quotaTimer.Tick += (_, _) => UpdateResetCountdowns(_quota.Snapshot);
+        _quotaTimer.Start();
+    }
     public async Task LoadAsync()
     {
         if (IsLoading) return;
@@ -54,14 +77,68 @@ public sealed partial class DashboardRailViewModel : ViewModelBase
             Contributions.Clear(); foreach (var item in snapshot.Contributions) Contributions.Add(new(item.Date, item.Count));
             News.Clear(); foreach (var item in snapshot.Releases.Concat(snapshot.News).Take(7)) News.Add(item);
             Streak = snapshot.Streak; WeekCommits = snapshot.WeekCommits; OnPropertyChanged(nameof(StreakText)); OnPropertyChanged(nameof(WeekText));
-            var cache = await _cache.GetStatisticsAsync(); var limit = _budget.Latest;
-            CacheHealth = limit is null
+            var cache = await _cache.GetStatisticsAsync(); var limit = _quota.Snapshot;
+            CacheHealth = limit.Core is null && limit.Search is null
                 ? $"缓存 {cache.TotalBytes / 1024d / 1024d:N1} MB · 命中 {cache.HitRate:P0}"
-                : $"缓存 {cache.TotalBytes / 1024d / 1024d:N1} MB · Core {limit.CoreRemaining:N0} · Search {limit.SearchRemaining:N0}";
+                : $"缓存 {cache.TotalBytes / 1024d / 1024d:N1} MB · Core {(limit.Core?.Remaining ?? 0):N0} · Search {(limit.Search?.Remaining ?? 0):N0}";
             Status = snapshot.Contributions.Any(x => x.Count > 0) ? "本地贡献已更新" : "添加本地仓库后显示贡献";
         }
         catch (Exception ex) { _logger.LogWarning(ex, "加载工作台概览失败"); Status = "概览暂时离线，稍后会自动重试"; }
         finally { IsLoading = false; }
     }
     [RelayCommand] private void OpenNews(NewsArticle article) { if (!_links.Open(article.Url)) Status = "无法打开该资讯链接"; }
+
+    [RelayCommand]
+    private async Task RefreshQuotaAsync()
+    {
+        if (IsQuotaRefreshing) return;
+        IsQuotaRefreshing = true;
+        try
+        {
+            Status = await _quota.RefreshAsync() ? "GitHub 官方额度已更新" : "额度读取失败，继续显示最近观测值";
+        }
+        finally { IsQuotaRefreshing = false; }
+    }
+
+    [RelayCommand]
+    private async Task SyncCurrentFeed()
+    {
+        if (IsSyncing || SyncCurrentFeedAsync is null) return;
+        IsSyncing = true;
+        try { await SyncCurrentFeedAsync(); }
+        finally { IsSyncing = false; }
+    }
+
+    private void ApplyBudget(GitHubBudgetSnapshot snapshot)
+    {
+        BudgetSessionText = snapshot.SessionKind == GitHubBudgetSessionKind.Authenticated ? "登录额度" : "游客额度";
+        CoreBudgetRatio = snapshot.Core?.UsedRatio ?? 0;
+        SearchBudgetRatio = snapshot.Search?.UsedRatio ?? 0;
+        CoreBudgetText = FormatBudget("Core", snapshot.Core);
+        SearchBudgetText = FormatBudget("Search", snapshot.Search);
+        var observed = new[] { snapshot.Core?.ObservedAt, snapshot.Search?.ObservedAt }
+            .Where(x => x.HasValue).Select(x => x!.Value).DefaultIfEmpty().Max();
+        BudgetObservedText = observed == default ? "尚未从 GitHub 校准" : $"最后观测 {observed.LocalDateTime:MM-dd HH:mm:ss}";
+        UpdateResetCountdowns(snapshot);
+    }
+
+    private void UpdateResetCountdowns(GitHubBudgetSnapshot snapshot)
+    {
+        CoreResetText = FormatReset(snapshot.Core);
+        SearchResetText = FormatReset(snapshot.Search);
+    }
+
+    private static string FormatBudget(string name, GitHubRateWindow? window)
+        => window is null ? $"{name} · 等待首次请求" : $"{name} · {window.EffectiveUsed:N0} / {window.Limit:N0} · 剩余 {window.Remaining:N0}";
+    private static string FormatReset(GitHubRateWindow? window)
+    {
+        if (window is null) return "尚未观测";
+        var target = window.RetryAfter ?? window.ResetAt;
+        var remaining = target - DateTimeOffset.UtcNow;
+        if (remaining <= TimeSpan.Zero) return "等待下一次响应校准";
+        return $"约 {remaining.Hours:00}:{remaining.Minutes:00}:{remaining.Seconds:00} 后重置";
+    }
+    private static string BudgetColor(double ratio) => ratio >= .95 ? "#E81123" : ratio >= .80 ? "#FFB900" : "#4C9AFF";
+    partial void OnCoreBudgetRatioChanged(double value) => OnPropertyChanged(nameof(CoreBudgetColor));
+    partial void OnSearchBudgetRatioChanged(double value) => OnPropertyChanged(nameof(SearchBudgetColor));
 }

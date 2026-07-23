@@ -73,6 +73,7 @@ public partial class App : Application
             var result = await coordinator.InitializeAsync(progress, token);
             if (!result.Success || token.IsCancellationRequested || _mainWindowStarted) return;
 
+            await _serviceProvider.GetRequiredService<IAppearanceService>().RestoreAsync(token);
             var mainWindow = new MainWindow();
             ConfigureInitialGeometry(mainWindow, startupWindow);
             ToastNotificationService.Attach(mainWindow);

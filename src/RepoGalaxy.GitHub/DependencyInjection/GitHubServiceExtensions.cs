@@ -63,7 +63,8 @@ public static class GitHubServiceExtensions
             sp.GetRequiredService<GitHubRequestBudget>(),
             sp.GetRequiredService<ISyncOrchestrator>(),
             sp.GetService<ICacheService>(),
-            sp.GetService<IUserService>()));
+            sp.GetService<IUserService>(),
+            sp.GetService<IApiRequestTelemetry>()));
         
         return services;
     }

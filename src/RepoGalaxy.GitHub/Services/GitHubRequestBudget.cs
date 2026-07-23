@@ -42,8 +42,8 @@ public sealed class GitHubRequestBudget
     public void Update(GitHubRateLimit? limit)
     {
         if (limit is null) return;
-        Update(new GitHubRateWindow("core", limit.CoreLimit, limit.CoreRemaining, limit.CoreResetAt));
-        Update(new GitHubRateWindow("search", limit.SearchLimit, limit.SearchRemaining, limit.SearchResetAt));
+        Update(new GitHubRateWindow("core", limit.CoreLimit, limit.CoreRemaining, limit.CoreResetAt, limit.CoreUsed, limit.ObservedAt));
+        Update(new GitHubRateWindow("search", limit.SearchLimit, limit.SearchRemaining, limit.SearchResetAt, limit.SearchUsed, limit.ObservedAt));
     }
 
     public void Update(GitHubRateWindow? window)

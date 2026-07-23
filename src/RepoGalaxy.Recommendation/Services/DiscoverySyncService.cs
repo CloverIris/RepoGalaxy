@@ -59,6 +59,83 @@ public sealed class DiscoverySyncService : IDisposable
         }
     }
     public Task SyncAsync(bool manual = false) => SyncAsync(manual, _lifetime?.Token ?? CancellationToken.None);
+    public async Task<DiscoveryExploreResult> ExploreAsync(DiscoveryExploreRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!_budget.CanSearch(out var retryAt))
+            return new(request.Source, [], true, retryAt, $"GitHub Search 额度将在 {retryAt.LocalDateTime:t} 后恢复。");
+        if (!_authenticated && !_guestPolicy.TryConsume(manual: true))
+            return new(request.Source, [], false, null, "游客模式本次会话的手动探索额度已使用。");
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var before = (await _store.GetFeedAsync(request.Source)).Select(x => x.RepositoryId).ToHashSet();
+            switch (request.Source)
+            {
+                case FeedSource.Subscription:
+                    await ExploreSubscriptionPageAsync(cancellationToken);
+                    break;
+                case FeedSource.ForYou:
+                    await SyncTrendingAsync(false, cancellationToken);
+                    await RefreshForYouAsync(cancellationToken);
+                    break;
+                default:
+                    await SyncTrendingAsync(false, cancellationToken);
+                    break;
+            }
+            var added = (await _store.GetFeedAsync(request.Source))
+                .Select(x => x.RepositoryId)
+                .Where(x => !before.Contains(x))
+                .Distinct()
+                .ToList();
+            var status = added.Count == 0 ? "此处暂时没有更多项目。" : $"已为此处发现 {added.Count} 个新项目。";
+            StatusChanged?.Invoke(this, status);
+            return new(request.Source, added, false, null, status);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return new(request.Source, [], false, null, "探索失败，已保留当前位置和本地内容。");
+        }
+        finally { _gate.Release(); }
+    }
+
+    private async Task ExploreSubscriptionPageAsync(CancellationToken cancellationToken)
+    {
+        var subscriptions = (await _store.GetSubscriptionsAsync())
+            .Where(x => x.IsEnabled)
+            .OrderBy(x => x.LastSyncedAt ?? DateTimeOffset.MinValue)
+            .ThenBy(x => x.Id)
+            .ToList();
+        var subscription = subscriptions.FirstOrDefault();
+        if (subscription is null) return;
+        var query = BuildQuery(subscription);
+        if (string.IsNullOrWhiteSpace(query)) return;
+        var next = await GetCheckpointAsync("Subscription", subscription.Id.ToString(), cancellationToken);
+        var page = await _github.SearchRepositoriesPageAsync(
+            query,
+            subscription.Languages.FirstOrDefault(),
+            "updated",
+            next,
+            cancellationToken);
+        foreach (var repo in page.Items)
+        {
+            repo.CalculateDiscoveryScore();
+            await _store.AddFeedItemAsync(repo, FeedSource.Subscription, new FeedReason
+            {
+                Summary = $"匹配订阅：{subscription.Name}",
+                MatchedRule = query,
+                Score = repo.DiscoveryScore
+            });
+        }
+        await SaveCheckpointAsync("Subscription", subscription.Id.ToString(), page.NextPageUrl, cancellationToken);
+        subscription.LastSyncedAt = DateTimeOffset.UtcNow;
+        await _store.SaveSubscriptionAsync(subscription);
+    }
+
     public async Task SyncAsync(bool manual, CancellationToken ct)
     {
         await _gate.WaitAsync(ct); var run = await BeginRunAsync("Discovery", ct);

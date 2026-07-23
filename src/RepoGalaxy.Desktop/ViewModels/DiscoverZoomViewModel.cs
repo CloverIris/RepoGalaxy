@@ -33,6 +33,9 @@ public sealed partial class DiscoverViewModel
     private CancellationTokenSource? _worldRefreshCancellation;
     private long _renderWindowKey = long.MinValue;
     private TileWorldContentBounds _contentBounds = TileWorldContentBounds.Empty;
+    private string? _userSelectedDetailSectionKey;
+    private bool _semanticIndexWasInteractive;
+    private CancellationTokenSource? _semanticViewportAnimation;
 
     public ObservableCollection<SemanticIndexItemViewModel> SemanticIndexItems { get; } = [];
     public ObservableCollection<SemanticMosaicItemViewModel> SemanticMosaicItems { get; } = [];
@@ -152,17 +155,17 @@ public sealed partial class DiscoverViewModel
     {
         if (!IsSemanticIndexInteractive) return;
         SemanticViewportX = ClampSemanticAxis(SemanticViewportX + screenDeltaX, viewportWidth, SemanticCanvasWidth);
-        SemanticViewportY = ClampSemanticAxis(SemanticViewportY + screenDeltaY, viewportHeight, SemanticCanvasHeight);
+        // The semantic mosaic is deliberately horizontal-only. Keeping its
+        // vertical center locked makes it impossible to lose the whole index.
+        SemanticViewportY = ClampSemanticAxis((viewportHeight - SemanticCanvasHeight) / 2, viewportHeight, SemanticCanvasHeight);
         SemanticViewportUserPositioned = true;
     }
 
     public void NormalizeSemanticViewport(double viewportWidth, double viewportHeight)
     {
         if (!SemanticViewportUserPositioned)
-        {
             SemanticViewportX = (viewportWidth - SemanticCanvasWidth) / 2;
-            SemanticViewportY = (viewportHeight - SemanticCanvasHeight) / 2;
-        }
+        SemanticViewportY = (viewportHeight - SemanticCanvasHeight) / 2;
         SemanticViewportX = ClampSemanticAxis(SemanticViewportX, viewportWidth, SemanticCanvasWidth);
         SemanticViewportY = ClampSemanticAxis(SemanticViewportY, viewportHeight, SemanticCanvasHeight);
         _semanticViewportWidth = viewportWidth;
@@ -197,6 +200,16 @@ public sealed partial class DiscoverViewModel
         if (_searchMatches.Count == 0) return;
         _searchMatchIndex = (_searchMatchIndex + 1) % _searchMatches.Count;
         _ = NavigateToSearchMatchAsync(_searchMatches[_searchMatchIndex]);
+    }
+
+    public async Task NavigateToSearchSuggestionAsync(string contentKey)
+    {
+        var tile = Tiles.FirstOrDefault(x => x.Key.Equals(contentKey, StringComparison.Ordinal));
+        if (tile is null) return;
+        var candidate = ToSearchCandidate(tile);
+        _searchMatches = [candidate];
+        _searchMatchIndex = 0;
+        await NavigateToSearchMatchAsync(candidate);
     }
 
     private void ScheduleSpatialSearch(string query)
@@ -268,18 +281,52 @@ public sealed partial class DiscoverViewModel
         await AnimateSemanticViewportAsync(targetX, targetY);
     }
 
+    private Task CenterSemanticViewportOnEntryAsync()
+    {
+        SemanticViewportUserPositioned = false;
+        var viewportWidth = _semanticViewportWidth > 0 ? _semanticViewportWidth : _viewportWidth;
+        var viewportHeight = _semanticViewportHeight > 0 ? _semanticViewportHeight : _viewportHeight;
+        var targetX = ClampSemanticAxis((viewportWidth - SemanticCanvasWidth) / 2, viewportWidth, SemanticCanvasWidth);
+        var targetY = ClampSemanticAxis((viewportHeight - SemanticCanvasHeight) / 2, viewportHeight, SemanticCanvasHeight);
+        return AnimateSemanticViewportAsync(targetX, targetY);
+    }
+
     private async Task AnimateSemanticViewportAsync(double targetX, double targetY)
     {
+        _semanticViewportAnimation?.Cancel();
+        _semanticViewportAnimation?.Dispose();
+        var cancellation = _semanticViewportAnimation = new CancellationTokenSource();
         var startX = SemanticViewportX; var startY = SemanticViewportY;
-        if (!MotionPreferences.AnimationsEnabled) { SemanticViewportX = targetX; SemanticViewportY = targetY; CommitSemanticViewport(); return; }
-        var stopwatch = Stopwatch.StartNew();
-        while (stopwatch.Elapsed.TotalMilliseconds < 180)
+        if (!MotionPreferences.AnimationsEnabled)
         {
-            await Task.Delay(16);
-            var t = Smooth(stopwatch.Elapsed.TotalMilliseconds / 180);
-            SemanticViewportX = Lerp(startX, targetX, t); SemanticViewportY = Lerp(startY, targetY, t);
+            SemanticViewportX = targetX;
+            SemanticViewportY = targetY;
+            CommitSemanticViewport();
+            _semanticViewportAnimation = null;
+            cancellation.Dispose();
+            return;
         }
-        SemanticViewportX = targetX; SemanticViewportY = targetY; CommitSemanticViewport();
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            while (stopwatch.Elapsed.TotalMilliseconds < 180)
+            {
+                await Task.Delay(16, cancellation.Token);
+                var t = Smooth(stopwatch.Elapsed.TotalMilliseconds / 180);
+                SemanticViewportX = Lerp(startX, targetX, t);
+                SemanticViewportY = Lerp(startY, targetY, t);
+            }
+            SemanticViewportX = targetX;
+            SemanticViewportY = targetY;
+            CommitSemanticViewport();
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            if (ReferenceEquals(_semanticViewportAnimation, cancellation))
+                _semanticViewportAnimation = null;
+            cancellation.Dispose();
+        }
     }
 
     public void ActivateSemanticIndexFromPointer(SemanticMosaicItemViewModel? item)
@@ -297,6 +344,7 @@ public sealed partial class DiscoverViewModel
     public void LikeTileFromPointer(MetroTileViewModel tile) => LikeTileCommand.Execute(tile);
     public void StarTileFromPointer(MetroTileViewModel tile) => StarTileCommand.Execute(tile);
     public void DislikeTileFromPointer(MetroTileViewModel tile) => OpenDislikeMenu(tile);
+    public Task OpenRankingItemFromPointerAsync(DashboardListItem item) => OpenTopItemAsync(item);
 
     public void SetCloneParentDirectory(string path)
     {
@@ -311,12 +359,11 @@ public sealed partial class DiscoverViewModel
         _scheduledDetailKey = string.Empty;
         _detailEntryCamera = null;
         _latchedDetailFitScale = 0;
+        _userSelectedDetailSectionKey = null;
         FocusedTile = tile;
-        ImmersiveDetail = tile is null ? null : _detailContent.CreateBaseline(CreateDetailTarget(tile));
-        SelectedDetailSection = ImmersiveDetail?.Sections.FirstOrDefault();
+        ApplyDetailSnapshot(tile is null ? null : _detailContent.CreateBaseline(CreateDetailTarget(tile)));
         IsClonePanelOpen = false;
         WorkspaceStatus = string.Empty;
-        ClearMarkdown();
         OnPropertyChanged(nameof(CanSaveImmersive));
         OnPropertyChanged(nameof(CanOpenImmersiveSource));
         OnPropertyChanged(nameof(CanOpenInIde));
@@ -354,6 +401,7 @@ public sealed partial class DiscoverViewModel
     {
         _cameraSaveDebounce?.Cancel(); _cameraSaveDebounce?.Dispose(); _cameraSaveDebounce = null;
         _semanticViewportSaveDebounce?.Cancel(); _semanticViewportSaveDebounce?.Dispose(); _semanticViewportSaveDebounce = null;
+        _semanticViewportAnimation?.Cancel(); _semanticViewportAnimation?.Dispose(); _semanticViewportAnimation = null;
         CancelDetailLoad(); CancelCameraAnimation(); CancelPortalAnimation();
         _imageLoadCancellation?.Cancel(); _imageLoadCancellation?.Dispose();
         _searchNavigationDebounce?.Cancel(); _searchNavigationDebounce?.Dispose();
@@ -405,6 +453,7 @@ public sealed partial class DiscoverViewModel
     [RelayCommand]
     private void SelectDetailSection(DetailSection section)
     {
+        _userSelectedDetailSectionKey = section.Key;
         SelectedDetailSection = section;
         if (!string.IsNullOrWhiteSpace(section.Markdown)) PrepareMarkdown(section.Markdown);
         else ClearMarkdown();
@@ -560,7 +609,11 @@ public sealed partial class DiscoverViewModel
         var transition = _zoomLayout.CalculateTransition(Camera, tileRect, _viewportWidth, _viewportHeight);
         SemanticIndexOpacity = transition.SemanticIndexOpacity;
         TileBoardOpacity = transition.TileBoardOpacity;
-        IsSemanticIndexInteractive = transition.SemanticIndexOpacity >= .98;
+        var semanticIndexInteractive = transition.SemanticIndexOpacity >= .98;
+        IsSemanticIndexInteractive = semanticIndexInteractive;
+        if (semanticIndexInteractive && !_semanticIndexWasInteractive)
+            _ = CenterSemanticViewportOnEntryAsync();
+        _semanticIndexWasInteractive = semanticIndexInteractive;
         var fitForDecision = DetailPresentation is DetailPresentationState.Snapping or DetailPresentationState.Full && _latchedDetailFitScale > 0
             ? _latchedDetailFitScale
             : transition.FitScale;
@@ -698,8 +751,11 @@ public sealed partial class DiscoverViewModel
         _scheduledDetailKey = tile.Key;
         var cancellation = _detailLoadCancellation = new CancellationTokenSource();
         var target = CreateDetailTarget(tile);
-        ImmersiveDetail = _detailContent.CreateBaseline(target) with { State = DetailLoadState.Loading, StatusText = "正在安全加载结构化详情" };
-        SelectedDetailSection = ImmersiveDetail.Sections.FirstOrDefault();
+        ApplyDetailSnapshot(_detailContent.CreateBaseline(target) with
+        {
+            State = DetailLoadState.Loading,
+            StatusText = "正在安全加载结构化详情"
+        }, _userSelectedDetailSectionKey);
         _ = LoadAfterDwellAsync(target, cancellation);
     }
 
@@ -711,13 +767,30 @@ public sealed partial class DiscoverViewModel
             IsDetailLoading = true;
             var result = await _detailContent.LoadAsync(target, cancellation.Token);
             if (_scheduledDetailKey != target.ContentKey || cancellation.IsCancellationRequested) return;
-            ImmersiveDetail = result;
-            SelectedDetailSection = result.Sections.FirstOrDefault();
-            ClearMarkdown();
+            ApplyDetailSnapshot(result, _userSelectedDetailSectionKey);
             OnPropertyChanged(nameof(CanOpenImmersiveSource));
         }
         catch (OperationCanceledException) { }
         finally { if (ReferenceEquals(_detailLoadCancellation, cancellation)) { IsDetailLoading = false; _detailLoadCancellation = null; } cancellation.Dispose(); }
+    }
+
+    private void ApplyDetailSnapshot(DetailSnapshot? snapshot, string? preferredSectionKey = null)
+    {
+        ImmersiveDetail = snapshot;
+        if (snapshot is null)
+        {
+            SelectedDetailSection = null;
+            ClearMarkdown();
+            return;
+        }
+
+        var selected = DetailSectionSelection.Select(snapshot.Sections, preferredSectionKey);
+        SelectedDetailSection = selected;
+
+        if (!string.IsNullOrWhiteSpace(selected?.Markdown))
+            PrepareMarkdown(selected.Markdown);
+        else
+            ClearMarkdown();
     }
 
     private void PrepareMarkdown(string markdown)
@@ -890,6 +963,27 @@ public sealed partial class DiscoverViewModel
     }
     private static double Lerp(double start, double end, double progress) => start + (end - start) * progress;
     private static double Smooth(double value) { value = Math.Clamp(value, 0, 1); return value * value * (3 - 2 * value); }
+}
+
+public static class DetailSectionSelection
+{
+    public static DetailSection? Select(
+        IReadOnlyList<DetailSection> sections,
+        string? userSelectedSectionKey = null)
+    {
+        if (!string.IsNullOrWhiteSpace(userSelectedSectionKey))
+        {
+            var explicitSelection = sections.FirstOrDefault(section =>
+                section.Key.Equals(userSelectedSectionKey, StringComparison.OrdinalIgnoreCase));
+            if (explicitSelection is not null) return explicitSelection;
+        }
+
+        return sections.FirstOrDefault(section =>
+                   section.Key.Equals("readme", StringComparison.OrdinalIgnoreCase))
+               ?? sections.FirstOrDefault(section =>
+                   section.Key.Equals("overview", StringComparison.OrdinalIgnoreCase))
+               ?? sections.FirstOrDefault();
+    }
 }
 
 public sealed class SemanticIndexItemViewModel

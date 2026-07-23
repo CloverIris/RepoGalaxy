@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Diagnostics;
 using RepoGalaxy.Core.Interfaces;
 using RepoGalaxy.Core.Models;
 using RepoGalaxy.GitHub.Services;
@@ -15,11 +16,20 @@ public sealed class GitHubApiClient : IGitHubClient, IDisposable
     private readonly ISyncOrchestrator _orchestrator;
     private readonly ICacheService? _cache;
     private readonly IUserService? _users;
+    private readonly IApiRequestTelemetry? _telemetry;
     private string? _accessToken;
     private string _cachePartition = "guest";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    public GitHubApiClient(HttpClient http, GitHubRequestBudget budget, ISyncOrchestrator orchestrator, ICacheService? cache = null, IUserService? users = null) { _http = http; _budget = budget; _orchestrator = orchestrator; _cache = cache; _users = users; }
-    public void SetAccessToken(string token, string? accountId = null) { _accessToken = token; _cachePartition = string.IsNullOrWhiteSpace(accountId) ? "authenticated" : accountId; _budget.BeginSession(GitHubBudgetSessionKind.Authenticated, _cachePartition, preserveObservedWindows: true); }
+    public GitHubApiClient(HttpClient http, GitHubRequestBudget budget, ISyncOrchestrator orchestrator, ICacheService? cache = null, IUserService? users = null, IApiRequestTelemetry? telemetry = null) { _http = http; _budget = budget; _orchestrator = orchestrator; _cache = cache; _users = users; _telemetry = telemetry; }
+    public void SetAccessToken(string token, string? accountId = null)
+    {
+        _accessToken = token;
+        var nextPartition = string.IsNullOrWhiteSpace(accountId) ? "authenticated" : accountId;
+        var preserve = _budget.Snapshot.SessionKind == GitHubBudgetSessionKind.Authenticated
+            && _budget.Snapshot.ScopeKey.Equals(nextPartition, StringComparison.OrdinalIgnoreCase);
+        _cachePartition = nextPartition;
+        _budget.BeginSession(GitHubBudgetSessionKind.Authenticated, _cachePartition, preserve);
+    }
     public void ClearAccessToken() { _accessToken = null; _cachePartition = "guest"; _budget.BeginSession(GitHubBudgetSessionKind.Guest, "guest"); }
     public async Task<bool> IsAuthenticatedAsync() => await GetCurrentUserAsync() is not null;
     public async Task<User?> GetCurrentUserAsync() => string.IsNullOrWhiteSpace(_accessToken) ? null : await ValidateTokenAsync(_accessToken);
@@ -33,11 +43,23 @@ public sealed class GitHubApiClient : IGitHubClient, IDisposable
         return null;
     }
 
-    public async Task<GitHubRateLimit?> GetRateLimitAsync()
+    public Task<GitHubRateLimit?> GetRateLimitAsync() => GetRateLimitAsync(CancellationToken.None);
+    public async Task<GitHubRateLimit?> GetRateLimitAsync(CancellationToken cancellationToken)
     {
-        var response = await SendAsync<RateLimitDto>(HttpMethod.Get, "rate_limit", null, CancellationToken.None);
+        var response = await SendAsync<RateLimitDto>(HttpMethod.Get, "rate_limit", null, cancellationToken);
         if (response.Data?.Resources is not { } r) return null;
-        return new GitHubRateLimit { CoreLimit = r.Core.Limit, CoreRemaining = r.Core.Remaining, CoreResetAt = FromEpoch(r.Core.Reset), SearchLimit = r.Search.Limit, SearchRemaining = r.Search.Remaining, SearchResetAt = FromEpoch(r.Search.Reset) };
+        return new GitHubRateLimit
+        {
+            CoreLimit = r.Core.Limit,
+            CoreRemaining = r.Core.Remaining,
+            CoreResetAt = FromEpoch(r.Core.Reset),
+            CoreUsed = r.Core.Used,
+            SearchLimit = r.Search.Limit,
+            SearchRemaining = r.Search.Remaining,
+            SearchResetAt = FromEpoch(r.Search.Reset),
+            SearchUsed = r.Search.Used,
+            ObservedAt = DateTimeOffset.UtcNow
+        };
     }
     public async Task<IReadOnlyList<UserSocialAccount>> GetUserSocialAccountsAsync(string login, CancellationToken cancellationToken = default)
     {
@@ -87,7 +109,11 @@ public sealed class GitHubApiClient : IGitHubClient, IDisposable
 
         var key = CacheKey.Create("github", _cachePartition, normalized);
         var cached = await _cache.GetAsync<CachedResponse<T>>(key, ct);
-        if (cached.State == CacheEntryState.Fresh && cached.Value is { } fresh) return FromCache(fresh);
+        if (cached.State == CacheEntryState.Fresh && cached.Value is { } fresh)
+        {
+            RecordTelemetry(normalized, ResourceFor(normalized), false, 200, 0);
+            return FromCache(fresh);
+        }
         try
         {
             var response = await _orchestrator.EnqueueAsync(PriorityFor(uri), token => SendCoreAsync<T>(method, uri, overrideToken, cached.Value?.ETag, cached.Value?.LastModified, token), ct);
@@ -111,16 +137,19 @@ public sealed class GitHubApiClient : IGitHubClient, IDisposable
     private async Task<GitHubResponse<T>> SendCoreAsync<T>(HttpMethod method, string uri, string? overrideToken, string? etag, string? lastModified, CancellationToken ct)
     {
         Exception? last = null;
+        var normalized = Normalize(uri);
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            using var request = new HttpRequestMessage(method, Normalize(uri));
+            using var request = new HttpRequestMessage(method, normalized);
             var token = overrideToken ?? _accessToken; if (!string.IsNullOrWhiteSpace(token)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             if (!string.IsNullOrWhiteSpace(etag)) request.Headers.TryAddWithoutValidation("If-None-Match", etag);
             if (!string.IsNullOrWhiteSpace(lastModified) && DateTimeOffset.TryParse(lastModified, out var modified)) request.Headers.IfModifiedSince = modified;
             try
             {
+                var stopwatch = Stopwatch.StartNew();
                 using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
                 var rate = ReadRate(response); if (rate is not null) _budget.Update(rate);
+                RecordTelemetry(normalized, rate?.Resource ?? ResourceFor(normalized), true, (int)response.StatusCode, stopwatch.ElapsedMilliseconds);
                 var nextPage = NextLink(response.Headers);
                 if ((int)response.StatusCode >= 500 && attempt < 2) { await RetryDelayAsync(attempt, ct); continue; }
                 if (response.StatusCode == HttpStatusCode.NotModified) return new(default, 304, rate?.Resource ?? "core", rate, NotModified: true, NextPageUrl: nextPage);
@@ -129,7 +158,12 @@ public sealed class GitHubApiClient : IGitHubClient, IDisposable
                 await using var stream = await response.Content.ReadAsStreamAsync(ct); var data = await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, ct);
                 return new(data, (int)response.StatusCode, rate?.Resource ?? "core", rate, Header(response, "ETag"), Header(response, "Last-Modified"), NextPageUrl: nextPage);
             }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested) { last = ex; if (attempt < 2) await RetryDelayAsync(attempt, ct); }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+            {
+                last = ex;
+                RecordTelemetry(normalized, ResourceFor(normalized), true, 0, 0);
+                if (attempt < 2) await RetryDelayAsync(attempt, ct);
+            }
         }
         throw new HttpRequestException("GitHub 请求在有限重试后仍然失败。", last);
     }
@@ -163,6 +197,17 @@ public sealed class GitHubApiClient : IGitHubClient, IDisposable
         if (path.StartsWith("repos/", StringComparison.OrdinalIgnoreCase)) return SyncPriority.InteractiveDetails;
         return SyncPriority.BackgroundRefresh;
     }
+    private void RecordTelemetry(string uri, string resource, bool network, int statusCode, long durationMilliseconds)
+        => _telemetry?.Record(new(
+            _cachePartition,
+            resource.Equals("search", StringComparison.OrdinalIgnoreCase) ? "search" : "core",
+            PriorityFor(uri).ToString(),
+            network,
+            statusCode,
+            durationMilliseconds,
+            DateTimeOffset.UtcNow));
+    private static string ResourceFor(string uri)
+        => Normalize(uri).StartsWith("search/", StringComparison.OrdinalIgnoreCase) ? "search" : "core";
     private static string Esc(string value) => Uri.EscapeDataString(value);
     private static string? Header(HttpResponseMessage r, string name) => r.Headers.TryGetValues(name, out var values) ? values.FirstOrDefault() : null;
     private static string? NextLink(HttpResponseHeaders headers) { if (!headers.TryGetValues("Link", out var values)) return null; foreach (var part in string.Join(',', values).Split(',')) if (part.Contains("rel=\"next\"", StringComparison.OrdinalIgnoreCase)) { var start = part.IndexOf('<'); var end = part.IndexOf('>'); if (start >= 0 && end > start) return part[(start + 1)..end]; } return null; }

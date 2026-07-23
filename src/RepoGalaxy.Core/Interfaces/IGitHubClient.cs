@@ -2,6 +2,11 @@ using RepoGalaxy.Core.Models;
 
 namespace RepoGalaxy.Core.Interfaces;
 
+public interface IApiRequestTelemetry
+{
+    void Record(ApiRequestObservation observation);
+}
+
 /// <summary>
 /// GitHub API 客户端接口
 /// </summary>

@@ -63,10 +63,21 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
             if (string.IsNullOrWhiteSpace(board.WorldSeed)) board.WorldSeed = Seed(scope, source);
             board.UpdatedAt = DateTimeOffset.UtcNow;
 
-            if (reflow && board.Placements.Count > 0)
+            var geometryChanged = board.Placements.Any(existing =>
             {
-                // A manual synchronization is an explicit request to bring the
-                // whole current data pool back into a coherent visible mosaic.
+                var match = requested.FirstOrDefault(item =>
+                    existing.ContentKind == item.Kind.ToString() &&
+                    existing.ContentKey == item.Key);
+                if (match is null) return false;
+                var span = SpanFor(match);
+                return existing.ColumnSpan != span.Columns || existing.RowSpan != span.Rows;
+            });
+
+            if ((reflow || geometryChanged) && board.Placements.Count > 0)
+            {
+                // A manual synchronization, or a current-generation geometry
+                // policy change, brings the whole data pool back into one
+                // coherent mosaic. This is not a legacy layout migration.
                 // Keep the board identity, camera and seed, but rebuild only
                 // the real-slot mapping. Virtual skeletons are never stored.
                 db.TilePlacements.RemoveRange(board.Placements);
@@ -163,6 +174,85 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
         finally { _gate.Release(); }
     }
 
+    public async Task<TileBoardState> PlaceNearAsync(
+        long boardId,
+        IReadOnlyList<TileContent> additions,
+        TileWorldWindow preferredWindow,
+        CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            await using var db = await _factory.CreateDbContextAsync(cancellationToken);
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            var board = await db.TileBoards.Include(x => x.Placements)
+                .FirstOrDefaultAsync(x => x.Id == boardId, cancellationToken);
+            if (board is null) return Empty("guest", FeedSource.Trending);
+
+            foreach (var item in additions.DistinctBy(x => (x.Kind, x.Key)))
+            {
+                var existing = board.Placements.FirstOrDefault(x =>
+                    x.ContentKind == item.Kind.ToString() && x.ContentKey == item.Key);
+                if (existing is not null)
+                {
+                    Copy(item, existing);
+                    continue;
+                }
+
+                var span = SpanFor(item);
+                var mapped = board.Placements.Select(MapPlacement).ToList();
+                var position = _virtualWorld?.FindNearestCompatibleSlot(
+                    board.WorldSeed,
+                    preferredWindow,
+                    span,
+                    mapped)
+                    ?? FindNearestVacant(mapped, preferredWindow, span);
+                var placement = new TilePlacementEntity
+                {
+                    Board = board,
+                    Column = position.Column,
+                    Row = position.Row,
+                    ColumnSpan = span.Columns,
+                    RowSpan = span.Rows
+                };
+                Copy(item, placement);
+                board.Placements.Add(placement);
+            }
+
+            board.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesWithRetryAsync(cancellationToken: cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return Map(board);
+        }
+        finally { _gate.Release(); }
+    }
+
+    private static (int Column, int Row) FindNearestVacant(
+        IReadOnlyList<TilePlacement> placements,
+        TileWorldWindow preferredWindow,
+        TileSpan span)
+    {
+        var occupied = new HashSet<(int X, int Y)>();
+        foreach (var item in placements)
+            for (var x = item.Column; x < item.Column + item.ColumnSpan; x++)
+                for (var y = item.Row; y < item.Row + item.RowSpan; y++)
+                    occupied.Add((x, y));
+        var centerX = (int)Math.Floor(preferredWindow.CenterX / 100d);
+        var centerY = (int)Math.Floor(preferredWindow.CenterY / 100d);
+        for (var radius = 0; radius < 512; radius++)
+            for (var y = centerY - radius; y <= centerY + radius; y++)
+                for (var x = centerX - radius; x <= centerX + radius; x++)
+                {
+                    if (Math.Max(Math.Abs(x - centerX), Math.Abs(y - centerY)) != radius) continue;
+                    var free = true;
+                    for (var dx = 0; dx < span.Columns && free; dx++)
+                        for (var dy = 0; dy < span.Rows; dy++)
+                            if (occupied.Contains((x + dx, y + dy))) { free = false; break; }
+                    if (free) return (x, y);
+                }
+        return (centerX, centerY);
+    }
+
     public async Task SaveCameraAsync(long boardId, CameraState camera, CancellationToken cancellationToken = default)
     {
         if (boardId <= 0) return;
@@ -253,6 +343,10 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
 
     private static TileSpan SpanFor(TileContent item)
     {
+        if (item.PreferredSpan is { } preferred
+            && preferred.Columns is >= 1 and <= 8
+            && preferred.Rows is >= 1 and <= 8)
+            return preferred;
         var span = TileSpan.For(item.Kind);
         if (item.Kind == MetroTileKind.Tip && item.Key.Contains(":wide:", StringComparison.Ordinal)) return new(2, 1);
         if (item.Kind == MetroTileKind.Tip && item.Key.Contains(":large:", StringComparison.Ordinal)) return new(2, 2);
@@ -276,7 +370,15 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
         x.Column, x.Row, x.ColumnSpan, x.RowSpan);
 
     private static TileBoardState Empty(string scopeKey, FeedSource source) => new(0, NormalizeScope(scopeKey), source, 0, 0, 1, null, string.Empty, 24, 24, 12, 8, [], Seed(NormalizeScope(scopeKey), source));
-    private static int Priority(MetroTileKind kind) => kind switch { MetroTileKind.RankingList => 0, MetroTileKind.Language => 1, MetroTileKind.Technology => 2, MetroTileKind.FeaturedRepository => 3, MetroTileKind.Repository => 4, _ => 5 };
+    private static int Priority(MetroTileKind kind) => kind switch
+    {
+        MetroTileKind.RankingList => 0,
+        MetroTileKind.Language or MetroTileKind.Technology => 1,
+        // Repository and knowledge tiles intentionally share a stable band.
+        // OrderBy is stable, so caller interleaving becomes visual interleaving.
+        MetroTileKind.Repository or MetroTileKind.FeaturedRepository or MetroTileKind.Tip => 2,
+        _ => 3
+    };
     private static int RoundUp(int value, int step) => (int)Math.Ceiling(value / (double)step) * step;
     private static string NormalizeScope(string value) => string.IsNullOrWhiteSpace(value) ? "guest" : value.Trim().ToLowerInvariant();
     private static string Key(MetroTileKind kind, string key) => $"{kind}:{key}";

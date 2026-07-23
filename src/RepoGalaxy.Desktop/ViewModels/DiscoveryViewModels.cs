@@ -56,6 +56,7 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
     private readonly IIdePreferenceService _idePreferences;
     private readonly IRankingRebuildService _rankingRebuild;
     private readonly IRepositoryTileActionService _tileActions;
+    private readonly TileMosaicPolicy _mosaic = new();
     private readonly List<FeedItemViewModel> _allItems = [];
 
     public ObservableCollection<FeedItemViewModel> Items { get; } = [];
@@ -84,6 +85,9 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
     [ObservableProperty] private string _activeTileFilter = string.Empty;
     [ObservableProperty] private bool _isDislikeMenuOpen;
     [ObservableProperty] private MetroTileViewModel? _dislikeTargetTile;
+    [ObservableProperty] private CanvasExploreTarget? _exploreTarget;
+    [ObservableProperty] private bool _isExploring;
+    [ObservableProperty] private string _exploreStatus = string.Empty;
     private TileBoardState? _tileBoard;
     public bool HasActiveTileFilter => !string.IsNullOrWhiteSpace(ActiveTileFilter);
 
@@ -185,6 +189,73 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
         finally
         {
             await LoadAsync(reflowTileBoard: true);
+        }
+    }
+
+    public void SetExploreTarget(CanvasExploreTarget? target)
+    {
+        if (IsExploring) return;
+        ExploreTarget = target;
+        SkeletonRevision++;
+    }
+
+    public async Task ExploreAtAsync(CanvasExploreTarget target)
+    {
+        if (IsExploring || _tileBoard is null || target.Source != SelectedSource.Source) return;
+        IsExploring = true;
+        ExploreTarget = target;
+        ExploreStatus = "正在从 GitHub 探索此处…";
+        SkeletonRevision++;
+        try
+        {
+            var result = await _sync.ExploreAsync(new(
+                SelectedSource.Source,
+                target.WorldX,
+                target.WorldY));
+            ExploreStatus = result.Status;
+            if (result.AddedRepositoryIds.Count == 0) return;
+
+            var feed = await _store.GetFeedAsync(SelectedSource.Source);
+            var additions = feed
+                .Where(x => result.AddedRepositoryIds.Contains(x.RepositoryId))
+                .Select(x =>
+                {
+                    var span = _mosaic.GetRepositorySpan(x.Repository, SelectedSource.Source);
+                    return new TileContent(
+                        $"repository:{x.Repository.Id}",
+                        span.Rows > 1 ? MetroTileKind.FeaturedRepository : MetroTileKind.Repository,
+                        x.Repository.FullName,
+                        x.Repository.Description,
+                        x.Reason.Summary,
+                        x.Repository.PrimaryLanguage,
+                        x.Repository.Id,
+                        x.Repository.OwnerAvatarUrl,
+                        SourceUrl: x.Repository.HtmlUrl,
+                        PreferredSpan: span);
+                })
+                .ToList();
+            var anchor = new TileWorldWindow(
+                target.WorldX,
+                target.WorldY,
+                Math.Max(100, target.ColumnSpan * 100),
+                Math.Max(100, target.RowSpan * 100));
+            await _tileLayout.PlaceNearAsync(_tileBoard.Id, additions, anchor);
+            await LoadAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            ExploreStatus = "已取消探索。";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "探索式加载失败");
+            ExploreStatus = "探索失败，已保留当前位置和本地内容。";
+        }
+        finally
+        {
+            IsExploring = false;
+            ExploreTarget = null;
+            SkeletonRevision++;
         }
     }
 
@@ -390,9 +461,21 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
         var liveCamera = Camera;
         var anchorKey = reflow ? FindCenterAnchorKey() : null;
         var liveSemanticViewport = new SemanticViewportState(SemanticViewportX, SemanticViewportY, _semanticViewportWidth, _semanticViewportHeight, SemanticViewportUserPositioned);
+        var scope = _session.Current.User?.GitHubId ?? "guest";
+        var boardKey = $"{scope}:{SelectedSource.Source}";
         var content = new List<TileContent>();
-        foreach (var list in TopLists)
-            content.Add(new($"ranking:{list.Title}", MetroTileKind.RankingList, list.Title, list.Subtitle, "TOP 5", "TypeScript"));
+        for (var index = 0; index < TopLists.Count; index++)
+        {
+            var list = TopLists[index];
+            content.Add(new(
+                $"ranking:{list.Title}",
+                MetroTileKind.RankingList,
+                list.Title,
+                list.Subtitle,
+                "TOP 5",
+                "TypeScript",
+                PreferredSpan: _mosaic.GetRankingSpan(index)));
+        }
 
         foreach (var group in _allItems.Where(x => !string.IsNullOrWhiteSpace(x.Repository.PrimaryLanguage)).GroupBy(x => x.Repository.PrimaryLanguage, StringComparer.OrdinalIgnoreCase).OrderByDescending(x => x.Count()).Take(10))
             content.Add(new($"language:{group.Key.ToLowerInvariant()}", MetroTileKind.Language, group.Key, $"{group.Count()} 个关联仓库", "点击筛选", group.Key, SourceUrl: OfficialTechnologyLinks.Get(group.Key)));
@@ -400,13 +483,45 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
         foreach (var group in _allItems.SelectMany(x => x.Repository.Topics.Select(topic => (Topic: topic, Item: x))).Where(x => !string.IsNullOrWhiteSpace(x.Topic)).GroupBy(x => x.Topic, StringComparer.OrdinalIgnoreCase).OrderByDescending(x => x.Count()).Take(10))
             content.Add(new($"stack:{group.Key.ToLowerInvariant()}", MetroTileKind.Technology, group.Key, $"关联 {group.Select(x => x.Item.Id).Distinct().Count()} 个项目", "技术栈", group.Key, SourceUrl: OfficialTechnologyLinks.Get(group.Key)));
 
-        foreach (var item in _allItems)
+        var tips = _tips.GetTips(DateOnly.FromDateTime(DateTime.Now));
+        for (var index = 0; index < _allItems.Count; index++)
         {
-            var kind = item.Repository.Stars >= 100_000 ? MetroTileKind.FeaturedRepository : MetroTileKind.Repository;
-            content.Add(new($"repository:{item.Repository.Id}", kind, item.Repository.FullName, item.Repository.Description, item.ReasonText, item.Repository.PrimaryLanguage, item.Repository.Id, item.Repository.OwnerAvatarUrl, SourceUrl: item.Repository.Repository.HtmlUrl));
+            if (index > 0 && index % TileMosaicPolicy.KnowledgeInterval == 0 && tips.Count > 0)
+            {
+                var insertionIndex = index / TileMosaicPolicy.KnowledgeInterval;
+                var tip = _mosaic.SelectTip(tips, boardKey, insertionIndex);
+                var caption = string.IsNullOrWhiteSpace(tip.Attribution)
+                    ? tip.Category
+                    : $"{tip.Category} · {tip.Attribution}";
+                content.Add(new(
+                    $"tip:mosaic:{tip.Key}:{insertionIndex}",
+                    MetroTileKind.Tip,
+                    tip.Title,
+                    tip.Body,
+                    caption,
+                    tip.AccentKey,
+                    SourceUrl: tip.SourceUrl,
+                    PreferredSpan: _mosaic.GetTipSpan(tip, boardKey, insertionIndex)));
+            }
+
+            var item = _allItems[index];
+            var span = _mosaic.GetRepositorySpan(item.Repository.Repository, SelectedSource.Source);
+            var kind = span.Rows > 1
+                ? MetroTileKind.FeaturedRepository
+                : MetroTileKind.Repository;
+            content.Add(new(
+                $"repository:{item.Repository.Id}",
+                kind,
+                item.Repository.FullName,
+                item.Repository.Description,
+                item.ReasonText,
+                item.Repository.PrimaryLanguage,
+                item.Repository.Id,
+                item.Repository.OwnerAvatarUrl,
+                SourceUrl: item.Repository.Repository.HtmlUrl,
+                PreferredSpan: span));
         }
 
-        var scope = _session.Current.User?.GitHubId ?? "guest";
         _tileBoard = await _tileLayout.SynchronizeAsync(scope, SelectedSource.Source, content, minimumColumns, minimumRows, reflow);
         var repositoriesById = _allItems.GroupBy(x => x.Repository.Id).ToDictionary(x => x.Key, x => x.First());
         var actionStates = await _tileActions.LoadStatesAsync(repositoriesById.Keys.ToArray());
@@ -766,10 +881,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public string RankingScopeText => _session.Current.User is { } user ? $"当前账号：@{user.Login}" : "游客配置";
     public string CoarseWeightTotalText => $"粗排合计 {CoarseRuleMatch + CoarseFreshness + CoarseStarVelocity + CoarseQuality + CoarsePreference:N0}%";
     public string FineWeightTotalText => $"精排合计 {FineCoarse + FineContentProfile + FineBehavior + FineNovelty + FineLocalRelevance:N0}%";
-    public SettingsViewModel(IUserService users, ICacheService cache, IMemoryCacheStore memoryCache, IDbContextFactory<RepoGalaxyDbContext> databaseFactory, DatabaseLifecycleService databaseLifecycle, DiscoverySyncService syncService, IMetroTileLayoutService tileLayout, IAuthenticationSessionService session, IRankingConfigurationService rankingConfiguration, IRankingRebuildService rankingRebuild, DiscoverViewModel discover)
+    private readonly IAppearanceService _appearance;
+    public SettingsViewModel(IUserService users, ICacheService cache, IMemoryCacheStore memoryCache, IDbContextFactory<RepoGalaxyDbContext> databaseFactory, DatabaseLifecycleService databaseLifecycle, DiscoverySyncService syncService, IMetroTileLayoutService tileLayout, IAuthenticationSessionService session, IRankingConfigurationService rankingConfiguration, IRankingRebuildService rankingRebuild, DiscoverViewModel discover, IAppearanceService appearance)
     {
         _users = users; _cache = cache; _memoryCache = memoryCache; _databaseFactory = databaseFactory; _databaseLifecycle = databaseLifecycle;
-        _syncService = syncService; _tileLayout = tileLayout; _session = session; _rankingConfiguration = rankingConfiguration; _rankingRebuild = rankingRebuild; _discover = discover;
+        _syncService = syncService; _tileLayout = tileLayout; _session = session; _rankingConfiguration = rankingConfiguration; _rankingRebuild = rankingRebuild; _discover = discover; _appearance = appearance;
         _session.Changed += (_, _) => { OnPropertyChanged(nameof(RankingScopeText)); _ = LoadRankingProfileAsync(); };
     }
     public async Task LoadAsync()
@@ -827,8 +943,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     partial void OnFineLocalRelevanceChanged(double value) => RankingWeightChanged();
     private void ApplyTheme()
     {
-        if (Application.Current is null) return;
-        Application.Current.RequestedThemeVariant = SelectedTheme switch { "浅色" => ThemeVariant.Light, "深色" => ThemeVariant.Dark, _ => ThemeVariant.Default };
+        _appearance.Apply(SelectedTheme);
     }
     private async Task SaveAsync()
     {
