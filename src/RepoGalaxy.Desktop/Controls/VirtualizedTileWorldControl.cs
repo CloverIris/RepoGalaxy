@@ -1,9 +1,9 @@
 namespace RepoGalaxy.Desktop.Controls;
 
 /// <summary>
-/// Viewport-sized Tile presenter. Real content is projected from an immutable
-/// world snapshot while virtual skeleton chunks are batch-drawn by the base
-/// renderer; the control itself never grows to the size of the infinite world.
+/// Viewport-sized, retained-data Tile presenter. It owns no ItemsControl or
+/// world-sized child tree: real and virtual tiles are batch-drawn from the
+/// current immutable snapshots and hit-tested in world coordinates.
 /// </summary>
 public sealed class VirtualizedTileWorldControl : ZoomableTileCanvas
 {

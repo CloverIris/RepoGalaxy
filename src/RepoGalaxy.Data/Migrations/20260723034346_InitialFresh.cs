@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace RepoGalaxy.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialV3 : Migration
+    public partial class InitialFresh : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -16,6 +16,7 @@ namespace RepoGalaxy.Data.Migrations
                 columns: table => new
                 {
                     Key = table.Column<string>(type: "TEXT", maxLength: 160, nullable: false),
+                    Schema = table.Column<int>(type: "INTEGER", nullable: false),
                     Payload = table.Column<byte[]>(type: "BLOB", nullable: false),
                     ETag = table.Column<string>(type: "TEXT", nullable: true),
                     LastModified = table.Column<string>(type: "TEXT", nullable: true),
@@ -51,6 +52,27 @@ namespace RepoGalaxy.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "CloneOperations",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", maxLength: 40, nullable: false),
+                    RepositoryId = table.Column<long>(type: "INTEGER", nullable: false),
+                    RepositoryFullName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
+                    ParentDirectory = table.Column<string>(type: "TEXT", nullable: false),
+                    StagingDirectory = table.Column<string>(type: "TEXT", nullable: false),
+                    DestinationDirectory = table.Column<string>(type: "TEXT", nullable: false),
+                    Mode = table.Column<int>(type: "INTEGER", nullable: false),
+                    State = table.Column<int>(type: "INTEGER", nullable: false),
+                    ErrorCode = table.Column<string>(type: "TEXT", maxLength: 80, nullable: false),
+                    StartedAt = table.Column<long>(type: "INTEGER", nullable: false),
+                    UpdatedAt = table.Column<long>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_CloneOperations", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "DiscoverySubscriptions",
                 columns: table => new
                 {
@@ -82,6 +104,22 @@ namespace RepoGalaxy.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_GitIdentityAliases", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "IdePreferences",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    ScopeKey = table.Column<string>(type: "TEXT", maxLength: 120, nullable: false),
+                    TechnologyKey = table.Column<string>(type: "TEXT", maxLength: 120, nullable: false),
+                    IdeKey = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
+                    UpdatedAt = table.Column<long>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_IdePreferences", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -131,11 +169,45 @@ namespace RepoGalaxy.Data.Migrations
                     Source = table.Column<string>(type: "TEXT", nullable: false),
                     AlgorithmVersion = table.Column<string>(type: "TEXT", nullable: false),
                     CreatedAt = table.Column<long>(type: "INTEGER", nullable: false),
-                    IsDirty = table.Column<bool>(type: "INTEGER", nullable: false)
+                    IsDirty = table.Column<bool>(type: "INTEGER", nullable: false),
+                    ProfileRevision = table.Column<int>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_RankingBatches", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RankingTuningProfiles",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    ScopeKey = table.Column<string>(type: "TEXT", maxLength: 120, nullable: false),
+                    Preset = table.Column<int>(type: "INTEGER", nullable: false),
+                    CoarseRuleMatch = table.Column<double>(type: "REAL", nullable: false),
+                    CoarseFreshness = table.Column<double>(type: "REAL", nullable: false),
+                    CoarseStarVelocity = table.Column<double>(type: "REAL", nullable: false),
+                    CoarseQuality = table.Column<double>(type: "REAL", nullable: false),
+                    CoarsePreference = table.Column<double>(type: "REAL", nullable: false),
+                    FineCoarse = table.Column<double>(type: "REAL", nullable: false),
+                    FineContentProfile = table.Column<double>(type: "REAL", nullable: false),
+                    FineBehavior = table.Column<double>(type: "REAL", nullable: false),
+                    FineNovelty = table.Column<double>(type: "REAL", nullable: false),
+                    FineLocalRelevance = table.Column<double>(type: "REAL", nullable: false),
+                    ExplorationRatio = table.Column<double>(type: "REAL", nullable: false),
+                    Temperature = table.Column<double>(type: "REAL", nullable: false),
+                    FreshnessHalfLifeDays = table.Column<double>(type: "REAL", nullable: false),
+                    SameLanguagePerTen = table.Column<int>(type: "INTEGER", nullable: false),
+                    SameOwnerPerTen = table.Column<int>(type: "INTEGER", nullable: false),
+                    CoarseCandidateCount = table.Column<int>(type: "INTEGER", nullable: false),
+                    FineResultCount = table.Column<int>(type: "INTEGER", nullable: false),
+                    Revision = table.Column<int>(type: "INTEGER", nullable: false),
+                    UpdatedAt = table.Column<long>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RankingTuningProfiles", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -166,6 +238,7 @@ namespace RepoGalaxy.Data.Migrations
                     PrimaryLanguage = table.Column<string>(type: "TEXT", nullable: true),
                     TopicsJson = table.Column<string>(type: "TEXT", nullable: true),
                     HtmlUrl = table.Column<string>(type: "TEXT", nullable: true),
+                    OwnerAvatarUrl = table.Column<string>(type: "TEXT", nullable: true),
                     IsPrivate = table.Column<bool>(type: "INTEGER", nullable: false),
                     IsArchived = table.Column<bool>(type: "INTEGER", nullable: false),
                     Stars = table.Column<int>(type: "INTEGER", nullable: false),
@@ -228,6 +301,34 @@ namespace RepoGalaxy.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "TileBoards",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    ScopeKey = table.Column<string>(type: "TEXT", maxLength: 120, nullable: false),
+                    Source = table.Column<int>(type: "INTEGER", nullable: false),
+                    CameraX = table.Column<double>(type: "REAL", nullable: false),
+                    CameraY = table.Column<double>(type: "REAL", nullable: false),
+                    Zoom = table.Column<double>(type: "REAL", nullable: false),
+                    ActiveIndexKind = table.Column<int>(type: "INTEGER", nullable: true),
+                    ActiveIndexKey = table.Column<string>(type: "TEXT", maxLength: 160, nullable: false),
+                    SemanticViewportX = table.Column<double>(type: "REAL", nullable: false),
+                    SemanticViewportY = table.Column<double>(type: "REAL", nullable: false),
+                    SemanticViewportWidth = table.Column<double>(type: "REAL", nullable: false),
+                    SemanticViewportHeight = table.Column<double>(type: "REAL", nullable: false),
+                    SemanticViewportUserPositioned = table.Column<bool>(type: "INTEGER", nullable: false),
+                    WorldSeed = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    ExtentColumns = table.Column<int>(type: "INTEGER", nullable: false),
+                    ExtentRows = table.Column<int>(type: "INTEGER", nullable: false),
+                    UpdatedAt = table.Column<long>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TileBoards", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "UserPreferences",
                 columns: table => new
                 {
@@ -270,10 +371,18 @@ namespace RepoGalaxy.Data.Migrations
                         .Annotation("Sqlite:Autoincrement", true),
                     GitHubId = table.Column<string>(type: "TEXT", nullable: false),
                     Login = table.Column<string>(type: "TEXT", nullable: false),
+                    DisplayName = table.Column<string>(type: "TEXT", nullable: true),
                     AvatarUrl = table.Column<string>(type: "TEXT", nullable: true),
                     Bio = table.Column<string>(type: "TEXT", nullable: true),
+                    Company = table.Column<string>(type: "TEXT", nullable: true),
+                    Location = table.Column<string>(type: "TEXT", nullable: true),
+                    Blog = table.Column<string>(type: "TEXT", nullable: true),
+                    TwitterUsername = table.Column<string>(type: "TEXT", nullable: true),
+                    ProfileUrl = table.Column<string>(type: "TEXT", nullable: true),
                     PublicRepos = table.Column<int>(type: "INTEGER", nullable: false),
                     Followers = table.Column<int>(type: "INTEGER", nullable: false),
+                    Following = table.Column<int>(type: "INTEGER", nullable: false),
+                    CreatedAt = table.Column<long>(type: "INTEGER", nullable: false),
                     LastLoginAt = table.Column<long>(type: "INTEGER", nullable: true)
                 },
                 constraints: table =>
@@ -523,6 +632,76 @@ namespace RepoGalaxy.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "SemanticIndexPlacements",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    BoardId = table.Column<long>(type: "INTEGER", nullable: false),
+                    ItemKey = table.Column<string>(type: "TEXT", maxLength: 240, nullable: false),
+                    Title = table.Column<string>(type: "TEXT", maxLength: 160, nullable: false),
+                    Kind = table.Column<int>(type: "INTEGER", nullable: false),
+                    ProjectCount = table.Column<int>(type: "INTEGER", nullable: false),
+                    AccentKey = table.Column<string>(type: "TEXT", maxLength: 80, nullable: false),
+                    ContentKeysJson = table.Column<string>(type: "TEXT", nullable: false),
+                    Column = table.Column<int>(type: "INTEGER", nullable: false),
+                    Row = table.Column<int>(type: "INTEGER", nullable: false),
+                    ColumnSpan = table.Column<int>(type: "INTEGER", nullable: false),
+                    RowSpan = table.Column<int>(type: "INTEGER", nullable: false),
+                    UpdatedAt = table.Column<long>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SemanticIndexPlacements", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_SemanticIndexPlacements_TileBoards_BoardId",
+                        column: x => x.BoardId,
+                        principalTable: "TileBoards",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TilePlacements",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    BoardId = table.Column<long>(type: "INTEGER", nullable: false),
+                    ContentKind = table.Column<string>(type: "TEXT", maxLength: 48, nullable: false),
+                    ContentKey = table.Column<string>(type: "TEXT", maxLength: 240, nullable: false),
+                    RepositoryId = table.Column<long>(type: "INTEGER", nullable: true),
+                    Column = table.Column<int>(type: "INTEGER", nullable: false),
+                    Row = table.Column<int>(type: "INTEGER", nullable: false),
+                    ColumnSpan = table.Column<int>(type: "INTEGER", nullable: false),
+                    RowSpan = table.Column<int>(type: "INTEGER", nullable: false),
+                    Title = table.Column<string>(type: "TEXT", nullable: false),
+                    Subtitle = table.Column<string>(type: "TEXT", nullable: false),
+                    Caption = table.Column<string>(type: "TEXT", nullable: false),
+                    AccentKey = table.Column<string>(type: "TEXT", nullable: false),
+                    ImageUrl = table.Column<string>(type: "TEXT", nullable: false),
+                    SourceUrl = table.Column<string>(type: "TEXT", nullable: false),
+                    IsPlaceholder = table.Column<bool>(type: "INTEGER", nullable: false),
+                    UpdatedAt = table.Column<long>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TilePlacements", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TilePlacements_Repositories_RepositoryId",
+                        column: x => x.RepositoryId,
+                        principalTable: "Repositories",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_TilePlacements_TileBoards_BoardId",
+                        column: x => x.BoardId,
+                        principalTable: "TileBoards",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "BookmarkTags",
                 columns: table => new
                 {
@@ -570,6 +749,11 @@ namespace RepoGalaxy.Data.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_CloneOperations_UpdatedAt",
+                table: "CloneOperations",
+                column: "UpdatedAt");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_DiscoverySubscriptions_Name",
                 table: "DiscoverySubscriptions",
                 column: "Name",
@@ -589,6 +773,12 @@ namespace RepoGalaxy.Data.Migrations
                 name: "IX_FeedItems_RepositoryId_Source_BatchId",
                 table: "FeedItems",
                 columns: new[] { "RepositoryId", "Source", "BatchId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_IdePreferences_ScopeKey_TechnologyKey",
+                table: "IdePreferences",
+                columns: new[] { "ScopeKey", "TechnologyKey" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -627,6 +817,12 @@ namespace RepoGalaxy.Data.Migrations
                 column: "RepositoryId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_RankingTuningProfiles_ScopeKey",
+                table: "RankingTuningProfiles",
+                column: "ScopeKey",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ReleaseNotifications_RepositoryId_ReleaseId",
                 table: "ReleaseNotifications",
                 columns: new[] { "RepositoryId", "ReleaseId" },
@@ -662,6 +858,12 @@ namespace RepoGalaxy.Data.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_SemanticIndexPlacements_BoardId_ItemKey",
+                table: "SemanticIndexPlacements",
+                columns: new[] { "BoardId", "ItemKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_SyncCheckpoints_AccountId_JobType_ScopeKey",
                 table: "SyncCheckpoints",
                 columns: new[] { "AccountId", "JobType", "ScopeKey" },
@@ -672,6 +874,23 @@ namespace RepoGalaxy.Data.Migrations
                 table: "SyncRuns",
                 column: "CorrelationId",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TileBoards_ScopeKey_Source",
+                table: "TileBoards",
+                columns: new[] { "ScopeKey", "Source" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TilePlacements_BoardId_ContentKind_ContentKey",
+                table: "TilePlacements",
+                columns: new[] { "BoardId", "ContentKind", "ContentKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TilePlacements_RepositoryId",
+                table: "TilePlacements",
+                column: "RepositoryId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserPreferences_UserId",
@@ -715,6 +934,9 @@ namespace RepoGalaxy.Data.Migrations
                 name: "BookmarkTags");
 
             migrationBuilder.DropTable(
+                name: "CloneOperations");
+
+            migrationBuilder.DropTable(
                 name: "DiscoverySubscriptions");
 
             migrationBuilder.DropTable(
@@ -727,6 +949,9 @@ namespace RepoGalaxy.Data.Migrations
                 name: "GitIdentityAliases");
 
             migrationBuilder.DropTable(
+                name: "IdePreferences");
+
+            migrationBuilder.DropTable(
                 name: "LocalContributionDays");
 
             migrationBuilder.DropTable(
@@ -734,6 +959,9 @@ namespace RepoGalaxy.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "RankingDecisions");
+
+            migrationBuilder.DropTable(
+                name: "RankingTuningProfiles");
 
             migrationBuilder.DropTable(
                 name: "ReleaseNotifications");
@@ -748,10 +976,16 @@ namespace RepoGalaxy.Data.Migrations
                 name: "RepositoryTopics");
 
             migrationBuilder.DropTable(
+                name: "SemanticIndexPlacements");
+
+            migrationBuilder.DropTable(
                 name: "SyncCheckpoints");
 
             migrationBuilder.DropTable(
                 name: "SyncRuns");
+
+            migrationBuilder.DropTable(
+                name: "TilePlacements");
 
             migrationBuilder.DropTable(
                 name: "UserPreferences");
@@ -773,6 +1007,9 @@ namespace RepoGalaxy.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "RankingBatches");
+
+            migrationBuilder.DropTable(
+                name: "TileBoards");
 
             migrationBuilder.DropTable(
                 name: "Repositories");

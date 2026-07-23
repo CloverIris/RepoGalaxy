@@ -10,7 +10,6 @@ namespace RepoGalaxy.Data.Services;
 
 public sealed class MetroTileLayoutService : IMetroTileLayoutService
 {
-    public const int CurrentLayoutVersion = 3;
     private const int ExpansionStep = 6;
     private readonly IDbContextFactory<RepoGalaxyDbContext> _factory;
     private readonly IVirtualTileWorldService? _virtualWorld;
@@ -26,7 +25,7 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
     {
         await using var db = await _factory.CreateDbContextAsync(cancellationToken);
         var board = await db.TileBoards.AsNoTracking().Include(x => x.Placements)
-            .FirstOrDefaultAsync(x => x.ScopeKey == NormalizeScope(scopeKey) && x.Source == (int)source && x.LayoutVersion == CurrentLayoutVersion, cancellationToken);
+            .FirstOrDefaultAsync(x => x.ScopeKey == NormalizeScope(scopeKey) && x.Source == (int)source, cancellationToken);
         return board is null ? Empty(scopeKey, source) : Map(board);
     }
 
@@ -42,11 +41,8 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
             // priority. A manual reflow can then make the newly ranked feed
             // immediately visible instead of sorting it back by content key.
             var requested = content.DistinctBy(x => (x.Kind, x.Key)).OrderBy(x => Priority(x.Kind)).ToList();
-            await db.TileBoards
-                .Where(x => x.ScopeKey == scope && x.Source == (int)source && x.LayoutVersion != CurrentLayoutVersion)
-                .ExecuteDeleteAsync(cancellationToken);
             var board = await db.TileBoards.Include(x => x.Placements)
-                .FirstOrDefaultAsync(x => x.ScopeKey == scope && x.Source == (int)source && x.LayoutVersion == CurrentLayoutVersion, cancellationToken);
+                .FirstOrDefaultAsync(x => x.ScopeKey == scope && x.Source == (int)source, cancellationToken);
             if (board is null)
             {
                 var extent = CalculateInitialExtent(requested, minimumColumns, minimumRows);
@@ -54,7 +50,6 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
                 {
                     ScopeKey = scope,
                     Source = (int)source,
-                    LayoutVersion = CurrentLayoutVersion,
                     ExtentColumns = extent.Columns,
                     ExtentRows = extent.Rows,
                     Zoom = 1,
@@ -264,7 +259,7 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
         return span;
     }
 
-    private static TileBoardState Map(TileBoardEntity board) => new(board.Id, board.ScopeKey, (FeedSource)board.Source, board.LayoutVersion,
+    private static TileBoardState Map(TileBoardEntity board) => new(board.Id, board.ScopeKey, (FeedSource)board.Source,
         board.CameraX, board.CameraY, board.Zoom <= 0 ? 1 : Math.Max(.55, board.Zoom),
         board.ActiveIndexKind is null ? null : (SemanticIndexKind)board.ActiveIndexKind.Value, board.ActiveIndexKey,
         board.SemanticViewportX, board.SemanticViewportY,
@@ -280,7 +275,7 @@ public sealed class MetroTileLayoutService : IMetroTileLayoutService
             x.RepositoryId, x.ImageUrl, x.IsPlaceholder, x.SourceUrl),
         x.Column, x.Row, x.ColumnSpan, x.RowSpan);
 
-    private static TileBoardState Empty(string scopeKey, FeedSource source) => new(0, NormalizeScope(scopeKey), source, CurrentLayoutVersion, 0, 0, 1, null, string.Empty, 24, 24, 12, 8, [], Seed(NormalizeScope(scopeKey), source));
+    private static TileBoardState Empty(string scopeKey, FeedSource source) => new(0, NormalizeScope(scopeKey), source, 0, 0, 1, null, string.Empty, 24, 24, 12, 8, [], Seed(NormalizeScope(scopeKey), source));
     private static int Priority(MetroTileKind kind) => kind switch { MetroTileKind.RankingList => 0, MetroTileKind.Language => 1, MetroTileKind.Technology => 2, MetroTileKind.FeaturedRepository => 3, MetroTileKind.Repository => 4, _ => 5 };
     private static int RoundUp(int value, int step) => (int)Math.Ceiling(value / (double)step) * step;
     private static string NormalizeScope(string value) => string.IsNullOrWhiteSpace(value) ? "guest" : value.Trim().ToLowerInvariant();

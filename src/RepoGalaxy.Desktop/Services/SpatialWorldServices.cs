@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using RepoGalaxy.Core.Interfaces;
 using RepoGalaxy.Core.Models;
 
@@ -248,8 +246,21 @@ public sealed class VirtualTileWorldService : IVirtualTileWorldService
     private static bool Overlaps(int x, int y, int w, int h, int ox, int oy, int ow, int oh) => x < ox + ow && x + w > ox && y < oy + oh && y + h > oy;
     private static ulong Stable(string seed, int x, int y, int slot)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{seed}:{x}:{y}:{slot}"));
-        return BitConverter.ToUInt64(bytes, 0);
+        // FNV-1a followed by SplitMix64 gives a stable, allocation-free seed.
+        // This is layout randomness, not cryptography.
+        ulong value = 14695981039346656037UL;
+        foreach (var character in seed)
+        {
+            value ^= character;
+            value *= 1099511628211UL;
+        }
+        value ^= unchecked((uint)x) * 0x9E3779B1UL;
+        value ^= unchecked((uint)y) * 0x85EBCA77UL;
+        value ^= unchecked((uint)slot) * 0xC2B2AE3DUL;
+        value += 0x9E3779B97F4A7C15UL;
+        value = (value ^ (value >> 30)) * 0xBF58476D1CE4E5B9UL;
+        value = (value ^ (value >> 27)) * 0x94D049BB133111EBUL;
+        return value ^ (value >> 31);
     }
 
     private sealed record ChunkCacheKey(string Seed, int X, int Y, string TipsKey);

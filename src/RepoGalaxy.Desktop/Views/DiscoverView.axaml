@@ -5,20 +5,39 @@
              x:Class="RepoGalaxy.Desktop.Views.DiscoverView"
              x:CompileBindings="False">
   <UserControl.Styles>
-    <Style Selector="Button.segment"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="14,8"/><Setter Property="CornerRadius" Value="0"/></Style>
-    <Style Selector="Button.segment.selected"><Setter Property="Foreground" Value="White"/><Setter Property="Background" Value="{DynamicResource AccentBrush}"/></Style>
-    <Style Selector="Border.metro-tile"><Setter Property="BorderBrush" Value="#40FFFFFF"/><Setter Property="BorderThickness" Value="1"/><Setter Property="ClipToBounds" Value="True"/></Style>
-    <Style Selector="Button.tile-hit"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="0"/><Setter Property="CornerRadius" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="VerticalContentAlignment" Value="Stretch"/></Style>
-    <Style Selector="Button.tile-action"><Setter Property="Background" Value="#24000000"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="#40FFFFFF"/><Setter Property="CornerRadius" Value="0"/><Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="9,3"/></Style>
+    <Style Selector="Button.segment">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="14,8"/>
+      <Setter Property="CornerRadius" Value="0"/>
+    </Style>
+    <Style Selector="Button.segment.selected">
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    </Style>
   </UserControl.Styles>
 
   <Grid RowDefinitions="Auto,*" Background="{DynamicResource CanvasBrush}">
-    <Border Padding="20,10" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <Border Padding="20,10" Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
         <Border Background="{DynamicResource SurfaceMutedBrush}" Padding="2">
           <ItemsControl ItemsSource="{Binding Sources}">
-            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate><DataTemplate><Button Classes="segment" Classes.selected="{Binding IsSelected}" Command="{Binding DataContext.SelectSourceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"><StackPanel Orientation="Horizontal" Spacing="7"><TextBlock Text="{Binding Title}" FontWeight="SemiBold"/><TextBlock Text="{Binding Count}" Opacity=".72"/></StackPanel></Button></DataTemplate></ItemsControl.ItemTemplate>
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="segment" Classes.selected="{Binding IsSelected}"
+                        Command="{Binding DataContext.SelectSourceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                        CommandParameter="{Binding}">
+                  <StackPanel Orientation="Horizontal" Spacing="7">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Count}" Opacity=".72"/>
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
           </ItemsControl>
         </Border>
 
@@ -28,21 +47,36 @@
           <TextBlock Text="{Binding TilePopulationSummary}" Classes="meta"/>
           <TextBlock Text="{Binding SpatialSearchStatus}" Classes="meta"/>
           <Border IsVisible="{Binding HasActiveTileFilter}" Background="{DynamicResource AccentBrush}" Padding="8,3">
-            <StackPanel Orientation="Horizontal" Spacing="7"><TextBlock Text="{Binding ActiveTileFilter}" Foreground="White"/><Button Classes="ghost" Content="×" Foreground="White" Padding="2,0" MinHeight="20" Command="{Binding ClearTileFilterCommand}"/></StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="7">
+              <TextBlock Text="{Binding ActiveTileFilter}" Foreground="White"/>
+              <Button Classes="ghost" Content="×" Foreground="White" Padding="2,0" MinHeight="20"
+                      Command="{Binding ClearTileFilterCommand}"/>
+            </StackPanel>
           </Border>
         </StackPanel>
 
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
-          <Border Background="{DynamicResource SurfaceMutedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="9,6"><TextBlock Text="{Binding ZoomText}" FontWeight="SemiBold"/></Border>
-          <Button Classes="subtle" Content="回到中景" ToolTip.Tip="恢复 100% 视图 (Home)" Command="{Binding ReturnToMiddleCommand}"/>
-          <Button Classes="subtle" Content="查看索引" ToolTip.Tip="缩放到语言与框架索引" Command="{Binding ShowSemanticIndexCommand}"/>
-          <Button Classes="primary" Command="{Binding SyncCommand}"><StackPanel Orientation="Horizontal" Spacing="7"><PathIcon Data="{StaticResource IconRefresh}" Width="15" Height="15"/><TextBlock Text="同步"/></StackPanel></Button>
+          <Border Background="{DynamicResource SurfaceMutedBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                  BorderThickness="1" Padding="9,6">
+            <TextBlock Text="{Binding ZoomText}" FontWeight="SemiBold"/>
+          </Border>
+          <Button Classes="subtle" Content="回到中景" ToolTip.Tip="恢复 100% 视图 (Home)"
+                  Command="{Binding ReturnToMiddleCommand}"/>
+          <Button Classes="subtle" Content="查看索引" ToolTip.Tip="缩放到语言与框架索引"
+                  Command="{Binding ShowSemanticIndexCommand}"/>
+          <Button Classes="primary" Command="{Binding SyncCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="7">
+              <PathIcon Data="{StaticResource IconRefresh}" Width="15" Height="15"/>
+              <TextBlock Text="同步"/>
+            </StackPanel>
+          </Button>
         </StackPanel>
       </Grid>
     </Border>
 
     <Grid Grid.Row="1" x:Name="WorldHost" ClipToBounds="True" Background="{DynamicResource CanvasBrush}">
-      <Canvas ZIndex="{Binding PortalZIndex}" IsVisible="{Binding IsPortalVisible}" IsHitTestVisible="{Binding IsDetailInteractive}">
+      <Canvas ZIndex="{Binding PortalZIndex}" IsVisible="{Binding IsPortalVisible}"
+              IsHitTestVisible="{Binding IsDetailInteractive}">
         <Border Canvas.Left="{Binding PortalX}" Canvas.Top="{Binding PortalY}"
                 Width="{Binding PortalWidth}" Height="{Binding PortalHeight}"
                 ClipToBounds="True" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1"
@@ -58,70 +92,41 @@
       </Canvas>
 
       <controls:VirtualizedTileWorldControl x:Name="TileWorld"
-                                   ZIndex="{Binding TileWorldZIndex}"
-                                   CameraX="{Binding CameraX}"
-                                   CameraY="{Binding CameraY}"
-                                   Zoom="{Binding Zoom}"
-                                   WorldOriginX="{Binding TileWorldOriginX}"
-                                   WorldOriginY="{Binding TileWorldOriginY}"
-                                   SkeletonRevision="{Binding SkeletonRevision}"
-                                   Opacity="{Binding TileBoardOpacity}"
-                                   Background="Transparent">
-        <ItemsControl ItemsSource="{Binding RenderedTiles}"
-                      Width="{Binding TileCanvasWidth}" Height="{Binding TileCanvasHeight}"
-                      HorizontalAlignment="Left" VerticalAlignment="Top">
-          <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-          <ItemsControl.Styles>
-            <Style Selector="ContentPresenter">
-              <Setter Property="Canvas.Left" Value="{Binding RenderLeft}"/>
-              <Setter Property="Canvas.Top" Value="{Binding RenderTop}"/>
-              <Setter Property="Width" Value="{Binding Width}"/>
-              <Setter Property="Height" Value="{Binding Height}"/>
-              <Setter Property="Panel.ZIndex" Value="{Binding ZIndex}"/>
-            </Style>
-          </ItemsControl.Styles>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <Border Classes="metro-tile" Background="Transparent" Opacity="{Binding DisplayOpacity}" IsVisible="{Binding IsInRenderWindow}" RenderTransformOrigin="0,0">
-                <Border.Transitions><Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.14"/></Transitions></Border.Transitions>
-                <Grid>
-                  <Grid Opacity="{Binding BackgroundLayerOpacity}" IsHitTestVisible="False">
-                    <Border Background="{Binding Background}"/>
-                    <Image Source="{Binding BackgroundImage}" Stretch="UniformToFill" Opacity=".28" IsVisible="{Binding !!BackgroundImage}"/>
-                    <PathIcon Data="{Binding IconGeometry}" Width="76" Height="76" Opacity=".14" Foreground="{Binding Foreground}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,4" IsVisible="{Binding HasIcon}"/>
-                    <TextBlock Text="{Binding Glyph}" FontSize="64" FontWeight="Bold" Opacity=".12" Foreground="{Binding Foreground}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,-10" IsVisible="{Binding !HasIcon}"/>
-                  </Grid>
-
-                  <Border Background="#D9121820" Margin="1" Padding="12" IsVisible="{Binding IsPeekVisible}" IsHitTestVisible="False">
-                    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="6">
-                      <TextBlock Text="README 预览" FontSize="10" FontWeight="Bold" Foreground="{Binding SecondaryForeground}"/>
-                      <TextBlock Grid.Row="1" Text="{Binding Subtitle}" FontSize="12" TextWrapping="Wrap" MaxLines="4" Foreground="{Binding Foreground}"/>
-                      <TextBlock Grid.Row="2" Text="{Binding Caption}" FontSize="10" TextTrimming="CharacterEllipsis" Foreground="{Binding SecondaryForeground}"/>
-                    </Grid>
-                  </Border>
-
-                  <Button Classes="tile-hit" Command="{Binding DataContext.ActivateTileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}">
-                    <Grid Margin="13" RowDefinitions="Auto,*,Auto">
-                      <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding KindLabel}" FontSize="10" FontWeight="Bold" Foreground="{Binding SecondaryForeground}"/><TextBlock Grid.Column="1" Text="{Binding Language}" FontSize="10" Foreground="{Binding SecondaryForeground}" TextTrimming="CharacterEllipsis" MaxWidth="100"/></Grid>
-                      <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="4" IsVisible="{Binding !IsRanking}"><TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" Foreground="{Binding Foreground}" TextTrimming="CharacterEllipsis" MaxLines="1"/><TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{Binding SecondaryForeground}" TextTrimming="CharacterEllipsis" MaxLines="1"/></StackPanel>
-                      <ItemsControl Grid.Row="1" ItemsSource="{Binding Ranking.Items}" IsVisible="{Binding IsRanking}"><ItemsControl.ItemTemplate><DataTemplate><Button Classes="ghost" Padding="1,3" HorizontalContentAlignment="Stretch" Command="{Binding DataContext.OpenTopItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"><Grid ColumnDefinitions="18,*"><TextBlock Text="{Binding Rank}" Foreground="White" FontWeight="Bold"/><TextBlock Grid.Column="1" Text="{Binding FullName}" Foreground="White" TextTrimming="CharacterEllipsis"/></Grid></Button></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-                      <Grid Grid.Row="2" ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Caption}" FontSize="11" Foreground="{Binding SecondaryForeground}" TextTrimming="CharacterEllipsis"/><StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsRepository}"><TextBlock Text="{Binding Stars}" Foreground="{Binding SecondaryForeground}" FontSize="11"/><TextBlock Text="{Binding Forks}" Foreground="{Binding SecondaryForeground}" FontSize="11"/></StackPanel></Grid>
-                    </Grid>
-                  </Button>
-
-                  <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0" IsVisible="{Binding IsRepository}">
-                    <Button Classes="tile-action" Content="{Binding SaveText}" Command="{Binding DataContext.SaveTileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
-                    <Button Classes="tile-action" Content="×" ToolTip.Tip="忽略" Command="{Binding DataContext.DismissTileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
-                  </StackPanel>
-                </Grid>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </controls:VirtualizedTileWorldControl>
+                                           ZIndex="{Binding TileWorldZIndex}"
+                                           CameraX="{Binding CameraX}"
+                                           CameraY="{Binding CameraY}"
+                                           Zoom="{Binding Zoom}"
+                                           SkeletonRevision="{Binding SkeletonRevision}"
+                                           Opacity="{Binding TileBoardOpacity}"/>
 
       <views:SemanticIndexView ZIndex="30" Opacity="{Binding SemanticIndexOpacity}"/>
-      <ProgressBar ZIndex="40" IsIndeterminate="True" IsVisible="{Binding IsLoading}" Height="3" VerticalAlignment="Top"/>
+      <ProgressBar ZIndex="40" IsIndeterminate="True" IsVisible="{Binding IsLoading}"
+                   Height="3" VerticalAlignment="Top"/>
+      <Popup ZIndex="60"
+             IsOpen="{Binding IsDislikeMenuOpen, Mode=TwoWay}"
+             PlacementTarget="{Binding #TileWorld}"
+             Placement="Pointer"
+             IsLightDismissEnabled="True">
+        <Border Width="220"
+                Padding="8"
+                Background="{DynamicResource ElevatedSurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1">
+          <StackPanel Spacing="4">
+            <TextBlock Margin="8,4,8,6"
+                       Text="减少类似推荐"
+                       FontWeight="SemiBold"/>
+            <Button Classes="subtle"
+                    HorizontalContentAlignment="Left"
+                    Content="少推荐这一类"
+                    Command="{Binding SuppressDislikeCategoryCommand}"/>
+            <Button Classes="subtle"
+                    HorizontalContentAlignment="Left"
+                    Content="不感兴趣这个"
+                    Command="{Binding DismissDislikeTargetCommand}"/>
+          </StackPanel>
+        </Border>
+      </Popup>
     </Grid>
   </Grid>
 </UserControl>

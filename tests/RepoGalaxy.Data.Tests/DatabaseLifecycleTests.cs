@@ -26,6 +26,18 @@ public sealed class DatabaseLifecycleTests
     }
 
     [Fact]
+    public async Task Current_data_generation_has_one_fresh_baseline()
+    {
+        await using var fixture = new DatabaseFixture();
+        await using var db = await fixture.Factory.CreateDbContextAsync();
+
+        var migrations = db.Database.GetMigrations().ToArray();
+
+        migrations.Should().ContainSingle();
+        migrations[0].Should().EndWith("_InitialFresh");
+    }
+
+    [Fact]
     public async Task Daily_backup_can_restore_the_database_to_its_last_good_state()
     {
         await using var fixture = new DatabaseFixture();
@@ -50,7 +62,7 @@ public sealed class DatabaseLifecycleTests
         public DatabaseLifecycleService Lifecycle { get; }
         public DatabaseFixture()
         {
-            Directory.CreateDirectory(_directory); DatabasePath = Path.Combine(_directory, "repogalaxy-v3.db");
+            Directory.CreateDirectory(_directory); DatabasePath = Path.Combine(_directory, "repogalaxy.db");
             var options = new DbContextOptionsBuilder<RepoGalaxyDbContext>().UseSqlite($"Data Source={DatabasePath};Pooling=False;Foreign Keys=True").Options;
             Factory = new FactoryAdapter(options); Lifecycle = new DatabaseLifecycleService(Factory, DatabasePath);
         }

@@ -105,6 +105,38 @@ public sealed class RankingPipelineTests
             .Should().Equal(pipeline.FineRank(coarse, context, profile).Select(x => x.Repository.Id));
     }
 
+    [Fact]
+    public void Like_and_unlike_map_to_positive_and_neutral_behavior_features()
+    {
+        var pipeline = new RankingPipeline();
+        var repository = Repository(1, "owner", "C#");
+        var liked = Context("liked") with { Feedback = new Dictionary<long, FeedbackType> { [1] = FeedbackType.Like } };
+        var unliked = Context("unliked") with { Feedback = new Dictionary<long, FeedbackType> { [1] = FeedbackType.Unlike } };
+
+        pipeline.CoarseRank(new([repository], "test", DateTimeOffset.UtcNow), liked).Single().Features.Behavior.Should().Be(.9);
+        pipeline.CoarseRank(new([repository], "test", DateTimeOffset.UtcNow), unliked).Single().Features.Behavior.Should().Be(.5);
+    }
+
+    [Fact]
+    public void Language_and_topic_suppression_is_capped_at_fifty_percent()
+    {
+        var pipeline = new RankingPipeline();
+        var repository = Repository(1, "owner", "C#");
+        repository.Topics = ["avalonia", "desktop", "dotnet"];
+        var baseline = Context("baseline");
+        var suppressed = baseline with
+        {
+            SuppressedSignals = new HashSet<string>(
+                ["language:c#", "topic:avalonia", "topic:desktop", "topic:dotnet"],
+                StringComparer.OrdinalIgnoreCase)
+        };
+        var coarse = pipeline.CoarseRank(new([repository], "test", DateTimeOffset.UtcNow), baseline);
+        var baselineScore = pipeline.FineRank(coarse, baseline).Single().FineScore;
+        var suppressedScore = pipeline.FineRank(coarse, suppressed).Single().FineScore;
+
+        suppressedScore.Should().BeApproximately(baselineScore * .5, .00001);
+    }
+
     private static RankingContext Context(string batch, IReadOnlyDictionary<long, double>? velocities = null, IReadOnlyDictionary<long, double>? rules = null) =>
         new(new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(["C#"], StringComparer.OrdinalIgnoreCase), new Dictionary<long, FeedbackType>(), batch, velocities, rules);
     private static Repository Repository(int id, string owner, string language) => new() { Id = id, GitHubId = $"node-{id}", Owner = owner, Name = $"repo-{id}", PrimaryLanguage = language, Stars = 1000 - id, Forks = 100, CreatedAt = DateTimeOffset.UtcNow.AddDays(-30), UpdatedAt = DateTimeOffset.UtcNow, Topics = [] };

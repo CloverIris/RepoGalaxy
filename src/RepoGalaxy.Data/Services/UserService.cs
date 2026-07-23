@@ -10,19 +10,13 @@ namespace RepoGalaxy.Data.Services;
 public sealed class UserService : IUserService
 {
     private readonly IDbContextFactory<RepoGalaxyDbContext> _factory;
-    private readonly ISecureStorage _secureStorage;
     private readonly SemaphoreSlim _preferencesGate = new(1, 1);
     private UserPreference? _cachedPreferences;
     private DateTimeOffset _preferencesCachedAt;
-    public UserService(IDbContextFactory<RepoGalaxyDbContext> factory, ISecureStorage secureStorage) { _factory = factory; _secureStorage = secureStorage; }
+    public UserService(IDbContextFactory<RepoGalaxyDbContext> factory) => _factory = factory;
 
-    public async Task<bool> IsAuthenticatedAsync() => !string.IsNullOrWhiteSpace(await GetAccessTokenAsync());
-    public async Task<User?> GetCurrentUserAsync() { await using var db = await _factory.CreateDbContextAsync(); var entity = await db.Users.AsNoTracking().OrderByDescending(x => x.LastLoginAt).ThenBy(x => x.Id).FirstOrDefaultAsync(); if (entity is null) return null; var model = Map(entity); model.AccessToken = await GetAccessTokenAsync(); return model; }
+    public async Task<User?> GetCurrentUserAsync() { await using var db = await _factory.CreateDbContextAsync(); var entity = await db.Users.AsNoTracking().OrderByDescending(x => x.LastLoginAt).ThenBy(x => x.Id).FirstOrDefaultAsync(); return entity is null ? null : Map(entity); }
     public async Task<bool> SaveUserAsync(User user) { await using var db = await _factory.CreateDbContextAsync(); var entity = await db.Users.OrderByDescending(x => x.LastLoginAt).ThenBy(x => x.Id).FirstOrDefaultAsync(); if (entity is null) { entity = new UserEntity(); db.Add(entity); } entity.GitHubId = user.GitHubId; entity.Login = user.Login; entity.DisplayName = user.DisplayName; entity.AvatarUrl = user.AvatarUrl; entity.Bio = user.Bio; entity.Company = user.Company; entity.Location = user.Location; entity.Blog = user.Blog; entity.TwitterUsername = user.TwitterUsername; entity.ProfileUrl = user.ProfileUrl; entity.PublicRepos = user.PublicRepos; entity.Followers = user.Followers; entity.Following = user.Following; entity.CreatedAt = user.CreatedAt; entity.LastLoginAt = DateTimeOffset.UtcNow; await db.SaveChangesAsync(); user.Id = entity.Id; return true; }
-    public Task<string?> GetAccessTokenAsync() => _secureStorage.GetAsync("github_access_token");
-    public async Task<bool> SaveAccessTokenAsync(string token, DateTimeOffset? expiresAt = null) { if (!await _secureStorage.SetAsync("github_access_token", token)) return false; return !expiresAt.HasValue || await _secureStorage.SetAsync("github_token_expires_at", expiresAt.Value.ToString("O")); }
-    public async Task<bool> ClearAuthenticationAsync() { var a = await _secureStorage.RemoveAsync("github_access_token"); var b = await _secureStorage.RemoveAsync("github_token_expires_at"); return a && b; }
-
     public async Task<UserPreference> GetPreferencesAsync()
     {
         if (_cachedPreferences is not null && DateTimeOffset.UtcNow - _preferencesCachedAt < TimeSpan.FromMinutes(5)) return _cachedPreferences;

@@ -80,7 +80,16 @@ public sealed class PersistentCacheStore : IPersistentCacheStore
     {
         await using var db = await _factory.CreateDbContextAsync(cancellationToken);
         var item = await db.ApiCacheEntries.FirstOrDefaultAsync(x => x.Key == key.Value, cancellationToken);
-        if (item is null || item.StaleUntil <= DateTimeOffset.UtcNow) { Interlocked.Increment(ref _misses); if (item is not null) { db.Remove(item); await db.SaveChangesWithRetryAsync(cancellationToken); } return CacheReadResult<T>.Miss(); }
+        if (item is null || item.Schema != ApiCacheEntryEntity.CurrentSchema || item.StaleUntil <= DateTimeOffset.UtcNow)
+        {
+            Interlocked.Increment(ref _misses);
+            if (item is not null)
+            {
+                db.Remove(item);
+                await db.SaveChangesWithRetryAsync(cancellationToken);
+            }
+            return CacheReadResult<T>.Miss();
+        }
         try
         {
             item.LastAccessedAt = DateTimeOffset.UtcNow;
@@ -99,6 +108,7 @@ public sealed class PersistentCacheStore : IPersistentCacheStore
         var now = DateTimeOffset.UtcNow;
         await using var db = await _factory.CreateDbContextAsync(cancellationToken);
         var item = await db.ApiCacheEntries.FindAsync([key.Value], cancellationToken) ?? new ApiCacheEntryEntity { Key = key.Value };
+        item.Schema = ApiCacheEntryEntity.CurrentSchema;
         item.Payload = payload; item.ETag = etag; item.LastModified = lastModified; item.Tags = "|" + string.Join('|', (policy.Tags ?? []).Select(x => x.Trim().ToLowerInvariant())) + "|";
         item.FetchedAt = now; item.ExpiresAt = now + policy.FreshFor; item.StaleUntil = now + policy.FreshFor + policy.StaleFor; item.LastAccessedAt = now; item.SizeBytes = payload.LongLength;
         if (db.Entry(item).State == EntityState.Detached) db.Add(item);

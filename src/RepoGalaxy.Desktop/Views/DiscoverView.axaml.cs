@@ -63,7 +63,7 @@ public partial class DiscoverView : UserControl
         if (TileInputClassifier.Classify(e.Delta.X, e.Delta.Y) == TileWheelIntent.Pan)
             tileWorld.QueuePan(-e.Delta.X * 72, -e.Delta.Y * 72);
         else
-            tileWorld.QueueZoom(e.Delta.Y, point.X, point.Y, FindTile(e.Source));
+            tileWorld.QueueZoom(e.Delta.Y, point.X, point.Y, tileWorld.GetTileAt(point));
         e.Handled = true;
     }
 
@@ -74,7 +74,7 @@ public partial class DiscoverView : UserControl
         if (tileWorld is null) return;
         var incremental = e.Scale / Math.Max(.001, _lastPinchScale);
         _lastPinchScale = e.Scale;
-        tileWorld.QueueZoomFactor(incremental, e.ScaleOrigin.X, e.ScaleOrigin.Y, FindTile(e.Source));
+        tileWorld.QueueZoomFactor(incremental, e.ScaleOrigin.X, e.ScaleOrigin.Y, tileWorld.GetTileAt(e.ScaleOrigin));
         e.Handled = true;
     }
 
@@ -90,7 +90,7 @@ public partial class DiscoverView : UserControl
         var tileWorld = this.FindControl<Controls.ZoomableTileCanvas>("TileWorld");
         if (tileWorld is null) return;
         var point = e.GetPosition(_worldHost);
-        tileWorld.QueueZoomFactor(Math.Exp(Math.Clamp(e.Delta.Y, -.35, .35)), point.X, point.Y, FindTile(e.Source));
+        tileWorld.QueueZoomFactor(Math.Exp(Math.Clamp(e.Delta.Y, -.35, .35)), point.X, point.Y, tileWorld.GetTileAt(point));
         e.Handled = true;
     }
 
@@ -101,10 +101,4 @@ public partial class DiscoverView : UserControl
         return false;
     }
 
-    private static MetroTileViewModel? FindTile(object? source)
-    {
-        for (var control = source as Control; control is not null; control = control.Parent as Control)
-            if (control.DataContext is MetroTileViewModel tile) return tile;
-        return null;
-    }
 }

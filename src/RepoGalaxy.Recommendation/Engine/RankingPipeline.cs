@@ -25,9 +25,10 @@ public sealed class RankingPipeline : IRankingPipeline
     public IReadOnlyList<FineRankResult> FineRank(IReadOnlyList<CoarseRankResult> candidates, RankingContext context, RankingTuningProfile profile)
     {
         var weights = profile.Fine;
-        var scored = candidates.Select(x => new ScoredCandidate(x, Clamp(x.Score * weights.CoarseScore
+        var scored = candidates.Select(x => new ScoredCandidate(x, Clamp((x.Score * weights.CoarseScore
             + x.Features.PreferenceAffinity * weights.ContentProfile + x.Features.Behavior * weights.Behavior
-            + x.Features.Novelty * weights.Novelty + x.Features.LocalRelevance * weights.LocalRelevance)))
+            + x.Features.Novelty * weights.Novelty + x.Features.LocalRelevance * weights.LocalRelevance)
+            * SuppressionMultiplier(x.Repository, context))))
             .OrderByDescending(x => x.Score).ThenBy(x => x.Coarse.Repository.FullName, StringComparer.OrdinalIgnoreCase).ToList();
         var selected = new List<FineRankResult>();
         var pool = new List<ScoredCandidate>(scored);
@@ -83,7 +84,7 @@ public sealed class RankingPipeline : IRankingPipeline
         var velocity = context.StarVelocities?.GetValueOrDefault(repo.Id)
             ?? Clamp(Math.Log10(Math.Max(1, repo.Stars + 1)) / 5d * freshness);
         var quality = Clamp(Math.Log10(Math.Max(1, repo.Stars + repo.Forks * 2 + 1)) / 5d) * (repo.IsArchived ? .25 : 1);
-        var feedback = context.Feedback.TryGetValue(repo.Id, out var action) ? action switch { FeedbackType.Bookmark => 1, FeedbackType.Click => .8, FeedbackType.View => .65, FeedbackType.Dismiss => .1, FeedbackType.Ignore => 0, _ => .5 } : .5;
+        var feedback = context.Feedback.TryGetValue(repo.Id, out var action) ? action switch { FeedbackType.Bookmark => 1, FeedbackType.Like => .9, FeedbackType.Click => .8, FeedbackType.View => .65, FeedbackType.Dismiss => .1, FeedbackType.Ignore => 0, FeedbackType.Unlike => .5, _ => .5 } : .5;
         var novelty = context.Feedback.ContainsKey(repo.Id) ? .25 : 1;
         var local = context.LocalLanguages.Contains(repo.PrimaryLanguage) ? 1 : 0;
         var ruleMatch = context.RuleMatches?.GetValueOrDefault(repo.Id) ?? Math.Max(affinity, repo.DiscoveryScore);
@@ -95,6 +96,15 @@ public sealed class RankingPipeline : IRankingPipeline
         return window.Count(x => x.Repository.PrimaryLanguage.Equals(candidate.PrimaryLanguage, StringComparison.OrdinalIgnoreCase)) < profile.SameLanguagePerTen
             && window.Count(x => x.Repository.Owner.Equals(candidate.Owner, StringComparison.OrdinalIgnoreCase)) < profile.SameOwnerPerTen;
     }
+    private static double SuppressionMultiplier(Repository repository, RankingContext context)
+    {
+        if (context.SuppressedSignals is not { Count: > 0 } signals) return 1;
+        var reduction = signals.Contains($"language:{NormalizeSignal(repository.PrimaryLanguage)}") ? .30 : 0;
+        reduction += repository.Topics.Count(topic => signals.Contains($"topic:{NormalizeSignal(topic)}")) * .10;
+        return 1 - Math.Min(.50, reduction);
+    }
+    private static string NormalizeSignal(string value) =>
+        string.Join('-', (value ?? string.Empty).Trim().ToLowerInvariant().Split([' ', '_'], StringSplitOptions.RemoveEmptyEntries));
     private static ScoredCandidate SampleByTemperature(IReadOnlyList<ScoredCandidate> pool, double temperature, Random random)
     {
         if (pool.Count == 1) return pool[0];

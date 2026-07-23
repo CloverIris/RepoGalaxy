@@ -26,7 +26,7 @@ public sealed class TileWorldPresentationService : ITileWorldPresentationService
             : new(anchorPlacement.Content.Key,
                 anchorPlacement.Column * UnitWithGap + Width(anchorPlacement.ColumnSpan) / 2,
                 anchorPlacement.Row * UnitWithGap + Width(anchorPlacement.RowSpan) / 2);
-        return new(board.Id, board.LayoutVersion, board.WorldSeed, placements, bounds, anchor);
+        return new(board.Id, board.WorldSeed, placements, bounds, anchor);
     }
 
     public IReadOnlyList<TilePlacement> QueryVisible(TileWorldSnapshot snapshot, TileWorldViewport viewport, double overscan = 180)

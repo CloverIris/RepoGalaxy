@@ -42,6 +42,9 @@ namespace RepoGalaxy.Data.Migrations
                         .IsRequired()
                         .HasColumnType("BLOB");
 
+                    b.Property<int>("Schema")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("SizeBytes")
                         .HasColumnType("INTEGER");
 
@@ -854,9 +857,6 @@ namespace RepoGalaxy.Data.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("LayoutVersion")
-                        .HasColumnType("INTEGER");
-
                     b.Property<int>("ProjectCount")
                         .HasColumnType("INTEGER");
 
@@ -876,7 +876,7 @@ namespace RepoGalaxy.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BoardId", "LayoutVersion", "ItemKey")
+                    b.HasIndex("BoardId", "ItemKey")
                         .IsUnique();
 
                     b.ToTable("SemanticIndexPlacements");
@@ -988,9 +988,6 @@ namespace RepoGalaxy.Data.Migrations
                     b.Property<int>("ExtentRows")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("LayoutVersion")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(120)
@@ -1027,7 +1024,7 @@ namespace RepoGalaxy.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ScopeKey", "Source", "LayoutVersion")
+                    b.HasIndex("ScopeKey", "Source")
                         .IsUnique();
 
                     b.ToTable("TileBoards");

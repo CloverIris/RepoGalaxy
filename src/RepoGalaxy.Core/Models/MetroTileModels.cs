@@ -46,7 +46,6 @@ public sealed record TileBoardState(
     long Id,
     string ScopeKey,
     FeedSource Source,
-    int LayoutVersion,
     double CameraX,
     double CameraY,
     double Zoom,
@@ -126,7 +125,6 @@ public readonly record struct TileWorldAnchor(string ContentKey, double WorldX, 
 
 public sealed record TileWorldSnapshot(
     long BoardId,
-    int LayoutVersion,
     string WorldSeed,
     IReadOnlyList<TilePlacement> Placements,
     TileWorldContentBounds ContentBounds,
@@ -171,7 +169,6 @@ public sealed record SemanticMosaicPlacement(
 
 public sealed record SemanticMosaicState(
     long BoardId,
-    int LayoutVersion,
     int ExtentColumns,
     int ExtentRows,
     IReadOnlyList<SemanticMosaicPlacement> Placements);
@@ -218,6 +215,42 @@ public readonly record struct ZoomTransitionState(
     bool ShouldPrefetch);
 
 public sealed record TilePalette(string Background, string Foreground, string SecondaryForeground, string Scrim);
+
+public enum TileActionKind
+{
+    None = 0,
+    Like = 1,
+    Bookmark = 2,
+    GitHubStar = 3,
+    Dislike = 4
+}
+
+public readonly record struct TileActionHitRegion(TileActionKind Action, TileWorldRect Bounds);
+
+public readonly record struct TileImageLayout(TileWorldRect Destination, TileWorldRect Source);
+
+public sealed record RepositoryTileLayout(
+    TileWorldRect Cover,
+    TileWorldRect Text,
+    IReadOnlyList<TileActionHitRegion> Actions,
+    bool UsesWideLayout,
+    bool UsesCover);
+
+public sealed record RepositoryTileActionState(
+    bool IsLiked,
+    bool IsStarred,
+    bool IsSuppressed);
+
+public sealed record RepositoryStarResult(
+    bool Success,
+    bool RequiresLogin,
+    bool IsStarred,
+    int Stars,
+    string? ErrorCode = null);
+
+public sealed record CategorySuppressionResult(
+    IReadOnlyList<string> Signals,
+    int AffectedRepositoryCount);
 
 public sealed record TipDefinition(
     string Key,

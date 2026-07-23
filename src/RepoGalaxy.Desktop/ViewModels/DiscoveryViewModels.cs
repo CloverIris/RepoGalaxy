@@ -55,11 +55,12 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
     private readonly IDetailPortalCoordinator _detailPortal;
     private readonly IIdePreferenceService _idePreferences;
     private readonly IRankingRebuildService _rankingRebuild;
+    private readonly IRepositoryTileActionService _tileActions;
     private readonly List<FeedItemViewModel> _allItems = [];
 
     public ObservableCollection<FeedItemViewModel> Items { get; } = [];
-    public List<MetroTileViewModel> Tiles { get; } = [];
-    public IReadOnlyList<MetroTileViewModel> RenderedTiles { get; private set; } = [];
+    public IReadOnlyList<MetroTileViewModel> Tiles { get; private set; } = [];
+    public TileWorldSnapshot? WorldSnapshot { get; private set; }
     public IReadOnlyList<VirtualTileSlot> RenderedSkeletonSlots { get; private set; } = [];
     public ObservableCollection<DashboardListViewModel> TopLists => _dashboard.TopLists;
     public IReadOnlyList<FeedSourceViewModel> Sources { get; } =
@@ -76,15 +77,13 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
     [ObservableProperty] private string _searchText = string.Empty;
     [ObservableProperty] private string _statusTitle = "还没有发现内容";
     [ObservableProperty] private string _statusDescription = "从热门项目开始，或创建订阅来建立你的长期关注列表。";
-    [ObservableProperty] private double _tileCanvasWidth = 1796;
-    [ObservableProperty] private double _tileCanvasHeight = 596;
-    [ObservableProperty] private double _tileWorldOriginX;
-    [ObservableProperty] private double _tileWorldOriginY;
     [ObservableProperty] private double _cameraX;
     [ObservableProperty] private double _cameraY;
     [ObservableProperty] private double _zoom = 1;
     [ObservableProperty] private int _skeletonRevision;
     [ObservableProperty] private string _activeTileFilter = string.Empty;
+    [ObservableProperty] private bool _isDislikeMenuOpen;
+    [ObservableProperty] private MetroTileViewModel? _dislikeTargetTile;
     private TileBoardState? _tileBoard;
     public bool HasActiveTileFilter => !string.IsNullOrWhiteSpace(ActiveTileFilter);
 
@@ -103,7 +102,7 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
     public event EventHandler? LoginRequested;
     public event EventHandler<string>? SubscriptionRequested;
 
-    public DiscoverViewModel(DiscoveryStore store, DiscoverySyncService sync, RepositoryDetailsViewModel details, ILogger<DiscoverViewModel> logger, DashboardRailViewModel dashboard, RepositoryService repositories, IRecommendationEngine recommendations, IMetroTileLayoutService tileLayout, ITilePaletteService tilePalette, ITileImageService tileImages, ITipCatalog tips, IAuthenticationSessionService session, IZoomableTileLayoutService zoomLayout, IDetailContentService detailContent, IExternalLinkService externalLinks, ISemanticMosaicLayoutService semanticLayout, ISemanticIndexCatalogService semanticCatalog, ISpatialTileSearchService spatialSearch, IVirtualTileWorldService virtualWorld, ITileWorldPresentationService worldPresentation, IMarkdownDocumentService markdown, ISafeMarkdownImageService markdownImages, ILocalIdeDiscoveryService ideDiscovery, ILocalRepositoryResolver localResolver, IRepositoryCloneService cloneService, IIdeLauncher ideLauncher, IDetailPortalCoordinator detailPortal, IIdePreferenceService idePreferences, IRankingRebuildService rankingRebuild)
+    public DiscoverViewModel(DiscoveryStore store, DiscoverySyncService sync, RepositoryDetailsViewModel details, ILogger<DiscoverViewModel> logger, DashboardRailViewModel dashboard, RepositoryService repositories, IRecommendationEngine recommendations, IMetroTileLayoutService tileLayout, ITilePaletteService tilePalette, ITileImageService tileImages, ITipCatalog tips, IAuthenticationSessionService session, IZoomableTileLayoutService zoomLayout, IDetailContentService detailContent, IExternalLinkService externalLinks, ISemanticMosaicLayoutService semanticLayout, ISemanticIndexCatalogService semanticCatalog, ISpatialTileSearchService spatialSearch, IVirtualTileWorldService virtualWorld, ITileWorldPresentationService worldPresentation, IMarkdownDocumentService markdown, ISafeMarkdownImageService markdownImages, ILocalIdeDiscoveryService ideDiscovery, ILocalRepositoryResolver localResolver, IRepositoryCloneService cloneService, IIdeLauncher ideLauncher, IDetailPortalCoordinator detailPortal, IIdePreferenceService idePreferences, IRankingRebuildService rankingRebuild, IRepositoryTileActionService tileActions)
     {
         _store = store;
         _sync = sync;
@@ -134,6 +133,7 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
         _detailPortal = detailPortal;
         _idePreferences = idePreferences;
         _rankingRebuild = rankingRebuild;
+        _tileActions = tileActions;
         _rankingRebuild.Rebuilt += OnRankingRebuilt;
         _selectedSource = Sources[0];
         _selectedSource.IsSelected = true;
@@ -206,6 +206,94 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
         if (tile.RepositoryItem is null) return;
         await SaveAsync(tile.RepositoryItem.Id);
         tile.RefreshSavedState();
+        SkeletonRevision++;
+    }
+
+    [RelayCommand]
+    private async Task LikeTileAsync(MetroTileViewModel tile)
+    {
+        if (tile.RepositoryItem is null) return;
+        try
+        {
+            var liked = await _tileActions.SetLikedAsync(tile.RepositoryItem.Repository.Id, !tile.IsLiked);
+            tile.SetLiked(liked);
+            SpatialSearchStatus = liked ? "已提升这类项目的推荐偏好" : "已取消点赞";
+            SkeletonRevision++;
+        }
+        catch { SpatialSearchStatus = "暂时无法保存点赞状态"; }
+    }
+
+    [RelayCommand]
+    private async Task StarTileAsync(MetroTileViewModel tile)
+    {
+        if (tile.RepositoryItem is null) return;
+        if (!_session.Current.IsAuthenticated)
+        {
+            SpatialSearchStatus = "登录 GitHub 后可以 Star 仓库";
+            LoginRequested?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+        var result = await _tileActions.ToggleStarAsync(tile.RepositoryItem.Repository.Repository, tile.IsStarred);
+        if (result.RequiresLogin)
+        {
+            LoginRequested?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+        if (!result.Success)
+        {
+            SpatialSearchStatus = "GitHub Star 操作失败，请检查登录状态或稍后重试";
+            return;
+        }
+        tile.SetStarred(result.IsStarred, result.Stars);
+        SpatialSearchStatus = result.IsStarred ? "已在 GitHub Star" : "已取消 GitHub Star";
+        SkeletonRevision++;
+    }
+
+    public void OpenDislikeMenu(MetroTileViewModel tile)
+    {
+        if (tile.RepositoryItem is null) return;
+        DislikeTargetTile = tile;
+        IsDislikeMenuOpen = true;
+    }
+
+    [RelayCommand]
+    private async Task SuppressDislikeCategoryAsync()
+    {
+        var target = DislikeTargetTile;
+        IsDislikeMenuOpen = false;
+        if (target?.RepositoryItem is null) return;
+        var repositories = _allItems.Select(x => x.Repository.Repository).ToArray();
+        var result = await _tileActions.SuppressCategoryAsync(target.RepositoryItem.Repository.Repository, repositories);
+        var signals = result.Signals.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var tile in Tiles)
+        {
+            if (tile.RepositoryItem is not { } item) continue;
+            if (MatchesSuppression(item.Repository.Repository, signals))
+                tile.SetCategorySuppressed(true);
+        }
+        DislikeTargetTile = null;
+        SpatialSearchStatus = result.Signals.Count == 0
+            ? "这个项目没有可用于降低推荐的分类信号"
+            : $"已减少此类推荐，当前 Feed 影响 {result.AffectedRepositoryCount} 个项目";
+        SkeletonRevision++;
+    }
+
+    [RelayCommand]
+    private async Task DismissDislikeTargetAsync()
+    {
+        var target = DislikeTargetTile;
+        IsDislikeMenuOpen = false;
+        DislikeTargetTile = null;
+        if (target is null) return;
+        await DismissTileAsync(target);
+        SpatialSearchStatus = "已隐藏这个项目";
+    }
+
+    [RelayCommand]
+    private void CloseDislikeMenu()
+    {
+        IsDislikeMenuOpen = false;
+        DislikeTargetTile = null;
     }
 
     [RelayCommand]
@@ -321,37 +409,27 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
         var scope = _session.Current.User?.GitHubId ?? "guest";
         _tileBoard = await _tileLayout.SynchronizeAsync(scope, SelectedSource.Source, content, minimumColumns, minimumRows, reflow);
         var repositoriesById = _allItems.GroupBy(x => x.Repository.Id).ToDictionary(x => x.Key, x => x.First());
+        var actionStates = await _tileActions.LoadStatesAsync(repositoriesById.Keys.ToArray());
         var rankingsByKey = TopLists.ToDictionary(x => $"ranking:{x.Title}", StringComparer.Ordinal);
-        Tiles.Clear();
+        var nextTiles = new List<MetroTileViewModel>(_tileBoard.Placements.Count);
         foreach (var placement in _tileBoard.Placements)
         {
             if (placement.Content.IsPlaceholder) continue;
             repositoriesById.TryGetValue(placement.Content.RepositoryId ?? -1, out var repository);
             rankingsByKey.TryGetValue(placement.Content.Key, out var ranking);
             var tile = new MetroTileViewModel(placement, _tilePalette.Create(placement.Content.AccentKey), repository, ranking);
-            Tiles.Add(tile);
+            if (repository is not null && actionStates.TryGetValue(repository.Repository.Id, out var actionState))
+                tile.ApplyActionState(actionState);
+            nextTiles.Add(tile);
             if (tile.IsRepository && !string.IsNullOrWhiteSpace(placement.Content.ImageUrl)) _ = LoadTileImageAsync(tile, placement.Content.ImageUrl);
         }
         var worldSnapshot = _worldPresentation.CreateSnapshot(_tileBoard, anchorKey);
-        if (Tiles.Count > 0)
-        {
-            TileWorldOriginX = worldSnapshot.ContentBounds.Left;
-            TileWorldOriginY = worldSnapshot.ContentBounds.Top;
-            TileCanvasWidth = Math.Max(1, worldSnapshot.ContentBounds.Width);
-            TileCanvasHeight = Math.Max(1, worldSnapshot.ContentBounds.Height);
-            foreach (var tile in Tiles) tile.SetWorldOrigin(TileWorldOriginX, TileWorldOriginY);
-        }
-        else
-        {
-            TileWorldOriginX = 0;
-            TileWorldOriginY = 0;
-            TileCanvasWidth = 1;
-            TileCanvasHeight = 1;
-        }
-        RenderedTiles = Tiles.ToArray();
-        OnPropertyChanged(nameof(RenderedTiles));
-        _renderWindowKey = string.Empty;
-        _tileRenderStateKey = string.Empty;
+        Tiles = nextTiles.ToArray();
+        WorldSnapshot = worldSnapshot;
+        OnPropertyChanged(nameof(Tiles));
+        OnPropertyChanged(nameof(WorldSnapshot));
+        _contentBounds = worldSnapshot.ContentBounds;
+        _renderWindowKey = long.MinValue;
         var camera = previousBoardId == _tileBoard.Id ? liveCamera : new CameraState(_tileBoard.CameraX, _tileBoard.CameraY, _tileBoard.Zoom, ActiveIndexKind: _tileBoard.ActiveIndexKind, ActiveIndexKey: _tileBoard.ActiveIndexKey);
         CameraX = camera.X; CameraY = camera.Y; Zoom = camera.Zoom;
         if (reflow)
@@ -393,10 +471,10 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
             ? null
             : Tiles.FirstOrDefault(x => x.Key.Equals(anchorKey, StringComparison.Ordinal));
         var centerX = target is null
-            ? TileWorldOriginX + TileCanvasWidth / 2
+            ? _contentBounds.CenterX
             : target.Left + target.Width / 2;
         var centerY = target is null
-            ? TileWorldOriginY + TileCanvasHeight / 2
+            ? _contentBounds.CenterY
             : target.Top + target.Height / 2;
         CameraX = centerX - _viewportWidth / (2 * zoom);
         CameraY = centerY - _viewportHeight / (2 * zoom);
@@ -411,14 +489,29 @@ public sealed partial class DiscoverViewModel : ViewModelBase, ISearchablePage, 
 
     private async Task LoadTileImageAsync(MetroTileViewModel tile, string url)
     {
-        if (await _tileImages.GetAsync(url) is { } asset) tile.ApplyImageAsset(asset, _tilePalette);
+        if (await _tileImages.GetAsync(url) is { } asset)
+        {
+            tile.ApplyImageAsset(asset, _tilePalette);
+            SkeletonRevision++;
+        }
     }
 
     private void ApplyTileFilter()
     {
         var filter = string.IsNullOrWhiteSpace(ActiveTileFilter) ? SearchText : ActiveTileFilter;
         foreach (var tile in Tiles) tile.SetFilter(filter);
+        SkeletonRevision++;
     }
+
+    private static bool MatchesSuppression(Repository repository, IReadOnlySet<string> signals)
+    {
+        if (!string.IsNullOrWhiteSpace(repository.PrimaryLanguage) &&
+            signals.Contains($"language:{NormalizeSuppressionValue(repository.PrimaryLanguage)}")) return true;
+        return repository.Topics.Any(x => signals.Contains($"topic:{NormalizeSuppressionValue(x)}"));
+    }
+
+    private static string NormalizeSuppressionValue(string value) =>
+        string.Join('-', value.Trim().ToLowerInvariant().Split([' ', '_'], StringSplitOptions.RemoveEmptyEntries));
 
     private async Task RefreshCountsAsync()
     {

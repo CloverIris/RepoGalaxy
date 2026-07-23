@@ -11,7 +11,8 @@ public sealed record RankingContext(
     IReadOnlyDictionary<long, FeedbackType> Feedback,
     string BatchId,
     IReadOnlyDictionary<long, double>? StarVelocities = null,
-    IReadOnlyDictionary<long, double>? RuleMatches = null);
+    IReadOnlyDictionary<long, double>? RuleMatches = null,
+    IReadOnlySet<string>? SuppressedSignals = null);
 
 public sealed record FeatureVector(
     double RuleMatch,

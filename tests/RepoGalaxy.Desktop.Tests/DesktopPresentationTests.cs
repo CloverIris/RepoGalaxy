@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Chrome;
 using Avalonia.Input;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using RepoGalaxy.Core.Models;
@@ -88,6 +89,33 @@ public sealed class DesktopPresentationTests
         Check(new LoginDialog() is not null, "Login dialog failed to load.");
     }
 
+    [Theory]
+    [InlineData(1440, 900)]
+    [InlineData(1366, 768)]
+    [InlineData(1000, 720)]
+    [InlineData(900, 640)]
+    public void Discover_tile_world_arranges_at_supported_headless_viewports(double width, double height)
+    {
+        TestAppBuilder.EnsureInitialized();
+        var view = new DiscoverView();
+        var host = new Window { Width = width, Height = height, Content = view };
+        try
+        {
+            host.Show();
+            Dispatcher.UIThread.RunJobs();
+            var world = view.FindControl<VirtualizedTileWorldControl>("TileWorld")
+                ?? throw new InvalidOperationException("Virtualized tile world was not found.");
+
+            Check(world.Bounds.Width > 0 && world.Bounds.Height > 0,
+                $"Tile world did not arrange at {width}x{height}.");
+            Check(world.ClipToBounds, "Tile world must rely only on true viewport clipping.");
+        }
+        finally
+        {
+            host.Close();
+        }
+    }
+
     [Fact]
     public void Startup_window_is_centered_responsive_and_uses_custom_chrome()
     {
@@ -114,7 +142,7 @@ public sealed class DesktopPresentationTests
             new TilePlacement(1, new TileContent("repository:wide", MetroTileKind.Repository, "owner/wide"), -12, 4, 6, 1),
             new TilePlacement(2, new TileContent("language:csharp", MetroTileKind.Language, "C#"), 3, -2, 1, 1)
         };
-        var board = new TileBoardState(5, "guest", FeedSource.Trending, 3, 0, 0, 1, null, "", 0, 0, 18, 10, placements, "seed");
+        var board = new TileBoardState(5, "guest", FeedSource.Trending, 0, 0, 1, null, "", 0, 0, 18, 10, placements, "seed");
         var service = new TileWorldPresentationService();
 
         var snapshot = service.CreateSnapshot(board, "repository:wide");
@@ -218,6 +246,78 @@ public sealed class DesktopPresentationTests
         }
         Check(TileIconCatalog.Get("Python") is not null, "Bundled Python SVG did not load as local geometry.");
         Check(TileIconCatalog.Get("not-a-language") is null, "Unknown technologies should use the text fallback.");
+    }
+
+    [Fact]
+    public void Wide_repository_layout_releases_missing_cover_space_and_precomputes_non_overlapping_actions()
+    {
+        TestAppBuilder.EnsureInitialized();
+        var repository = new Repository
+        {
+            Id = 42,
+            Owner = "owner",
+            Name = "repository",
+            Description = "A repository description that can wrap onto a second line.",
+            Stars = 1234
+        };
+        var feed = new FeedItemViewModel(new FeedItem
+        {
+            Id = 7,
+            RepositoryId = repository.Id,
+            Repository = repository,
+            Reason = new FeedReason { Summary = "推荐原因" }
+        });
+        var palette = new TilePalette("#1D4ED8", "#FFFFFF", "#DCE8FF", "#66000000");
+        var withoutCover = new MetroTileViewModel(
+            new TilePlacement(1, new TileContent("repository:42", MetroTileKind.Repository, repository.FullName, RepositoryId: repository.Id), 0, 0, 6, 1),
+            palette,
+            feed);
+        var withCoverPlacement = new TilePlacement(2,
+            new TileContent("repository:42:cover", MetroTileKind.Repository, repository.FullName,
+                RepositoryId: repository.Id, ImageUrl: "https://avatars.githubusercontent.com/u/42"),
+            0, 0, 6, 1);
+        var withCover = MetroTileViewModel.CalculateRepositoryLayout(withCoverPlacement, usesCover: true)!;
+
+        Check(withoutCover.RepositoryLayout is { UsesWideLayout: true, UsesCover: false }, "6x1 repository should use the wide layout without reserving a missing cover.");
+        Check(withoutCover.RepositoryLayout!.Text.X == 8, "Missing cover must release its entire horizontal slot.");
+        Check(withCover.UsesCover, "A successfully loaded image should enable the cover slot.");
+        Check(withCover.Cover.Width == withCover.Cover.Height, "6x1 cover must remain exactly square.");
+        var actions = withCover.Actions;
+        Check(actions.Select(x => x.Action).SequenceEqual(
+            [TileActionKind.Like, TileActionKind.Bookmark, TileActionKind.GitHubStar, TileActionKind.Dislike]),
+            "Repository action order changed.");
+        for (var index = 0; index < actions.Count; index++)
+            for (var other = index + 1; other < actions.Count; other++)
+                Check(!Overlaps(actions[index].Bounds, actions[other].Bounds), "Repository action hit regions overlap.");
+
+        static bool Overlaps(TileWorldRect left, TileWorldRect right) =>
+            left.X < right.X + right.Width && left.X + left.Width > right.X
+            && left.Y < right.Y + right.Height && left.Y + left.Height > right.Y;
+    }
+
+    [Fact]
+    public void Featured_repository_layout_keeps_a_full_cover_and_shared_action_semantics()
+    {
+        TestAppBuilder.EnsureInitialized();
+        var repository = new Repository { Id = 8, Owner = "owner", Name = "featured" };
+        var feed = new FeedItemViewModel(new FeedItem
+        {
+            RepositoryId = repository.Id,
+            Repository = repository,
+            Reason = new FeedReason()
+        });
+        var placement = new TilePlacement(3,
+            new TileContent("featured:8", MetroTileKind.FeaturedRepository, repository.FullName,
+                RepositoryId: repository.Id, ImageUrl: "https://avatars.githubusercontent.com/u/8"),
+            0, 0, 2, 2);
+        var tile = new MetroTileViewModel(placement, new("#1F2937", "#FFFFFF", "#D1D5DB", "#99000000"), feed);
+        var loadedLayout = MetroTileViewModel.CalculateRepositoryLayout(placement, usesCover: true)!;
+
+        Check(tile.RepositoryLayout is { UsesWideLayout: false, UsesCover: false }, "Featured repositories must not reserve space before their image is available.");
+        Check(loadedLayout is { UsesWideLayout: false, UsesCover: true }, "2x2 featured repository should retain its large cover after loading.");
+        Check(loadedLayout.Cover.Width == tile.Width && loadedLayout.Cover.Height == tile.Height,
+            "Featured cover should fill the tile before UniformToFill cropping and scrim composition.");
+        Check(loadedLayout.Actions.Count == 4, "Featured repository must expose the same four actions.");
     }
 
     [Fact]

@@ -99,6 +99,7 @@ class Program
         services.AddSingleton<ISpatialTileSearchService, SpatialTileSearchService>();
         services.AddSingleton<IVirtualTileWorldService, VirtualTileWorldService>();
         services.AddSingleton<ITileWorldPresentationService, TileWorldPresentationService>();
+        services.AddSingleton<IRepositoryTileActionService, RepositoryTileActionService>();
         services.AddSingleton<IZoomableTileLayoutService, ZoomableTileLayoutService>();
         services.AddSingleton<IDetailPortalCoordinator, DetailPortalCoordinator>();
         services.AddSingleton<ITilePaletteService, TilePaletteService>();
@@ -216,7 +217,7 @@ class Program
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var appFolder = Path.Combine(appData, "RepoGalaxy");
         Directory.CreateDirectory(appFolder);
-        return Path.Combine(appFolder, "repogalaxy-v3.db");
+        return Path.Combine(appFolder, "repogalaxy.db");
     }
 
     /// <summary>

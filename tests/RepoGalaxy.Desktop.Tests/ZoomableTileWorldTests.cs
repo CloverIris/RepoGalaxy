@@ -303,21 +303,6 @@ public sealed class ZoomableTileWorldTests
     }
 
     [Fact]
-    public void Real_tile_projection_uses_world_origin_without_changing_tile_geometry()
-    {
-        var tile = new MetroTileViewModel(
-            new TilePlacement(1, new TileContent("repository:wide", MetroTileKind.Repository, "owner/wide"), -12, 7, 6, 1),
-            new TilePalette("#102030", "#ffffff", "#d0d0d0", "#00000080"));
-
-        tile.SetWorldOrigin(-1800, 400);
-
-        Assert.Equal(600, tile.RenderLeft);
-        Assert.Equal(300, tile.RenderTop);
-        Assert.Equal(596, tile.Width);
-        Assert.Equal(96, tile.Height);
-    }
-
-    [Fact]
     public void Nearest_compatible_slots_extend_the_real_tile_frontier_without_template_gaps()
     {
         var service = new VirtualTileWorldService();

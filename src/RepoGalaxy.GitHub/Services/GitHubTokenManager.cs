@@ -10,10 +10,7 @@ namespace RepoGalaxy.GitHub.Services;
 public class GitHubTokenManager
 {
     private readonly ISecureStorage _secureStorage;
-    private const string TokenKey = "github_access_token";
-    private const string CredentialEnvelopeKey = "github_credential_envelope_v3";
-    private const string TokenExpiryKey = "github_token_expires_at";
-    private const string RefreshTokenKey = "github_refresh_token";
+    public const string CredentialEnvelopeKey = "github_credential";
     private const string SessionMetadataKey = "github_session_metadata";
     
     public GitHubTokenManager(ISecureStorage secureStorage)
@@ -42,7 +39,7 @@ public class GitHubTokenManager
     public async Task<string?> GetTokenAsync()
     {
         var envelope = await ReadEnvelopeAsync();
-        return envelope?.AccessToken ?? await _secureStorage.GetAsync(TokenKey);
+        return envelope?.AccessToken;
     }
     
     /// <summary>
@@ -51,15 +48,7 @@ public class GitHubTokenManager
     public async Task<DateTimeOffset?> GetTokenExpiryAsync()
     {
         var envelope = await ReadEnvelopeAsync();
-        if (envelope?.ExpiresAt is { } stored) return stored;
-        var expiryStr = await _secureStorage.GetAsync(TokenExpiryKey);
-        if (string.IsNullOrEmpty(expiryStr))
-            return null;
-            
-        if (DateTimeOffset.TryParse(expiryStr, out var expiry))
-            return expiry;
-            
-        return null;
+        return envelope?.ExpiresAt;
     }
     
     /// <summary>
@@ -91,12 +80,7 @@ public class GitHubTokenManager
     {
         try
         {
-            // Deletion is intentionally idempotent: a missing legacy key does not
-            // make logout fail. Storage exceptions still surface as a failure.
             await _secureStorage.RemoveAsync(CredentialEnvelopeKey);
-            await _secureStorage.RemoveAsync(TokenKey);
-            await _secureStorage.RemoveAsync(TokenExpiryKey);
-            await _secureStorage.RemoveAsync(RefreshTokenKey);
             await _secureStorage.RemoveAsync(SessionMetadataKey);
             return true;
         }
@@ -111,7 +95,7 @@ public class GitHubTokenManager
     /// </summary>
     public async Task<string?> GetRefreshTokenAsync()
     {
-        return (await ReadEnvelopeAsync())?.RefreshToken ?? await _secureStorage.GetAsync(RefreshTokenKey);
+        return (await ReadEnvelopeAsync())?.RefreshToken;
     }
     
     /// <summary>

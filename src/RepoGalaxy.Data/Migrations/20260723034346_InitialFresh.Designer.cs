@@ -11,8 +11,8 @@ using RepoGalaxy.Data.DbContexts;
 namespace RepoGalaxy.Data.Migrations
 {
     [DbContext(typeof(RepoGalaxyDbContext))]
-    [Migration("20260720164154_ThreeScaleTileWorld")]
-    partial class ThreeScaleTileWorld
+    [Migration("20260723034346_InitialFresh")]
+    partial class InitialFresh
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -44,6 +44,9 @@ namespace RepoGalaxy.Data.Migrations
                     b.Property<byte[]>("Payload")
                         .IsRequired()
                         .HasColumnType("BLOB");
+
+                    b.Property<int>("Schema")
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("SizeBytes")
                         .HasColumnType("INTEGER");
@@ -150,6 +153,56 @@ namespace RepoGalaxy.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("BookmarkTags");
+                });
+
+            modelBuilder.Entity("RepoGalaxy.Data.Entities.CloneOperationEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DestinationDirectory")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorCode")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Mode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ParentDirectory")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RepositoryFullName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RepositoryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StagingDirectory")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("StartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UpdatedAt");
+
+                    b.ToTable("CloneOperations");
                 });
 
             modelBuilder.Entity("RepoGalaxy.Data.Entities.DiscoverySubscriptionEntity", b =>
@@ -298,6 +351,38 @@ namespace RepoGalaxy.Data.Migrations
                     b.ToTable("GitIdentityAliases");
                 });
 
+            modelBuilder.Entity("RepoGalaxy.Data.Entities.IdePreferenceEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("IdeKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TechnologyKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ScopeKey", "TechnologyKey")
+                        .IsUnique();
+
+                    b.ToTable("IdePreferences");
+                });
+
             modelBuilder.Entity("RepoGalaxy.Data.Entities.LocalContributionDayEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -416,6 +501,9 @@ namespace RepoGalaxy.Data.Migrations
                     b.Property<bool>("IsDirty")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("ProfileRevision")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -468,6 +556,85 @@ namespace RepoGalaxy.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("RankingDecisions");
+                });
+
+            modelBuilder.Entity("RepoGalaxy.Data.Entities.RankingTuningProfileEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CoarseCandidateCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("CoarseFreshness")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("CoarsePreference")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("CoarseQuality")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("CoarseRuleMatch")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("CoarseStarVelocity")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("ExplorationRatio")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("FineBehavior")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("FineCoarse")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("FineContentProfile")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("FineLocalRelevance")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("FineNovelty")
+                        .HasColumnType("REAL");
+
+                    b.Property<int>("FineResultCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("FreshnessHalfLifeDays")
+                        .HasColumnType("REAL");
+
+                    b.Property<int>("Preset")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SameLanguagePerTen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SameOwnerPerTen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("Temperature")
+                        .HasColumnType("REAL");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ScopeKey")
+                        .IsUnique();
+
+                    b.ToTable("RankingTuningProfiles");
                 });
 
             modelBuilder.Entity("RepoGalaxy.Data.Entities.ReleaseNotificationEntity", b =>
@@ -661,6 +828,63 @@ namespace RepoGalaxy.Data.Migrations
                     b.ToTable("RepositoryTopics");
                 });
 
+            modelBuilder.Entity("RepoGalaxy.Data.Entities.SemanticIndexPlacementEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AccentKey")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("BoardId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Column")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ColumnSpan")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ContentKeysJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ItemKey")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ProjectCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Row")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RowSpan")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BoardId", "ItemKey")
+                        .IsUnique();
+
+                    b.ToTable("SemanticIndexPlacements");
+                });
+
             modelBuilder.Entity("RepoGalaxy.Data.Entities.SyncCheckpointEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -767,13 +991,25 @@ namespace RepoGalaxy.Data.Migrations
                     b.Property<int>("ExtentRows")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("LayoutVersion")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("TEXT");
+
+                    b.Property<double>("SemanticViewportHeight")
+                        .HasColumnType("REAL");
+
+                    b.Property<bool>("SemanticViewportUserPositioned")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("SemanticViewportWidth")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("SemanticViewportX")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("SemanticViewportY")
+                        .HasColumnType("REAL");
 
                     b.Property<int>("Source")
                         .HasColumnType("INTEGER");
@@ -781,12 +1017,17 @@ namespace RepoGalaxy.Data.Migrations
                     b.Property<long>("UpdatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("WorldSeed")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<double>("Zoom")
                         .HasColumnType("REAL");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ScopeKey", "Source", "LayoutVersion")
+                    b.HasIndex("ScopeKey", "Source")
                         .IsUnique();
 
                     b.ToTable("TileBoards");
@@ -878,7 +1119,22 @@ namespace RepoGalaxy.Data.Migrations
                     b.Property<string>("Bio")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Blog")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Company")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DisplayName")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Followers")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Following")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("GitHubId")
@@ -888,12 +1144,21 @@ namespace RepoGalaxy.Data.Migrations
                     b.Property<long?>("LastLoginAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Location")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Login")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ProfileUrl")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("PublicRepos")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("TwitterUsername")
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -1139,6 +1404,17 @@ namespace RepoGalaxy.Data.Migrations
                         .HasForeignKey("RepositoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("RepoGalaxy.Data.Entities.SemanticIndexPlacementEntity", b =>
+                {
+                    b.HasOne("RepoGalaxy.Data.Entities.TileBoardEntity", "Board")
+                        .WithMany()
+                        .HasForeignKey("BoardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Board");
                 });
 
             modelBuilder.Entity("RepoGalaxy.Data.Entities.TilePlacementEntity", b =>

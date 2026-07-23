@@ -129,7 +129,7 @@ Keep the secret in secure local configuration and never commit it. The app still
 
 ### Local data
 
-RepoGalaxy stores its database, logs, cache, and backups in the current user's local application-data directory. The v3 database uses EF Core migrations with WAL, foreign keys, busy waiting, and full synchronization. Cache cleanup removes only reconstructible network responses; it never removes Feed data, Tile layouts, saved repositories, subscriptions, preferences, or business history. Signing out clears the credential and private account-derived data.
+RepoGalaxy stores its database, logs, cache, and backups in the current user's local application-data directory. The database is created from one `InitialFresh` baseline with WAL, foreign keys, busy waiting, and full synchronization. The app does not read or migrate databases, layouts, cache payloads, or credential keys from an older data generation. Cache cleanup removes only reconstructible network responses; it never removes Feed data, Tile layouts, saved repositories, subscriptions, preferences, or business history. Signing out clears the credential and private account-derived data.
 
 ## Development and quality checks
 
@@ -142,7 +142,7 @@ dotnet test RepoGalaxy.slnx -c Release
 dotnet list RepoGalaxy.slnx package --vulnerable --include-transitive
 ```
 
-When changing database models, add an incremental migration and verify upgrades from the previous database version. For UI work, validate light and dark themes, keyboard focus, common window widths, and Avalonia Headless tests. No gesture path should issue network or database requests.
+When changing database models, keep one baseline for the current data generation. An incompatible schema change must explicitly start a new generation and reset local data instead of adding legacy conversion branches. For UI work, validate light and dark themes, keyboard focus, common window widths, and Avalonia Headless tests. No gesture path should issue network or database requests.
 
 ## Contributing
 

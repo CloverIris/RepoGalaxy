@@ -31,9 +31,8 @@ public sealed partial class DiscoverViewModel
     private double _semanticViewportWidth;
     private double _semanticViewportHeight;
     private CancellationTokenSource? _worldRefreshCancellation;
-    private string _renderWindowKey = string.Empty;
-    private string _tileRenderStateKey = string.Empty;
-    private int _lastFocusPresentationBucket = -1;
+    private long _renderWindowKey = long.MinValue;
+    private TileWorldContentBounds _contentBounds = TileWorldContentBounds.Empty;
 
     public ObservableCollection<SemanticIndexItemViewModel> SemanticIndexItems { get; } = [];
     public ObservableCollection<SemanticMosaicItemViewModel> SemanticMosaicItems { get; } = [];
@@ -129,7 +128,7 @@ public sealed partial class DiscoverViewModel
             if (FocusedTile is null) desired = Math.Min(desired, 2.5);
             else desired = Math.Min(desired, Math.Min(8, _zoomLayout.CalculateFitScale(Rect(FocusedTile), _viewportWidth, _viewportHeight) * 1.08));
         }
-        ApplyCamera(_zoomLayout.ZoomAt(Camera, desired, anchorX, anchorY, _viewportWidth, _viewportHeight, TileCanvasWidth, TileCanvasHeight));
+        ApplyCamera(_zoomLayout.ZoomAt(Camera, desired, anchorX, anchorY, _viewportWidth, _viewportHeight, 0, 0));
     }
 
     public void ZoomByFactor(double factor, double anchorX, double anchorY, MetroTileViewModel? pointerTile = null)
@@ -139,14 +138,14 @@ public sealed partial class DiscoverViewModel
         var desired = Zoom * Math.Clamp(factor, .72, 1.38);
         if (FocusedTile is null) desired = Math.Min(desired, 2.5);
         else desired = Math.Min(desired, Math.Min(8, _zoomLayout.CalculateFitScale(Rect(FocusedTile), _viewportWidth, _viewportHeight) * 1.08));
-        ApplyCamera(_zoomLayout.ZoomAt(Camera, desired, anchorX, anchorY, _viewportWidth, _viewportHeight, TileCanvasWidth, TileCanvasHeight));
+        ApplyCamera(_zoomLayout.ZoomAt(Camera, desired, anchorX, anchorY, _viewportWidth, _viewportHeight, 0, 0));
     }
 
     public void PanBy(double screenDeltaX, double screenDeltaY)
     {
         if (DetailPresentation is DetailPresentationState.Snapping or DetailPresentationState.Full) return;
         CancelCameraAnimation();
-        ApplyCamera(_zoomLayout.Pan(Camera, screenDeltaX, screenDeltaY, _viewportWidth, _viewportHeight, TileCanvasWidth, TileCanvasHeight));
+        ApplyCamera(_zoomLayout.Pan(Camera, screenDeltaX, screenDeltaY, _viewportWidth, _viewportHeight, 0, 0));
     }
 
     public void PanSemanticBy(double screenDeltaX, double screenDeltaY, double viewportWidth, double viewportHeight)
@@ -294,6 +293,11 @@ public sealed partial class DiscoverViewModel
         ActivateTileCommand.Execute(tile);
     }
 
+    public void SaveTileFromPointer(MetroTileViewModel tile) => SaveTileCommand.Execute(tile);
+    public void LikeTileFromPointer(MetroTileViewModel tile) => LikeTileCommand.Execute(tile);
+    public void StarTileFromPointer(MetroTileViewModel tile) => StarTileCommand.Execute(tile);
+    public void DislikeTileFromPointer(MetroTileViewModel tile) => OpenDislikeMenu(tile);
+
     public void SetCloneParentDirectory(string path)
     {
         if (!string.IsNullOrWhiteSpace(path)) CloneParentDirectory = path;
@@ -380,10 +384,10 @@ public sealed partial class DiscoverViewModel
     }
 
     [RelayCommand]
-    private async Task ReturnToMiddleAsync() => await AnimateCameraAsync(_zoomLayout.ZoomAt(Camera, 1, _viewportWidth / 2, _viewportHeight / 2, _viewportWidth, _viewportHeight, TileCanvasWidth, TileCanvasHeight));
+    private async Task ReturnToMiddleAsync() => await AnimateCameraAsync(_zoomLayout.ZoomAt(Camera, 1, _viewportWidth / 2, _viewportHeight / 2, _viewportWidth, _viewportHeight, 0, 0));
 
     [RelayCommand]
-    private async Task ShowSemanticIndexAsync() => await AnimateCameraAsync(_zoomLayout.ZoomAt(Camera, _zoomLayout.ScaleProfile.SemanticFullyVisibleZoom, _viewportWidth / 2, _viewportHeight / 2, _viewportWidth, _viewportHeight, TileCanvasWidth, TileCanvasHeight));
+    private async Task ShowSemanticIndexAsync() => await AnimateCameraAsync(_zoomLayout.ZoomAt(Camera, _zoomLayout.ScaleProfile.SemanticFullyVisibleZoom, _viewportWidth / 2, _viewportHeight / 2, _viewportWidth, _viewportHeight, 0, 0));
 
     [RelayCommand]
     private async Task CloseImmersiveDetailAsync()
@@ -521,7 +525,7 @@ public sealed partial class DiscoverViewModel
         CommitCamera();
     }
 
-    private void ApplyCamera(CameraState camera, bool persist = true)
+    private void ApplyCamera(CameraState camera, bool persist = false)
     {
         CameraX = camera.X; CameraY = camera.Y; Zoom = camera.Zoom;
         OnPropertyChanged(nameof(ZoomText));
@@ -564,36 +568,25 @@ public sealed partial class DiscoverViewModel
         DetailProgress = Smooth(Math.Clamp((ratio - .65) / .27, 0, 1));
         PortalContentOpacity = DetailProgress;
 
-        var focusBucket = (int)Math.Round(DetailProgress * 20);
-        if (focusBucket != _lastFocusPresentationBucket)
-        {
-            _lastFocusPresentationBucket = focusBucket;
-            foreach (var tile in Tiles) tile.SetFocus(ReferenceEquals(tile, FocusedTile), DetailProgress);
-        }
-
-        RefreshRenderedWorld();
+        RequestSkeletonWindowSnapshot();
 
         if (transition.ShouldPrefetch && FocusedTile is not null) ScheduleDetailLoad(FocusedTile);
         else if (ratio < .55) CancelDetailLoad();
         UpdateDetailState(ratio);
     }
 
-    private async void RefreshRenderedWorld(bool force = false)
+    private async void RequestSkeletonWindowSnapshot(bool force = false)
     {
         if (_tileBoard is null || _viewportWidth <= 0 || _viewportHeight <= 0) return;
         var zoom = Math.Max(_zoomLayout.ScaleProfile.MinimumZoom, Zoom);
         var window = new TileWorldWindow(CameraX, CameraY, _viewportWidth / zoom, _viewportHeight / zoom);
-        var renderStateKey = $"{(int)Math.Floor(CameraX * zoom / 24)}:{(int)Math.Floor(CameraY * zoom / 24)}:{(int)Math.Round(zoom * 20)}:{(int)(_viewportWidth / 24)}:{(int)(_viewportHeight / 24)}";
-        if (force || renderStateKey != _tileRenderStateKey)
-        {
-            _tileRenderStateKey = renderStateKey;
-            UpdateTileRenderStates();
-        }
-        var key = $"{(int)Math.Floor(window.X / 1200)}:{(int)Math.Floor((window.X + window.Width) / 1200)}:{(int)Math.Floor(window.Y / 800)}:{(int)Math.Floor((window.Y + window.Height) / 800)}";
+        var key = HashCode.Combine(
+            (int)Math.Floor(window.X / 1200),
+            (int)Math.Floor((window.X + window.Width) / 1200),
+            (int)Math.Floor(window.Y / 800),
+            (int)Math.Floor((window.Y + window.Height) / 800));
         if (!force && key == _renderWindowKey) return;
         _renderWindowKey = key;
-        UpdateMaterializedTiles(window);
-        UpdateTileRenderStates();
         _worldRefreshCancellation?.Cancel();
         _worldRefreshCancellation?.Dispose();
         var cancellation = _worldRefreshCancellation = new CancellationTokenSource();
@@ -613,51 +606,6 @@ public sealed partial class DiscoverViewModel
             if (ReferenceEquals(_worldRefreshCancellation, cancellation)) _worldRefreshCancellation = null;
             cancellation.Dispose();
         }
-    }
-
-    private void UpdateTileRenderStates()
-    {
-        const double overscan = 180;
-        const double edgeBand = 84;
-        foreach (var tile in RenderedTiles)
-        {
-            var left = (tile.Left - CameraX) * Zoom;
-            var top = (tile.Top - CameraY) * Zoom;
-            var right = left + tile.Width * Zoom;
-            var bottom = top + tile.Height * Zoom;
-            var visible = right >= -overscan && left <= _viewportWidth + overscan && bottom >= -overscan && top <= _viewportHeight + overscan;
-            if (!visible)
-            {
-                tile.SetRenderState(false, .3);
-                continue;
-            }
-
-            var inward = Math.Min(Math.Min(left, _viewportWidth - right), Math.Min(top, _viewportHeight - bottom));
-            var normalized = Math.Clamp((inward + edgeBand) / edgeBand, 0, 1);
-            var eased = normalized * normalized * (3 - 2 * normalized);
-            tile.SetRenderState(true, .42 + .58 * eased);
-        }
-    }
-
-    private void UpdateMaterializedTiles(TileWorldWindow window)
-    {
-        // Keep one full chunk around the world viewport so fast camera motion
-        // never exposes an unmaterialized real Tile. The ItemsControl receives
-        // one immutable array instead of Clear/Add notifications.
-        const double overscanX = VirtualTileWorldService.ChunkColumns * VirtualTileWorldService.UnitWithGap;
-        const double overscanY = VirtualTileWorldService.ChunkRows * VirtualTileWorldService.UnitWithGap;
-        var next = Tiles.Where(tile =>
-                tile.Left + tile.Width >= window.X - overscanX
-                && tile.Left <= window.X + window.Width + overscanX
-                && tile.Top + tile.Height >= window.Y - overscanY
-                && tile.Top <= window.Y + window.Height + overscanY)
-            .ToArray();
-        if (RenderedTiles.Count == next.Length
-            && RenderedTiles.Select(x => x.Key).SequenceEqual(next.Select(x => x.Key), StringComparer.Ordinal))
-            return;
-        RenderedTiles = next;
-        OnPropertyChanged(nameof(RenderedTiles));
-        TilePerformanceMetrics.MaterializedControlCount(next.Length);
     }
 
     private void UpdateDetailState(double ratio)

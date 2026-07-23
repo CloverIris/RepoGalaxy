@@ -11,7 +11,7 @@ namespace RepoGalaxy.Desktop.Services;
 public sealed class SecureStorage : ISecureStorage
 {
     private readonly string _directory;
-    private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("RepoGalaxy.Credentials.v2");
+    private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("RepoGalaxy.Credentials");
     public SecureStorage()
     {
         _directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RepoGalaxy", "Credentials");

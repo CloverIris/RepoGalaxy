@@ -6,7 +6,9 @@ namespace RepoGalaxy.Data.Entities;
 [Table("ApiCacheEntries")]
 public sealed class ApiCacheEntryEntity
 {
+    public const int CurrentSchema = 1;
     [Key, MaxLength(160)] public string Key { get; set; } = string.Empty;
+    public int Schema { get; set; } = CurrentSchema;
     [Required] public byte[] Payload { get; set; } = [];
     public string? ETag { get; set; }
     public string? LastModified { get; set; }
@@ -153,7 +155,6 @@ public sealed class TileBoardEntity
     [Key] public long Id { get; set; }
     [Required, MaxLength(120)] public string ScopeKey { get; set; } = "guest";
     public int Source { get; set; }
-    public int LayoutVersion { get; set; } = 2;
     public double CameraX { get; set; }
     public double CameraY { get; set; }
     public double Zoom { get; set; } = 1;
@@ -210,7 +211,6 @@ public sealed class SemanticIndexPlacementEntity
     public int Row { get; set; }
     public int ColumnSpan { get; set; } = 1;
     public int RowSpan { get; set; } = 1;
-    public int LayoutVersion { get; set; } = 1;
     public DateTimeOffset UpdatedAt { get; set; }
     [ForeignKey(nameof(BoardId))] public TileBoardEntity Board { get; set; } = null!;
 }

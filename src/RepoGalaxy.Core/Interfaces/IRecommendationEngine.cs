@@ -40,5 +40,7 @@ public enum FeedbackType
     Click = 1,
     Bookmark = 2,
     Ignore = 3,
-    Dismiss = 4
+    Dismiss = 4,
+    Like = 5,
+    Unlike = 6
 }

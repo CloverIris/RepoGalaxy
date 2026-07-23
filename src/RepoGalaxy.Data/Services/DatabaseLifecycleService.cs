@@ -24,7 +24,6 @@ public sealed class DatabaseLifecycleService
         {
             Directory.CreateDirectory(_appDirectory);
             await using var migrationLock = await AcquireMigrationLockAsync(cancellationToken);
-            ArchiveLegacyDatabase();
             var uncleanShutdown = File.Exists(_markerPath);
             var databaseExisted = File.Exists(_databasePath);
             await using var db = await _factory.CreateDbContextAsync(cancellationToken);
@@ -53,7 +52,7 @@ public sealed class DatabaseLifecycleService
         return await CreateBackupAsync(DateTime.UtcNow.ToString("yyyyMMdd"), cancellationToken, reuseExisting: true);
     }
     public string? GetLatestBackupPath() => Directory.Exists(Path.Combine(_appDirectory, "Backups"))
-        ? Directory.GetFiles(Path.Combine(_appDirectory, "Backups"), "repogalaxy-v3-*.db").OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault()
+        ? Directory.GetFiles(Path.Combine(_appDirectory, "Backups"), "repogalaxy-*.db").OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault()
         : null;
     public async Task<bool> RestoreLatestBackupAsync(CancellationToken cancellationToken = default)
     {
@@ -72,7 +71,7 @@ public sealed class DatabaseLifecycleService
     private async Task<string> CreateBackupAsync(string suffix, CancellationToken cancellationToken, bool reuseExisting = false)
     {
         var directory = Path.Combine(_appDirectory, "Backups"); Directory.CreateDirectory(directory);
-        var target = Path.Combine(directory, $"repogalaxy-v3-{suffix}.db");
+        var target = Path.Combine(directory, $"repogalaxy-{suffix}.db");
         if (reuseExisting && File.Exists(target)) return target;
         await using var source = new SqliteConnection($"Data Source={_databasePath};Mode=ReadWrite"); await using var destination = new SqliteConnection($"Data Source={target};Mode=ReadWriteCreate");
         await source.OpenAsync(cancellationToken); await destination.OpenAsync(cancellationToken); source.BackupDatabase(destination); return target;
@@ -92,17 +91,9 @@ public sealed class DatabaseLifecycleService
         }
         throw new IOException("另一个 RepoGalaxy 实例正在升级数据库，请稍后重试。");
     }
-    private void ArchiveLegacyDatabase()
-    {
-        if (File.Exists(_databasePath)) return;
-        var legacy = Path.Combine(_appDirectory, "repogalaxy-v2.db"); if (!File.Exists(legacy)) return;
-        var destination = Path.Combine(_appDirectory, "Backups", "Legacy", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss")); Directory.CreateDirectory(destination);
-        foreach (var suffix in new[] { "", "-wal", "-shm" }) { var source = legacy + suffix; if (File.Exists(source)) File.Move(source, Path.Combine(destination, Path.GetFileName(source))); }
-    }
     private void CleanupBackups()
     {
         var directory = Path.Combine(_appDirectory, "Backups"); if (!Directory.Exists(directory)) return;
-        foreach (var file in Directory.GetFiles(directory, "repogalaxy-v3-*.db").OrderByDescending(x => x).Skip(7)) { try { File.Delete(file); } catch { } }
-        var legacy = Path.Combine(directory, "Legacy"); if (Directory.Exists(legacy)) foreach (var item in Directory.GetDirectories(legacy)) if (Directory.GetCreationTimeUtc(item) < DateTime.UtcNow.AddDays(-7)) { try { Directory.Delete(item, true); } catch { } }
+        foreach (var file in Directory.GetFiles(directory, "repogalaxy-*.db").OrderByDescending(x => x).Skip(7)) { try { File.Delete(file); } catch { } }
     }
 }

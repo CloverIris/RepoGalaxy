@@ -62,7 +62,10 @@ public sealed class RecommendationEngine : IRecommendationEngine, IRankingRebuil
         var metrics = await LoadMetricVelocitiesAsync(candidates.Select(x => x.Id));
         var rules = await LoadRuleMatchesAsync(candidates);
         var localLanguages = DetectLocalLanguages(await LoadLocalPathsAsync());
-        var context = new RankingContext(new HashSet<string>(preferences.InterestedLanguages, StringComparer.OrdinalIgnoreCase), new HashSet<string>(preferences.InterestedTopics, StringComparer.OrdinalIgnoreCase), localLanguages, feedback, batch, metrics, rules);
+        var suppressedSignals = preferences.IgnoredTopics
+            .Where(x => x.StartsWith("language:", StringComparison.OrdinalIgnoreCase) || x.StartsWith("topic:", StringComparison.OrdinalIgnoreCase))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var context = new RankingContext(new HashSet<string>(preferences.InterestedLanguages, StringComparer.OrdinalIgnoreCase), new HashSet<string>(preferences.InterestedTopics, StringComparer.OrdinalIgnoreCase), localLanguages, feedback, batch, metrics, rules, suppressedSignals);
         progress?.Report(new("features", .30, "正在构建排序特征"));
         var ranked = await Task.Run(() =>
         {
@@ -82,7 +85,7 @@ public sealed class RecommendationEngine : IRecommendationEngine, IRankingRebuil
     public async Task<IEnumerable<Repository>> GetRelatedRecommendationsAsync(IEnumerable<long> seedIds, int count = 15) { var ids = seedIds.ToHashSet(); var seeds = new List<Repository>(); foreach (var id in ids) if (await _repositories.GetByIdAsync(id) is { } r) seeds.Add(r); if (seeds.Count == 0) return []; var all = await _repositories.GetCachedAsync(TimeSpan.FromDays(30)); return all.Where(x => !ids.Contains(x.Id)).Select(x => (Repo: x, Score: seeds.Max(s => Similarity(s, x)))).OrderByDescending(x => x.Score).Take(count).Select(x => x.Repo).ToList(); }
     public Task UpdateUserProfileAsync() => Task.CompletedTask;
     public async Task RecordFeedbackAsync(long repositoryId, FeedbackType type) { await using var db = await _factory.CreateDbContextAsync(); db.FeedImpressions.Add(new FeedImpressionEntity { RepositoryId = repositoryId, Action = type.ToString(), OccurredAt = DateTimeOffset.UtcNow }); var batches = await db.RankingBatches.Where(x => !x.IsDirty).ToListAsync(); foreach (var b in batches) b.IsDirty = true; await db.SaveChangesAsync(); }
-    private async Task<IReadOnlyDictionary<long, FeedbackType>> LoadFeedbackAsync(CancellationToken cancellationToken = default) { await using var db = await _factory.CreateDbContextAsync(cancellationToken); var rows = await db.FeedImpressions.AsNoTracking().OrderByDescending(x => x.OccurredAt).Take(500).ToListAsync(cancellationToken); return rows.GroupBy(x => x.RepositoryId).ToDictionary(x => x.Key, x => Enum.TryParse<FeedbackType>(x.First().Action, out var value) ? value : FeedbackType.View); }
+    private async Task<IReadOnlyDictionary<long, FeedbackType>> LoadFeedbackAsync(CancellationToken cancellationToken = default) { await using var db = await _factory.CreateDbContextAsync(cancellationToken); var rows = await db.FeedImpressions.AsNoTracking().OrderByDescending(x => x.OccurredAt).ThenByDescending(x => x.Id).Take(500).ToListAsync(cancellationToken); return rows.GroupBy(x => x.RepositoryId).ToDictionary(x => x.Key, x => Enum.TryParse<FeedbackType>(x.First().Action, out var value) ? value : FeedbackType.View); }
     private async Task<IReadOnlyDictionary<long, double>> LoadMetricVelocitiesAsync(IEnumerable<long> repositoryIds)
     {
         var ids = repositoryIds.ToList();

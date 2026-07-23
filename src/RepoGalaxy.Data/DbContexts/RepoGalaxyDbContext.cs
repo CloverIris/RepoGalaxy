@@ -89,9 +89,9 @@ public class RepoGalaxyDbContext : DbContext
         modelBuilder.Entity<LocalContributionDayEntity>().HasIndex(x => new { x.LocalRepositoryId, x.Date }).IsUnique();
         modelBuilder.Entity<NewsItemEntity>().HasIndex(x => x.ExternalId).IsUnique();
         modelBuilder.Entity<AuthenticationAuditEventEntity>().HasIndex(x => x.OccurredAt);
-        modelBuilder.Entity<TileBoardEntity>().HasIndex(x => new { x.ScopeKey, x.Source, x.LayoutVersion }).IsUnique();
+        modelBuilder.Entity<TileBoardEntity>().HasIndex(x => new { x.ScopeKey, x.Source }).IsUnique();
         modelBuilder.Entity<TilePlacementEntity>().HasIndex(x => new { x.BoardId, x.ContentKind, x.ContentKey }).IsUnique();
-        modelBuilder.Entity<SemanticIndexPlacementEntity>().HasIndex(x => new { x.BoardId, x.LayoutVersion, x.ItemKey }).IsUnique();
+        modelBuilder.Entity<SemanticIndexPlacementEntity>().HasIndex(x => new { x.BoardId, x.ItemKey }).IsUnique();
         modelBuilder.Entity<CloneOperationEntity>().HasIndex(x => x.UpdatedAt);
         modelBuilder.Entity<IdePreferenceEntity>().HasIndex(x => new { x.ScopeKey, x.TechnologyKey }).IsUnique();
 

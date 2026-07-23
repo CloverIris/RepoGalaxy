@@ -22,7 +22,7 @@ public class GitHubTokenManagerTests
     {
         // Arrange
         var token = "ghp_test_token_123";
-        _secureStorage.SetAsync("github_credential_envelope_v3", Arg.Any<string>()).Returns(true);
+        _secureStorage.SetAsync("github_credential", Arg.Any<string>()).Returns(true);
 
         // Act
         var result = await _tokenManager.SaveTokenAsync(token, DateTimeOffset.Now.AddHours(8));
@@ -30,7 +30,7 @@ public class GitHubTokenManagerTests
         // Assert
         result.Should().BeTrue();
         await _secureStorage.Received(1).SetAsync(
-            "github_credential_envelope_v3",
+            "github_credential",
             Arg.Is<string>(value => value.Contains(token, StringComparison.Ordinal)));
     }
 
@@ -39,7 +39,7 @@ public class GitHubTokenManagerTests
     {
         // Arrange
         var expectedToken = "ghp_existing_token";
-        _secureStorage.GetAsync("github_access_token").Returns(expectedToken);
+        _secureStorage.GetAsync("github_credential").Returns($"{{\"AccessToken\":\"{expectedToken}\"}}");
 
         // Act
         var result = await _tokenManager.GetTokenAsync();
@@ -52,7 +52,7 @@ public class GitHubTokenManagerTests
     public async Task GetTokenAsync_NoToken_ReturnsNull()
     {
         // Arrange
-        _secureStorage.GetAsync("github_access_token").Returns((string?)null);
+        _secureStorage.GetAsync("github_credential").Returns((string?)null);
 
         // Act
         var result = await _tokenManager.GetTokenAsync();
@@ -65,7 +65,7 @@ public class GitHubTokenManagerTests
     public async Task HasTokenAsync_WithToken_ReturnsTrue()
     {
         // Arrange
-        _secureStorage.GetAsync("github_access_token").Returns("ghp_token");
+        _secureStorage.GetAsync("github_credential").Returns("{\"AccessToken\":\"ghp_token\"}");
 
         // Act
         var result = await _tokenManager.HasTokenAsync();
@@ -78,7 +78,7 @@ public class GitHubTokenManagerTests
     public async Task HasTokenAsync_WithoutToken_ReturnsFalse()
     {
         // Arrange
-        _secureStorage.GetAsync("github_access_token").Returns((string?)null);
+        _secureStorage.GetAsync("github_credential").Returns((string?)null);
 
         // Act
         var result = await _tokenManager.HasTokenAsync();
@@ -96,7 +96,7 @@ public class GitHubTokenManagerTests
     {
         // Arrange
         var expiry = DateTimeOffset.Now.AddHours(hoursFromNow);
-        _secureStorage.GetAsync("github_token_expires_at").Returns(expiry.ToString("O"));
+        _secureStorage.GetAsync("github_credential").Returns($"{{\"AccessToken\":\"token\",\"ExpiresAt\":\"{expiry:O}\"}}");
 
         // Act
         var result = await _tokenManager.IsTokenExpiredAsync();
@@ -109,7 +109,7 @@ public class GitHubTokenManagerTests
     public async Task IsTokenExpiredAsync_NoExpiry_ReturnsFalse()
     {
         // Arrange
-        _secureStorage.GetAsync("github_token_expires_at").Returns((string?)null);
+        _secureStorage.GetAsync("github_credential").Returns("{\"AccessToken\":\"token\"}");
 
         // Act
         var result = await _tokenManager.IsTokenExpiredAsync();
@@ -127,10 +127,7 @@ public class GitHubTokenManagerTests
 
         // Assert
         result.Should().BeTrue();
-        await _secureStorage.Received(1).RemoveAsync("github_credential_envelope_v3");
-        await _secureStorage.Received(1).RemoveAsync("github_access_token");
-        await _secureStorage.Received(1).RemoveAsync("github_token_expires_at");
-        await _secureStorage.Received(1).RemoveAsync("github_refresh_token");
+        await _secureStorage.Received(1).RemoveAsync("github_credential");
     }
 
     [Fact]
@@ -138,7 +135,7 @@ public class GitHubTokenManagerTests
     {
         // Arrange
         var expectedDate = DateTimeOffset.Now.AddHours(8);
-        _secureStorage.GetAsync("github_token_expires_at").Returns(expectedDate.ToString("O"));
+        _secureStorage.GetAsync("github_credential").Returns($"{{\"AccessToken\":\"token\",\"ExpiresAt\":\"{expectedDate:O}\"}}");
 
         // Act
         var result = await _tokenManager.GetTokenExpiryAsync();
@@ -151,7 +148,7 @@ public class GitHubTokenManagerTests
     public async Task GetTokenExpiryAsync_InvalidDate_ReturnsNull()
     {
         // Arrange
-        _secureStorage.GetAsync("github_token_expires_at").Returns("invalid_date");
+        _secureStorage.GetAsync("github_credential").Returns("{\"AccessToken\":\"token\",\"ExpiresAt\":\"invalid_date\"}");
 
         // Act
         var result = await _tokenManager.GetTokenExpiryAsync();
@@ -165,7 +162,7 @@ public class GitHubTokenManagerTests
     {
         // Arrange - 还有4分钟过期（小于5分钟缓冲）
         var expiry = DateTimeOffset.Now.AddMinutes(4);
-        _secureStorage.GetAsync("github_token_expires_at").Returns(expiry.ToString("O"));
+        _secureStorage.GetAsync("github_credential").Returns($"{{\"AccessToken\":\"token\",\"ExpiresAt\":\"{expiry:O}\"}}");
 
         // Act - 使用5分钟缓冲
         var result = await _tokenManager.IsTokenExpiredAsync(TimeSpan.FromMinutes(5));

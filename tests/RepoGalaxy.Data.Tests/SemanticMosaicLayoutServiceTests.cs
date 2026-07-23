@@ -19,7 +19,6 @@ public sealed class SemanticMosaicLayoutServiceTests
             .Concat(Enumerable.Range(0, 10).Select(i => Item(SemanticIndexKind.Framework, $"Framework {i}", 80 - i))).ToList();
 
         var first = await service.SynchronizeAsync(board.Id, initial, 1.6);
-        first.LayoutVersion.Should().Be(2);
         AssertNoOverlap(first.Placements);
         first.Placements.Where(x => x.Item.Kind == SemanticIndexKind.Language).OrderByDescending(x => x.Item.ProjectCount).Take(4).Should().OnlyContain(x => x.ColumnSpan == 2 && x.RowSpan == 2);
         first.Placements.Where(x => x.Item.Kind == SemanticIndexKind.Framework).OrderByDescending(x => x.Item.ProjectCount).Skip(4).Should().OnlyContain(x => x.ColumnSpan == 2 && x.RowSpan == 1);

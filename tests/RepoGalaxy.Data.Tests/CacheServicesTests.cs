@@ -73,6 +73,33 @@ public sealed class CacheServicesTests
     }
 
     [Fact]
+    public async Task Persistent_cache_rejects_an_unknown_schema_without_migrating_it()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using (var db = await database.Factory.CreateDbContextAsync())
+        {
+            db.ApiCacheEntries.Add(new ApiCacheEntryEntity
+            {
+                Key = "old-schema",
+                Schema = ApiCacheEntryEntity.CurrentSchema + 1,
+                Payload = [1, 2, 3],
+                FetchedAt = DateTimeOffset.UtcNow,
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(1),
+                StaleUntil = DateTimeOffset.UtcNow.AddDays(1),
+                LastAccessedAt = DateTimeOffset.UtcNow,
+                SizeBytes = 3
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var cache = new PersistentCacheStore(database.Factory);
+        (await cache.GetAsync<string>(new CacheKey("old-schema"))).State.Should().Be(CacheEntryState.Miss);
+
+        await using var verification = await database.Factory.CreateDbContextAsync();
+        (await verification.ApiCacheEntries.AnyAsync()).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Tag_invalidation_matches_a_complete_tag_only()
     {
         await using var database = await TestDatabase.CreateAsync();
