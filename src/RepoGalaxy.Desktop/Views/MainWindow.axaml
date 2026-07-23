@@ -1,10 +1,11 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:RepoGalaxy.Desktop"
         xmlns:vm="using:RepoGalaxy.Desktop.ViewModels"
         xmlns:controls="using:RepoGalaxy.Desktop.Controls"
         x:Class="RepoGalaxy.Desktop.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="RepoGalaxy"
+        Title="{x:Static local:ApplicationProductInfo.WindowTitle}"
         Icon="/Assets/repogalaxy.ico"
         Width="1440" Height="900"
         WindowStartupLocation="CenterScreen"
@@ -49,7 +50,11 @@
       <Grid ColumnDefinitions="Auto,*,Auto,138">
         <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center" Margin="16,0,12,0" IsHitTestVisible="False">
           <controls:RepoGalaxyMark x:Name="HeaderBrandMark" Width="28" Height="28"/>
-          <TextBlock Text="RepoGalaxy" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+          <TextBlock Text="{x:Static local:ApplicationProductInfo.ProductName}" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+          <Border Background="{DynamicResource AccentSoftBrush}" Padding="6,2" VerticalAlignment="Center">
+            <TextBlock Text="{x:Static local:ApplicationProductInfo.DisplayVersion}" FontSize="10" FontWeight="SemiBold"
+                       Foreground="{DynamicResource AccentTextBrush}"/>
+          </Border>
         </StackPanel>
 
         <Grid x:Name="SearchRegion" Grid.Column="1" MaxWidth="680" MinWidth="180" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="18,0">

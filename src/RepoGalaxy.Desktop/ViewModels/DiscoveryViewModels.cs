@@ -841,6 +841,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly IRankingConfigurationService _rankingConfiguration;
     private readonly IRankingRebuildService _rankingRebuild;
     private readonly DiscoverViewModel _discover;
+    private readonly IExternalLinkService _productLinks;
     private UserPreference? _preferences;
     private bool _isLoaded;
     private bool _loadingRanking;
@@ -892,17 +893,34 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _rankingStatus = string.Empty;
     [ObservableProperty] private double _rankingProgress;
     [ObservableProperty] private bool _isRankingRebuilding;
+    [ObservableProperty] private string _aboutStatus = string.Empty;
 
     public string ThresholdText => $"匹配度达到 {NotificationThreshold:P0} 时提醒";
     public string RankingScopeText => _session.Current.User is { } user ? $"当前账号：@{user.Login}" : "游客配置";
     public string CoarseWeightTotalText => $"粗排合计 {CoarseRuleMatch + CoarseFreshness + CoarseStarVelocity + CoarseQuality + CoarsePreference:N0}%";
     public string FineWeightTotalText => $"精排合计 {FineCoarse + FineContentProfile + FineBehavior + FineNovelty + FineLocalRelevance:N0}%";
     private readonly IAppearanceService _appearance;
-    public SettingsViewModel(IUserService users, ICacheService cache, IMemoryCacheStore memoryCache, IDbContextFactory<RepoGalaxyDbContext> databaseFactory, DatabaseLifecycleService databaseLifecycle, DiscoverySyncService syncService, IMetroTileLayoutService tileLayout, IAuthenticationSessionService session, IRankingConfigurationService rankingConfiguration, IRankingRebuildService rankingRebuild, DiscoverViewModel discover, IAppearanceService appearance)
+    public SettingsViewModel(IUserService users, ICacheService cache, IMemoryCacheStore memoryCache, IDbContextFactory<RepoGalaxyDbContext> databaseFactory, DatabaseLifecycleService databaseLifecycle, DiscoverySyncService syncService, IMetroTileLayoutService tileLayout, IAuthenticationSessionService session, IRankingConfigurationService rankingConfiguration, IRankingRebuildService rankingRebuild, DiscoverViewModel discover, IAppearanceService appearance, IExternalLinkService productLinks)
     {
         _users = users; _cache = cache; _memoryCache = memoryCache; _databaseFactory = databaseFactory; _databaseLifecycle = databaseLifecycle;
-        _syncService = syncService; _tileLayout = tileLayout; _session = session; _rankingConfiguration = rankingConfiguration; _rankingRebuild = rankingRebuild; _discover = discover; _appearance = appearance;
+        _syncService = syncService; _tileLayout = tileLayout; _session = session; _rankingConfiguration = rankingConfiguration; _rankingRebuild = rankingRebuild; _discover = discover; _appearance = appearance; _productLinks = productLinks;
         _session.Changed += (_, _) => { OnPropertyChanged(nameof(RankingScopeText)); _ = LoadRankingProfileAsync(); };
+    }
+
+    [RelayCommand]
+    private void OpenAuthor() => OpenProductLink(ApplicationProductInfo.AuthorUrl);
+
+    [RelayCommand]
+    private void OpenProject() => OpenProductLink(ApplicationProductInfo.RepositoryUrl);
+
+    [RelayCommand]
+    private void OpenLicense() => OpenProductLink(ApplicationProductInfo.LicenseUrl);
+
+    private void OpenProductLink(string uri)
+    {
+        AboutStatus = _productLinks.Open(uri)
+            ? string.Empty
+            : "无法打开浏览器，请检查系统默认浏览器设置。";
     }
     public async Task LoadAsync()
     {

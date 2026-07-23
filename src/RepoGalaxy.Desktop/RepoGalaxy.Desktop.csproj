@@ -7,6 +7,16 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\repogalaxy.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <Version>1.0.0-preview.1</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0-preview.1</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Product>RepoGalaxy</Product>
+    <AssemblyTitle>RepoGalaxy</AssemblyTitle>
+    <Description>A spatial GitHub discovery and subscription client.</Description>
+    <Authors>CloverIris and RepoGalaxy contributors</Authors>
+    <Copyright>Copyright (c) 2026 CloverIris and RepoGalaxy contributors</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

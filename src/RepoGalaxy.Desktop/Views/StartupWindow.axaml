@@ -1,8 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:RepoGalaxy.Desktop"
         xmlns:controls="using:RepoGalaxy.Desktop.Controls"
         x:Class="RepoGalaxy.Desktop.Views.StartupWindow"
-        Title="RepoGalaxy"
+        Title="{x:Static local:ApplicationProductInfo.WindowTitle}"
         Icon="/Assets/repogalaxy.ico"
         Width="540" Height="260"
         MinWidth="540" MinHeight="260"
@@ -17,7 +18,7 @@
       <Grid ColumnDefinitions="*,46">
         <StackPanel Orientation="Horizontal" Spacing="9" Margin="14,0" VerticalAlignment="Center" IsHitTestVisible="False">
           <controls:RepoGalaxyMark x:Name="StartupBrandMark" Width="24" Height="24"/>
-          <TextBlock Text="RepoGalaxy" FontWeight="SemiBold" VerticalAlignment="Center"/>
+          <TextBlock Text="{x:Static local:ApplicationProductInfo.WindowTitle}" FontWeight="SemiBold" VerticalAlignment="Center"/>
         </StackPanel>
         <Button x:Name="StartupCloseButton" Grid.Column="1" Width="46" Height="42" Padding="0" Background="Transparent" BorderThickness="0" Click="OnCloseClick">
           <Grid Width="20" Height="20"><Path x:Name="StartupCloseIcon" Data="M3,3 L17,17 M17,3 L3,17" Stroke="{DynamicResource PrimaryTextBrush}" StrokeThickness="1" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid>
