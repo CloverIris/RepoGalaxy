@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/repogalaxy-logo.svg" width="152" height="152" alt="RepoGalaxy Logo" />
   <h1>RepoGalaxy</h1>
-  <p><strong>A local-first desktop client for discovering, subscribing to, and intelligently ranking GitHub repositories.</strong></p>
+  <p><strong>Turn GitHub repository discovery, tracking, and reading into your local developer workspace.</strong></p>
   <p>
     <img alt="C#" src="https://img.shields.io/badge/C%23-latest-512BD4?logo=dotnet&logoColor=white" />
     <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white" />
@@ -17,28 +17,28 @@
 
 ## What is RepoGalaxy?
 
-RepoGalaxy turns the accidental discovery of a useful repository into a repeatable workflow: discover projects, understand why they were recommended, subscribe to technologies you care about, save repositories, and receive updates when important releases arrive.
+RepoGalaxy is a desktop workspace for exploring GitHub and keeping track of repositories that matter to you. Discover projects through trending and personalized feeds, follow languages and technology stacks, see why a repository was recommended, then add it to your subscriptions or saved list.
 
-It is not a thin wrapper around the GitHub website. RepoGalaxy follows a local-first architecture and stores feeds, subscriptions, saved repositories, reading feedback, API cache entries, and ranking batches in local SQLite. The UI renders local snapshots first and incrementally synchronizes in the background. Apart from GitHub itself, the app requires no Redis, Docker, WSL, or self-hosted service.
+Discovery does not stop at a link. Explore repositories on a spatial map, read safely rendered READMEs, check releases and topics, and clone a project locally to open it in the development tools you already use.
 
-The desktop app supports Windows and macOS. It uses Avalonia's official FluentTheme as its control foundation, with a square Windows 10 Metro / Fluent 1 visual language for the spatial feed.
+RepoGalaxy keeps feeds, subscriptions, saved repositories, reading feedback, and cache entries in a local SQLite database. Existing content appears first while synchronization runs in the background; recommendations can adapt to your interests and feedback over time. GitHub is the only service it needs—there is no database, container, or self-hosted backend to set up.
 
 <img src="assets/lable.png" width="2000">
 
 ## Highlights
 
-- **Three-scale discovery** — move continuously between a semantic technology index, a two-dimensional Tile world, and immersive repository details; X/Y panning and Z-axis zoom remain independent.
-- **Dense GitHub feeds** — explore Trending, For You, and Subscriptions with local search, stable Tile coordinates, semantic filters, and lazy-loaded details.
-- **Explainable two-stage ranking** — candidate retrieval is followed by coarse ranking, fine ranking, and diversity reranking. Reasons, impressions, and feedback are recorded, while presets, weights, exploration rate, and temperature remain adjustable.
-- **Reliable local data foundation** — EF Core migrations, SQLite WAL, database backups, integrity checks, bounded L1 memory cache, and persistent SQLite cache provide a stale-while-revalidate pipeline.
-- **Auditable GitHub sessions** — Device Flow is the default sign-in path, with PAT and guarded local-loopback alternatives. Credentials are stored only after verification and are protected with DPAPI on Windows or Keychain on macOS.
-- **Rate-aware synchronization** — Core and Search budgets are tracked independently; checkpoints, conditional requests, backoff, and cancellation prevent unbounded API work.
-- **Repository reading and local development** — details open on a safely rendered README. RepoGalaxy can discover Visual Studio, VS Code, and JetBrains IDEs, then clone and open a repository when needed.
-- **Local activity and official news** — the side rail combines local Git contributions, stable releases from saved repositories, GitHub Blog, and GitHub Changelog feeds.
+- **Explore repositories like a map** — move from a language and technology index into a two-dimensional repository world, zooming from broad themes to project details.
+- **Keep the GitHub signals you care about together** — switch between Trending, For You, and Subscriptions, then narrow results with local search and semantic filters.
+- **Understand the recommendations** — inspect why a project appears; ranking considers your interests, reading feedback, and content diversity, with adjustable preferences.
+- **Build your own repository library** — subscribe to technologies, save repositories, follow important releases, and clone projects into your local development environment.
+- **Local-first, ready on launch** — feeds, subscriptions, saved items, and feedback live in SQLite. RepoGalaxy shows a local snapshot first, synchronizes in the background, and provides backup and integrity checks.
+- **Keep synchronization in check** — track GitHub Core and Search budgets separately, with pagination checkpoints, conditional requests, backoff, and cancellation.
+- **Protect account credentials** — Device Flow is the default sign-in method; credentials are saved only after verification and protected with Windows DPAPI or macOS Keychain.
+- **Follow project activity without losing context** — see local Git contributions, releases from saved repositories, and official GitHub Blog and Changelog updates in one side rail.
 
 ## Interaction model
 
-The Discover page is a navigable two-dimensional content map rather than a conventional endless vertical list:
+Discover is a navigable two-dimensional content map rather than an endless list, guiding you from the technologies you follow to the projects you want to understand:
 
 1. **Semantic index** — a curated view of languages and technology stacks that actually occur in the current feed, local repositories, or subscriptions.
 2. **Tile world** — repositories, languages, stacks, charts, and tips occupy stable coordinates. Virtual chunks are drawn on demand and real content fills compatible slots in place.
@@ -75,13 +75,12 @@ flowchart LR
 
 The app first presents a centered, draggable lightweight startup window. A startup coordinator then performs database checks, migrations, backups, and abandoned-workspace cleanup in the background. The main data flow is local-snapshot first: the UI consumes immutable Feed/Tile snapshots; synchronization writes network responses into the cache and business database; the ranking pipeline creates a new batch; and the UI atomically swaps snapshots. The virtual Tile control queries visible real content in signed world coordinates and continuously draws deterministic `12×8` chunks in all four directions. Pan, zoom, and Resize only update the viewport and camera matrix—never the database, network, ranking pipeline, or semantic catalog. After explicit synchronization or reranking, the camera stays anchored to the prior center item, or falls back to the new data-island center.
 
-## Get and run RepoGalaxy
+## Get, run, and package RepoGalaxy
 
 ### Requirements
 
 - Windows 10/11, macOS 12+ (the macOS release targets Apple Silicon), or x86_64 Linux.
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). [`global.json`](global.json) pins `10.0.302` and permits the latest patch in the same feature band.
-- Visual Studio with .NET 10 support and the **.NET desktop development** workload.
 - Git, both for cloning RepoGalaxy and for its local-repository features.
 
 ### Clone
@@ -93,47 +92,62 @@ cd RepoGalaxy
 
 Alternatively, choose **Code → Download ZIP** on the GitHub repository page and extract the archive.
 
-### Visual Studio
+### Run from source
 
-1. Open `RepoGalaxy.slnx`.
-2. Set `RepoGalaxy.Desktop` as the startup project.
-3. Wait for NuGet restore, then press `F5` to debug or `Ctrl+F5` to run without debugging.
+Open `RepoGalaxy.slnx` in Visual Studio, set `RepoGalaxy.Desktop` as the startup project, wait for NuGet restore, and press `F5`. Or use the command line:
 
-A responsive startup page appears first, while database migrations run automatically in the background; no manual SQLite setup is required.
-
-### Command line
-
-```powershell
+```bash
 dotnet restore
 dotnet build RepoGalaxy.slnx
-dotnet test RepoGalaxy.slnx
 dotnet run --project src/RepoGalaxy.Desktop
 ```
 
-To produce a Windows x64 Release build:
+The app presents an interactive startup screen while database migrations run automatically in the background; no manual SQLite setup is needed.
+
+### Create platform release packages
+
+Each platform has its own release command. Windows can be published from a .NET 10 development environment; the macOS and Linux packaging scripts must run on their respective operating systems.
+
+#### Windows 10/11 (x64)
+
+Run this in PowerShell from the repository root to create a self-contained, single-file executable:
 
 ```powershell
-dotnet publish src/RepoGalaxy.Desktop/RepoGalaxy.Desktop.csproj `
-  -c Release -r win-x64 --self-contained false
+dotnet publish src/RepoGalaxy.Desktop/RepoGalaxy.Desktop.csproj -c Release -r win-x64 --self-contained true -o release/1.0.0-preview.1-win-x64 -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false
 ```
 
-On macOS, create a native `.app` bundle and DMG:
+Run `RepoGalaxy.Desktop.exe` from the output directory. This package targets x64 Windows and does not require users to install the .NET Runtime separately.
+
+#### macOS (Apple Silicon or Intel)
+
+Install the .NET 10 SDK on macOS, then run the release script from the repository root. It targets Apple Silicon by default; pass `osx-x64` to build for Intel Macs:
 
 ```bash
 bash scripts/publish-release-macos.sh
+# Intel Mac:
+bash scripts/publish-release-macos.sh osx-x64
 ```
 
-Download `release/1.0.0-preview.1-osx-arm64/RepoGalaxy-1.0.0-preview.1-osx-arm64.dmg` and drag RepoGalaxy to Applications. The release directory also contains `RepoGalaxy.app`.
+The script creates an `.app` bundle and DMG in `release/1.0.0-preview.1-osx-arm64/` or `release/1.0.0-preview.1-osx-x64/`. Open the DMG and drag RepoGalaxy to Applications. This preview is ad-hoc signed, not notarized by Apple; if Gatekeeper blocks the first launch, Control-click the app in Finder, choose **Open**, and confirm.
 
-The macOS app stores credentials in Keychain and keeps its database and logs in `~/Library/Application Support/RepoGalaxy`. This preview is not notarized with an Apple Developer ID certificate; if Gatekeeper blocks the first launch, Control-click the app in Finder, choose **Open**, and confirm **Open** again.
+The macOS app stores credentials in Keychain and keeps its database and logs in `~/Library/Application Support/RepoGalaxy`.
 
-On Ubuntu 22.04 or a compatible x86_64 Linux host, create a single-file AppImage:
+#### Linux (x86_64 AppImage)
+
+On Ubuntu 22.04 or a compatible x86_64 Linux host, install the .NET 10 SDK and `appimagetool`, then run from the repository root:
 
 ```bash
 bash scripts/publish-release-linux.sh
 ```
 
-Building requires the .NET 10 SDK and `appimagetool`. The AppImage and SHA-256 checksum are written to `release/1.0.0-preview.1-linux-x64/`; Linux graphics libraries must be provided by the host. Linux Secret Service credential storage is not implemented in this preview, so GitHub sign-in is unavailable; guest mode remains usable.
+The script creates an AppImage and SHA-256 checksum in `release/1.0.0-preview.1-linux-x64/`. From the repository root, make it executable and launch it:
+
+```bash
+chmod +x release/1.0.0-preview.1-linux-x64/RepoGalaxy-1.0.0-preview.1-linux-x64.AppImage
+./release/1.0.0-preview.1-linux-x64/RepoGalaxy-1.0.0-preview.1-linux-x64.AppImage
+```
+
+You can also launch it by double-clicking in a file manager. Linux desktop graphics libraries must be provided by the host. Linux Secret Service credential storage is not implemented in this preview, so GitHub sign-in is unavailable; guest mode remains usable.
 
 ### GitHub sign-in
 

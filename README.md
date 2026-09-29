@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/repogalaxy-logo.svg" width="152" height="152" alt="RepoGalaxy Logo" />
   <h1>RepoGalaxy</h1>
-  <p><strong>一个本地优先、面向开发者的 GitHub 发现、订阅与智能推荐桌面客户端。</strong></p>
+  <p><strong>把 GitHub 仓库发现、跟踪与阅读，整理成你的本地开发工作台。</strong></p>
   <p>
     <img alt="C#" src="https://img.shields.io/badge/C%23-latest-512BD4?logo=dotnet&logoColor=white" />
     <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white" />
@@ -17,28 +17,28 @@
 
 ## RepoGalaxy 是什么
 
-RepoGalaxy 希望把“偶然刷到一个好仓库”变成一套可以持续使用的工作流：发现项目、理解推荐理由、订阅感兴趣的技术方向、保存仓库，并在重要 Release 到来时得到提醒。
+RepoGalaxy 是面向开发者的 GitHub 探索与仓库管理桌面应用。它帮你从热门项目和个性化推荐中发现值得关注的仓库，沿着语言与技术栈继续探索，读懂推荐理由，再把感兴趣的项目加入订阅或收藏。
 
-它不是 GitHub 网页的简单套壳。应用采用本地优先架构，将 Feed、订阅、收藏、阅读反馈、API 缓存和推荐批次保存在本机 SQLite 中；界面可以先呈现本地快照，再在后台增量同步。除 GitHub 服务本身外，运行 RepoGalaxy 不需要 Redis、Docker、WSL 或自建服务。
+发现不是终点：你可以在空间化的信息地图中浏览仓库，在详情页阅读经过安全处理的 README、查看 Release 与项目主题，并从应用中把仓库克隆到本地、交给熟悉的开发工具打开。
 
-桌面应用支持 Windows 与 macOS，使用 Avalonia 官方 FluentTheme 作为控件基础，并以 Windows 10 Metro / Fluent 1 的方角视觉构建空间化信息流。
+RepoGalaxy 以本机 SQLite 保存 Feed、订阅、收藏、阅读反馈与缓存。启动时优先呈现已有内容，网络同步在后台进行；推荐排序也会结合你的兴趣和反馈逐步调整。除 GitHub 服务外，不需要额外部署数据库、容器或自建后端，让发现与整理工作流留在自己的桌面上。
 
 <img src="assets/lable.png" width="2000">
 
 ## 核心能力
 
-- **三尺度发现体验**：在技术索引、二维 Tile 世界和沉浸式仓库详情之间连续缩放；X/Y 平移与 Z 轴缩放相互独立。
-- **高密度 GitHub Feed**：提供热门、为你推荐和订阅三个来源，支持本地搜索、稳定 Tile 坐标、语义筛选和详情懒加载。
-- **可解释两阶段推荐**：候选召回后依次进行粗排、精排与多样性重排，并记录推荐依据、曝光和反馈；设置页可调整预设、权重、探索比例和温度。
-- **可靠的本地数据底座**：EF Core migrations、SQLite WAL、数据库备份、完整性检查、有界 L1 缓存和 SQLite 持久缓存共同提供 stale-while-revalidate 数据链路。
-- **清晰的 GitHub 会话闭环**：Device Flow 为默认登录方式，也支持 PAT 和受控的本地回环；凭证经验证后才保存，并使用 Windows DPAPI 或 macOS 钥匙串加密。
-- **额度感知的同步**：Core 与 Search 限额分别计量；分页检查点、条件请求、失败退避和取消机制避免无边界请求。
-- **仓库阅读与本地开发**：详情优先展示经过安全处理的 README；应用可发现 Visual Studio、VS Code 和 JetBrains IDE，并在需要时克隆仓库后打开。
-- **本地贡献与资讯侧栏**：聚合本地 Git 贡献、收藏仓库正式 Release、GitHub Blog 与 GitHub Changelog 官方信息源。
+- **像逛地图一样发现项目**：从语言与技术栈索引进入二维仓库世界，在远景浏览主题、近景阅读项目详情；平移和缩放都围绕内容进行。
+- **把关注流集中在一处**：在热门、为你推荐和订阅 Feed 之间切换，用本地搜索与语义筛选快速找到项目。
+- **知道推荐从何而来**：查看推荐理由；排序综合兴趣、阅读反馈与内容多样性，并可在设置中调整推荐偏好。
+- **建立自己的仓库清单**：订阅技术方向、收藏仓库、跟踪重要 Release，并在需要时克隆项目到本地开发环境。
+- **本地优先，启动即有内容**：Feed、订阅、收藏和反馈保存在 SQLite；先显示本地快照，再于后台同步，并提供备份与完整性检查。
+- **让同步更可控**：分别跟踪 GitHub Core 与 Search 请求额度，通过分页检查点、条件请求、退避与取消机制避免无界请求。
+- **保护账号凭证**：默认通过 OAuth Device Flow 登录；验证成功后才保存凭证，在 Windows 使用 DPAPI、macOS 使用钥匙串。
+- **顺手查看项目动态**：在同一侧栏查看本地 Git 贡献、收藏仓库的正式 Release，以及 GitHub Blog 和 Changelog。
 
 ## 交互模型
 
-发现页不是传统的无限纵向列表，而是一张可漫游的二维内容地图：
+发现页不是一眼望不到头的列表，而是一张可漫游的二维内容地图，让你从“我关注什么技术”自然走到“这个项目值得读什么”：
 
 1. **远景索引**：精选当前 Feed、本地仓库与订阅中真实出现的语言和技术栈。
 2. **中景 Tile 世界**：仓库、语言、技术栈、榜单与 Tips 以稳定坐标拼贴；虚拟区块按需绘制，真实内容原位填充。
@@ -75,13 +75,12 @@ flowchart LR
 
 应用先显示位于活动屏幕中央、可拖动的轻量启动窗口；启动协调器随后在后台完成数据库检查、迁移、备份和遗留工作区清理。主要数据流遵循“本地快照优先”：UI 读取不可变 Feed/Tile 快照，后台同步把网络响应写入缓存和业务数据库，推荐管线生成新的排名批次，最后原子替换 UI 快照。虚拟 Tile 控件按有符号世界坐标查询可见真实内容，并以确定性 `12×8` 区块连续绘制四向骨架。拖动、缩放与 Resize 只更新视口和相机矩阵，不执行数据库、网络、排名或语义索引扫描；同步重排后优先锚定原视口中央内容，内容失效时回到新数据岛中心。
 
-## 获取与运行
+## 获取、运行与打包
 
 ### 环境要求
 
 - Windows 10/11、macOS 12+（macOS 发布包针对 Apple Silicon）或 x86_64 Linux。
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)。仓库通过 [`global.json`](global.json) 固定到 `10.0.302`，并允许同一功能带的最新补丁。
-- Visual Studio：安装支持 .NET 10 的版本及“.NET 桌面开发”工作负载。
 - Git：用于克隆本仓库，以及 RepoGalaxy 内的本地仓库能力。
 
 ### 克隆仓库
@@ -93,47 +92,62 @@ cd RepoGalaxy
 
 也可以在 GitHub 仓库页面选择 **Code → Download ZIP**，解压后进入项目目录。
 
-### 使用 Visual Studio
+### 从源码运行
 
-1. 打开 `RepoGalaxy.slnx`。
-2. 将 `RepoGalaxy.Desktop` 设为启动项目。
-3. 等待 NuGet 还原完成，然后按 `F5` 调试或按 `Ctrl+F5` 运行。
+在 Visual Studio 中打开 `RepoGalaxy.slnx`，将 `RepoGalaxy.Desktop` 设为启动项目，等待 NuGet 还原完成后按 `F5` 运行。也可以使用命令行：
 
-应用启动时会先显示可交互启动页，再在后台自动执行数据库迁移，因此不需要手动创建 SQLite 数据库。
-
-### 使用命令行
-
-```powershell
+```bash
 dotnet restore
 dotnet build RepoGalaxy.slnx
-dotnet test RepoGalaxy.slnx
 dotnet run --project src/RepoGalaxy.Desktop
 ```
 
-创建 Windows x64 Release 输出：
+应用启动时会显示可交互启动页，并在后台自动执行数据库迁移；不需要手动创建 SQLite 数据库。
+
+### 创建平台发布包
+
+各平台使用独立发布命令。Windows 可从装有 .NET 10 SDK 的开发环境发布；macOS 与 Linux 打包脚本须在对应的操作系统上运行。
+
+#### Windows 10/11（x64）
+
+在 PowerShell 中从仓库根目录执行，生成自包含的单文件程序：
 
 ```powershell
-dotnet publish src/RepoGalaxy.Desktop/RepoGalaxy.Desktop.csproj `
-  -c Release -r win-x64 --self-contained false
+dotnet publish src/RepoGalaxy.Desktop/RepoGalaxy.Desktop.csproj -c Release -r win-x64 --self-contained true -o release/1.0.0-preview.1-win-x64 -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false
 ```
 
-在 macOS 上构建本机架构的 `.app` 与 DMG：
+运行输出目录中的 `RepoGalaxy.Desktop.exe`。此包面向 x64 Windows，不要求用户另行安装 .NET Runtime。
+
+#### macOS（Apple Silicon 或 Intel）
+
+在 macOS 上安装 .NET 10 SDK 后，从仓库根目录运行发布脚本。默认构建 Apple Silicon 版本；也可传入 `osx-x64` 构建 Intel 版本：
 
 ```bash
 bash scripts/publish-release-macos.sh
+# Intel Mac:
+bash scripts/publish-release-macos.sh osx-x64
 ```
 
-下载 `release/1.0.0-preview.1-osx-arm64/RepoGalaxy-1.0.0-preview.1-osx-arm64.dmg`，将 RepoGalaxy 拖到“应用程序”文件夹后启动。发布目录也包含可直接运行的 `RepoGalaxy.app`。
+脚本会生成 `.app` 和 DMG，分别放在 `release/1.0.0-preview.1-osx-arm64/` 或 `release/1.0.0-preview.1-osx-x64/`。打开 DMG，将 RepoGalaxy 拖到“应用程序”文件夹即可。预览包采用 ad-hoc 签名，未经 Apple 公证；若首次启动被 Gatekeeper 阻止，请在 Finder 中按住 Control 点击应用，选择“打开”，并确认打开。
 
-macOS 应用使用钥匙串保存 GitHub 凭证，数据库与日志位于 `~/Library/Application Support/RepoGalaxy`。预览包未使用 Developer ID 证书公证；首次打开时若 macOS 阻止启动，请在 Finder 中按住 Control 点击应用，选择“打开”，并在确认对话框中再次选择“打开”。
+macOS 应用使用钥匙串保存 GitHub 凭证，数据库与日志位于 `~/Library/Application Support/RepoGalaxy`。
 
-在 Ubuntu 22.04 或兼容的 x86_64 Linux 主机上，可创建单文件 AppImage：
+#### Linux（x86_64 AppImage）
+
+在 Ubuntu 22.04 或兼容的 x86_64 Linux 主机上安装 .NET 10 SDK 与 `appimagetool`，然后从仓库根目录运行：
 
 ```bash
 bash scripts/publish-release-linux.sh
 ```
 
-构建需要 .NET 10 SDK 和 `appimagetool`。AppImage 与 SHA-256 校验文件位于 `release/1.0.0-preview.1-linux-x64/`；应用仍依赖主机提供的 Linux 图形库。当前预览版尚未实现 Linux Secret Service 凭证存储，因此 GitHub 登录暂不可用，游客模式仍可使用。
+脚本会生成 AppImage 与 SHA-256 校验文件，位于 `release/1.0.0-preview.1-linux-x64/`。首次运行前在仓库根目录执行：
+
+```bash
+chmod +x release/1.0.0-preview.1-linux-x64/RepoGalaxy-1.0.0-preview.1-linux-x64.AppImage
+./release/1.0.0-preview.1-linux-x64/RepoGalaxy-1.0.0-preview.1-linux-x64.AppImage
+```
+
+也可在文件管理器中双击启动。应用仍依赖系统提供的 Linux 图形库。当前预览版尚未实现 Linux Secret Service 凭证存储，因此 GitHub 登录暂不可用，游客模式仍可使用。
 
 ### 登录 GitHub
 
