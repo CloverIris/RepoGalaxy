@@ -33,7 +33,7 @@ class Program
             .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
             .WriteTo.Console()
             .WriteTo.File(
-                path: GetLogFilePath(),
+                path: ApplicationPaths.GetLogFilePath(),
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 7)
             .CreateLogger();
@@ -77,8 +77,8 @@ class Program
         });
 
         // 数据库上下文只通过 factory 创建短生命周期实例，避免跨线程共享跟踪状态。
-        services.AddDbContextFactory<RepoGalaxyDbContext>(options => options.UseSqlite($"Data Source={GetDatabasePath()};Cache=Shared;Pooling=True;Foreign Keys=True;Default Timeout=5"));
-        services.AddSingleton(sp => new DatabaseLifecycleService(sp.GetRequiredService<IDbContextFactory<RepoGalaxyDbContext>>(), GetDatabasePath()));
+        services.AddDbContextFactory<RepoGalaxyDbContext>(options => options.UseSqlite($"Data Source={ApplicationPaths.GetDatabasePath()};Cache=Shared;Pooling=True;Foreign Keys=True;Default Timeout=5"));
+        services.AddSingleton(sp => new DatabaseLifecycleService(sp.GetRequiredService<IDbContextFactory<RepoGalaxyDbContext>>(), ApplicationPaths.GetDatabasePath()));
         services.AddSingleton<IApplicationStartupCoordinator, ApplicationStartupCoordinator>();
         services.AddSingleton<IAppearanceService, AppearanceService>();
 
@@ -216,25 +216,4 @@ class Program
         return services.BuildServiceProvider();
     }
 
-    /// <summary>
-    /// 获取数据库路径
-    /// </summary>
-    private static string GetDatabasePath()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var appFolder = Path.Combine(appData, "RepoGalaxy");
-        Directory.CreateDirectory(appFolder);
-        return Path.Combine(appFolder, "repogalaxy.db");
-    }
-
-    /// <summary>
-    /// 获取日志文件路径
-    /// </summary>
-    private static string GetLogFilePath()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var logFolder = Path.Combine(appData, "RepoGalaxy", "Logs");
-        Directory.CreateDirectory(logFolder);
-        return Path.Combine(logFolder, "repogalaxy-.log");
-    }
 }

@@ -67,6 +67,7 @@ public sealed class LocalIdeDiscoveryService : ILocalIdeDiscoveryService
 
     private static void DiscoverVisualStudio(Action<LocalIdeDescriptor> add, CancellationToken cancellationToken)
     {
+        if (!OperatingSystem.IsWindows()) return;
         var installer = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
         var vswhere = Path.Combine(installer, "Microsoft Visual Studio", "Installer", "vswhere.exe");
         if (File.Exists(vswhere))
@@ -97,23 +98,42 @@ public sealed class LocalIdeDiscoveryService : ILocalIdeDiscoveryService
 
     private static void DiscoverVsCode(Action<LocalIdeDescriptor> add)
     {
-        var candidates = new[]
-        {
+        var candidates = OperatingSystem.IsMacOS()
+            ? new[]
+            {
+                Path.Combine("/Applications", "Visual Studio Code.app", "Contents", "Resources", "app", "bin", "code"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Applications", "Visual Studio Code.app", "Contents", "Resources", "app", "bin", "code"),
+                Path.Combine("/opt/homebrew/bin", "code"),
+                Path.Combine("/usr/local/bin", "code")
+            }.Concat((Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+                .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+                .Select(directory => Path.Combine(directory, "code")))
+            : new[]
+            {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Microsoft VS Code", "Code.exe"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microsoft VS Code", "Code.exe"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft VS Code", "Code.exe")
-        };
-        foreach (var path in candidates) add(new("vscode", "Visual Studio Code", IdeFamily.VisualStudioCode, FileVersion(path), path, IdeCapability.OpenFolder, 50));
+            };
+        foreach (var path in candidates.Distinct(StringComparer.Ordinal)) add(new("vscode", "Visual Studio Code", IdeFamily.VisualStudioCode, FileVersion(path), path, IdeCapability.OpenFolder, 50));
     }
 
     private static void DiscoverJetBrains(Action<LocalIdeDescriptor> add, CancellationToken cancellationToken)
     {
-        var roots = new[]
-        {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "JetBrains"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JetBrains", "Toolbox", "apps")
-        }.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase);
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var roots = OperatingSystem.IsMacOS()
+            ? new[]
+            {
+                "/Applications",
+                Path.Combine(userProfile, "Applications"),
+                Path.Combine(userProfile, "Library", "Application Support", "JetBrains", "Toolbox", "apps")
+            }
+            : new[]
+            {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "JetBrains"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JetBrains", "Toolbox", "apps")
+            };
+        roots = roots.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         foreach (var root in roots)
         {
             IEnumerable<string> files;
@@ -133,7 +153,10 @@ public sealed class LocalIdeDiscoveryService : ILocalIdeDiscoveryService
                     foreach (var launch in launches.EnumerateArray())
                     {
                         if (!launch.TryGetProperty("launcherPath", out var launcher)) continue;
-                        var executable = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(file)!, launcher.GetString() ?? string.Empty));
+                        var productDirectory = Path.GetDirectoryName(file)!;
+                        if (OperatingSystem.IsMacOS() && Path.GetFileName(productDirectory).Equals("Resources", StringComparison.OrdinalIgnoreCase))
+                            productDirectory = Directory.GetParent(productDirectory)!.FullName;
+                        var executable = Path.GetFullPath(Path.Combine(productDirectory, launcher.GetString() ?? string.Empty));
                         add(new($"jetbrains:{family}:{version}", name, family.Value, version, executable, IdeCapability.OpenFolder | IdeCapability.OpenProject, 60));
                         break;
                     }

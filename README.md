@@ -9,7 +9,7 @@
     <img alt="EF Core 10" src="https://img.shields.io/badge/EF_Core-10.0.10-512BD4" />
     <img alt="SQLite" src="https://img.shields.io/badge/SQLite-local--first-003B57?logo=sqlite&logoColor=white" />
     <img alt="Markdig" src="https://img.shields.io/badge/Markdig-1.3.2-2F81F7" />
-    <img alt="Windows first" src="https://img.shields.io/badge/Platform-Windows_first-0078D4?logo=windows&logoColor=white" />
+    <img alt="Windows and macOS" src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078D4" />
     <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-2ea44f" /></a>
   </p>
   <p><strong>语言 / Language</strong><br /><strong>简体中文</strong> · <a href="README.en.md">English</a></p>
@@ -21,7 +21,7 @@ RepoGalaxy 希望把“偶然刷到一个好仓库”变成一套可以持续使
 
 它不是 GitHub 网页的简单套壳。应用采用本地优先架构，将 Feed、订阅、收藏、阅读反馈、API 缓存和推荐批次保存在本机 SQLite 中；界面可以先呈现本地快照，再在后台增量同步。除 GitHub 服务本身外，运行 RepoGalaxy 不需要 Redis、Docker、WSL 或自建服务。
 
-当前产品以 Windows 桌面为首要平台，使用 Avalonia 官方 FluentTheme 作为控件基础，并以 Windows 10 Metro / Fluent 1 的方角视觉构建空间化信息流。
+桌面应用支持 Windows 与 macOS，使用 Avalonia 官方 FluentTheme 作为控件基础，并以 Windows 10 Metro / Fluent 1 的方角视觉构建空间化信息流。
 
 <img src="assets/lable.png" width="2000">
 
@@ -31,7 +31,7 @@ RepoGalaxy 希望把“偶然刷到一个好仓库”变成一套可以持续使
 - **高密度 GitHub Feed**：提供热门、为你推荐和订阅三个来源，支持本地搜索、稳定 Tile 坐标、语义筛选和详情懒加载。
 - **可解释两阶段推荐**：候选召回后依次进行粗排、精排与多样性重排，并记录推荐依据、曝光和反馈；设置页可调整预设、权重、探索比例和温度。
 - **可靠的本地数据底座**：EF Core migrations、SQLite WAL、数据库备份、完整性检查、有界 L1 缓存和 SQLite 持久缓存共同提供 stale-while-revalidate 数据链路。
-- **清晰的 GitHub 会话闭环**：Device Flow 为默认登录方式，也支持 PAT 和受控的本地回环；凭证经验证后才保存，并在 Windows 上使用 DPAPI CurrentUser 加密。
+- **清晰的 GitHub 会话闭环**：Device Flow 为默认登录方式，也支持 PAT 和受控的本地回环；凭证经验证后才保存，并使用 Windows DPAPI 或 macOS 钥匙串加密。
 - **额度感知的同步**：Core 与 Search 限额分别计量；分页检查点、条件请求、失败退避和取消机制避免无边界请求。
 - **仓库阅读与本地开发**：详情优先展示经过安全处理的 README；应用可发现 Visual Studio、VS Code 和 JetBrains IDE，并在需要时克隆仓库后打开。
 - **本地贡献与资讯侧栏**：聚合本地 Git 贡献、收藏仓库正式 Release、GitHub Blog 与 GitHub Changelog 官方信息源。
@@ -79,7 +79,7 @@ flowchart LR
 
 ### 环境要求
 
-- Windows 10/11（当前首要支持平台）。
+- Windows 10/11 或 macOS 12+（macOS 发布包针对 Apple Silicon）。
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)。仓库通过 [`global.json`](global.json) 固定到 `10.0.302`，并允许同一功能带的最新补丁。
 - Visual Studio：安装支持 .NET 10 的版本及“.NET 桌面开发”工作负载。
 - Git：用于克隆本仓库，以及 RepoGalaxy 内的本地仓库能力。
@@ -116,6 +116,16 @@ dotnet run --project src/RepoGalaxy.Desktop
 dotnet publish src/RepoGalaxy.Desktop/RepoGalaxy.Desktop.csproj `
   -c Release -r win-x64 --self-contained false
 ```
+
+在 macOS 上构建本机架构的 `.app` 与 DMG：
+
+```bash
+bash scripts/publish-release-macos.sh
+```
+
+下载 `release/1.0.0-preview.1-osx-arm64/RepoGalaxy-1.0.0-preview.1-osx-arm64.dmg`，将 RepoGalaxy 拖到“应用程序”文件夹后启动。发布目录也包含可直接运行的 `RepoGalaxy.app`。
+
+macOS 应用使用钥匙串保存 GitHub 凭证，数据库与日志位于 `~/Library/Application Support/RepoGalaxy`。预览包未使用 Developer ID 证书公证；首次打开时若 macOS 阻止启动，请在 Finder 中按住 Control 点击应用，选择“打开”，并在确认对话框中再次选择“打开”。
 
 ### 登录 GitHub
 

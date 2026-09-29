@@ -4,8 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>Assets\repogalaxy.ico</ApplicationIcon>
+    <ApplicationManifest Condition="'$(OS)' == 'Windows_NT'">app.manifest</ApplicationManifest>
+    <ApplicationIcon Condition="'$(OS)' == 'Windows_NT'">Assets\repogalaxy.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <Version>1.0.0-preview.1</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>

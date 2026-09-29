@@ -7,7 +7,7 @@ public interface IDesktopNotificationService
     void ShowFeedNotification(FeedItem item);
 }
 
-/// <summary>Windows-friendly in-session notification adapter. It intentionally stops with the app process.</summary>
+/// <summary>In-session notification adapter. It intentionally stops with the app process.</summary>
 public sealed class DesktopNotificationService : IDesktopNotificationService
 {
     private readonly INotificationService _notifications;

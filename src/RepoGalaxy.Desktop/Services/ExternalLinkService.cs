@@ -18,7 +18,16 @@ public sealed class ExternalLinkService : IExternalLinkService
         if (!CanOpen(uri)) return false;
         try
         {
-            Process.Start(new ProcessStartInfo { FileName = uri!, UseShellExecute = true });
+            if (OperatingSystem.IsMacOS())
+            {
+                var processInfo = new ProcessStartInfo("open");
+                processInfo.ArgumentList.Add(uri!);
+                Process.Start(processInfo);
+            }
+            else
+            {
+                Process.Start(new ProcessStartInfo { FileName = uri!, UseShellExecute = true });
+            }
             return true;
         }
         catch
@@ -27,4 +36,3 @@ public sealed class ExternalLinkService : IExternalLinkService
         }
     }
 }
-

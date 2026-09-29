@@ -40,7 +40,7 @@
             <Expander Header="使用 Personal Access Token" Margin="0,4,0,0">
               <StackPanel Margin="0,12,0,0" Spacing="9"><TextBox Text="{Binding PatToken}" PlaceholderText="github_pat_…" PasswordChar="●"/><Button Content="验证并登录" Command="{Binding LoginWithPatCommand}" Classes="subtle" HorizontalAlignment="Right"/></StackPanel>
             </Expander>
-            <Border Classes="soft-card" Margin="0,8,0,0"><TextBlock Text="凭证仅使用当前 Windows 用户的 DPAPI 加密保存，RepoGalaxy 不会记录或显示 Token。" Classes="meta" TextWrapping="Wrap" LineHeight="19"/></Border>
+            <Border Classes="soft-card" Margin="0,8,0,0"><TextBlock Text="凭证由系统安全存储保护，RepoGalaxy 不会记录或显示 Token。" Classes="meta" TextWrapping="Wrap" LineHeight="19"/></Border>
           </StackPanel>
 
           <StackPanel IsVisible="{Binding CurrentState, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=DeviceCode}" Spacing="18" VerticalAlignment="Center">
