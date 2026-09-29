@@ -90,7 +90,19 @@ public sealed partial class LocalReposViewModel : ViewModelBase, ISearchablePage
     [RelayCommand] private void OpenFolder(LocalRepoViewModel item)
     {
         if (!Directory.Exists(item.LocalPath)) { StatusMessage = "该目录已经不存在。"; return; }
-        try { Process.Start(new ProcessStartInfo { FileName = item.LocalPath, UseShellExecute = true }); }
+        try
+        {
+            if (OperatingSystem.IsMacOS())
+            {
+                var processInfo = new ProcessStartInfo("open");
+                processInfo.ArgumentList.Add(item.LocalPath);
+                Process.Start(processInfo);
+            }
+            else
+            {
+                Process.Start(new ProcessStartInfo { FileName = item.LocalPath, UseShellExecute = true });
+            }
+        }
         catch { StatusMessage = "无法打开该目录。"; }
     }
     [RelayCommand] private async Task CopyPathAsync(LocalRepoViewModel item)

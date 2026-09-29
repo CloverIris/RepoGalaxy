@@ -9,7 +9,7 @@
     <img alt="EF Core 10" src="https://img.shields.io/badge/EF_Core-10.0.10-512BD4" />
     <img alt="SQLite" src="https://img.shields.io/badge/SQLite-local--first-003B57?logo=sqlite&logoColor=white" />
     <img alt="Markdig" src="https://img.shields.io/badge/Markdig-1.3.2-2F81F7" />
-    <img alt="Windows first" src="https://img.shields.io/badge/Platform-Windows_first-0078D4?logo=windows&logoColor=white" />
+    <img alt="Windows and macOS" src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078D4" />
     <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-2ea44f" /></a>
   </p>
   <p><strong>Language / 语言</strong><br /><a href="README.md">简体中文</a> · <strong>English</strong></p>
@@ -21,7 +21,7 @@ RepoGalaxy turns the accidental discovery of a useful repository into a repeatab
 
 It is not a thin wrapper around the GitHub website. RepoGalaxy follows a local-first architecture and stores feeds, subscriptions, saved repositories, reading feedback, API cache entries, and ranking batches in local SQLite. The UI renders local snapshots first and incrementally synchronizes in the background. Apart from GitHub itself, the app requires no Redis, Docker, WSL, or self-hosted service.
 
-Windows desktop is the primary platform today. The interface uses Avalonia's official FluentTheme as its control foundation, with a square Windows 10 Metro / Fluent 1 visual language for the spatial feed.
+The desktop app supports Windows and macOS. It uses Avalonia's official FluentTheme as its control foundation, with a square Windows 10 Metro / Fluent 1 visual language for the spatial feed.
 
 <img src="assets/lable.png" width="2000">
 
@@ -31,7 +31,7 @@ Windows desktop is the primary platform today. The interface uses Avalonia's off
 - **Dense GitHub feeds** — explore Trending, For You, and Subscriptions with local search, stable Tile coordinates, semantic filters, and lazy-loaded details.
 - **Explainable two-stage ranking** — candidate retrieval is followed by coarse ranking, fine ranking, and diversity reranking. Reasons, impressions, and feedback are recorded, while presets, weights, exploration rate, and temperature remain adjustable.
 - **Reliable local data foundation** — EF Core migrations, SQLite WAL, database backups, integrity checks, bounded L1 memory cache, and persistent SQLite cache provide a stale-while-revalidate pipeline.
-- **Auditable GitHub sessions** — Device Flow is the default sign-in path, with PAT and guarded local-loopback alternatives. Credentials are stored only after verification and are protected with DPAPI CurrentUser on Windows.
+- **Auditable GitHub sessions** — Device Flow is the default sign-in path, with PAT and guarded local-loopback alternatives. Credentials are stored only after verification and are protected with DPAPI on Windows or Keychain on macOS.
 - **Rate-aware synchronization** — Core and Search budgets are tracked independently; checkpoints, conditional requests, backoff, and cancellation prevent unbounded API work.
 - **Repository reading and local development** — details open on a safely rendered README. RepoGalaxy can discover Visual Studio, VS Code, and JetBrains IDEs, then clone and open a repository when needed.
 - **Local activity and official news** — the side rail combines local Git contributions, stable releases from saved repositories, GitHub Blog, and GitHub Changelog feeds.
@@ -79,7 +79,7 @@ The app first presents a centered, draggable lightweight startup window. A start
 
 ### Requirements
 
-- Windows 10/11, currently the primary supported platform.
+- Windows 10/11 or macOS 12+ (the macOS release targets Apple Silicon).
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). [`global.json`](global.json) pins `10.0.302` and permits the latest patch in the same feature band.
 - Visual Studio with .NET 10 support and the **.NET desktop development** workload.
 - Git, both for cloning RepoGalaxy and for its local-repository features.
@@ -116,6 +116,16 @@ To produce a Windows x64 Release build:
 dotnet publish src/RepoGalaxy.Desktop/RepoGalaxy.Desktop.csproj `
   -c Release -r win-x64 --self-contained false
 ```
+
+On macOS, create a native `.app` bundle and DMG:
+
+```bash
+bash scripts/publish-release-macos.sh
+```
+
+Download `release/1.0.0-preview.1-osx-arm64/RepoGalaxy-1.0.0-preview.1-osx-arm64.dmg` and drag RepoGalaxy to Applications. The release directory also contains `RepoGalaxy.app`.
+
+The macOS app stores credentials in Keychain and keeps its database and logs in `~/Library/Application Support/RepoGalaxy`. This preview is not notarized with an Apple Developer ID certificate; if Gatekeeper blocks the first launch, Control-click the app in Finder, choose **Open**, and confirm **Open** again.
 
 ### GitHub sign-in
 

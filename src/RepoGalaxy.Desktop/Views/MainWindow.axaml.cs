@@ -4,6 +4,7 @@ using Avalonia.Controls.Chrome;
 using Avalonia.Interactivity;
 using Avalonia.Input;
 using Avalonia.Media;
+using RepoGalaxy.Desktop.Services;
 using RepoGalaxy.Desktop.ViewModels;
 
 namespace RepoGalaxy.Desktop.Views;
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        PlatformWindowChrome.UseNativeMacDecorations(this);
         _navigationSplit = this.FindControl<SplitView>("NavigationSplit");
         _detailsSplit = this.FindControl<SplitView>("DetailsSplit");
         if (this.FindControl<TextBox>("SearchBox") is { } searchBox)
@@ -120,6 +122,15 @@ public partial class MainWindow : Window
 
     private void ConfigureWindowChrome()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            if (this.FindControl<Control>("MinimizeButton") is { } minimize) minimize.IsVisible = false;
+            if (this.FindControl<Control>("MaximizeButton") is { } maximize) maximize.IsVisible = false;
+            if (this.FindControl<Control>("CloseButton") is { } close) close.IsVisible = false;
+            UpdateResizeChrome();
+            return;
+        }
+
         SetRole("TitleBarDragRegion", WindowDecorationsElementRole.TitleBar);
         SetRole("SearchRegion", WindowDecorationsElementRole.User);
         SetRole("AccountRegion", WindowDecorationsElementRole.User);

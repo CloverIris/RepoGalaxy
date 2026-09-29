@@ -888,7 +888,7 @@ public class ZoomableTileCanvas : Control
             Truncate(value, maximumLength),
             CultureInfo.CurrentUICulture,
             FlowDirection.LeftToRight,
-            new Typeface("Segoe UI, Microsoft YaHei UI"),
+            new Typeface("Inter"),
             size,
             new SolidColorBrush(color));
         _textCache[cacheKey] = text;

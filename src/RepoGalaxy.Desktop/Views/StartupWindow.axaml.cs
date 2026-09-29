@@ -15,11 +15,18 @@ public partial class StartupWindow : Window
     public StartupWindow()
     {
         InitializeComponent();
+        PlatformWindowChrome.UseNativeMacDecorations(this);
         Opened += (_, _) => ConfigureWindowChrome();
     }
 
     private void ConfigureWindowChrome()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            if (this.FindControl<Control>("StartupCloseButton") is { } macClose) macClose.IsVisible = false;
+            return;
+        }
+
         if (this.FindControl<Control>("StartupTitleBar") is { } title)
             WindowDecorationProperties.SetElementRole(title, WindowDecorationsElementRole.TitleBar);
         if (this.FindControl<Control>("StartupCloseButton") is { } close)

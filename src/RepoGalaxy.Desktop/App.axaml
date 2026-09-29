@@ -80,7 +80,7 @@
     <FluentTheme />
 
     <Style Selector="Window">
-      <Setter Property="FontFamily" Value="Microsoft YaHei UI, Inter, Segoe UI"/>
+      <Setter Property="FontFamily" Value="Inter"/>
       <Setter Property="FontSize" Value="14"/>
       <Setter Property="Background" Value="{DynamicResource CanvasBrush}"/>
       <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>

@@ -14,6 +14,6 @@ public static class ApplicationProductInfo
     public const string RepositoryUrl = "https://github.com/CloverIris/RepoGalaxy";
     public const string LicenseName = "MIT";
     public const string LicenseUrl = "https://github.com/CloverIris/RepoGalaxy/blob/main/LICENSE";
-    public const string BuildDescription = ".NET 10 · Avalonia 12.1.0 · Windows x64";
+    public const string BuildDescription = ".NET 10 · Avalonia 12.1.0";
     public const string WindowTitle = "RepoGalaxy · Preview 1.0.0";
 }

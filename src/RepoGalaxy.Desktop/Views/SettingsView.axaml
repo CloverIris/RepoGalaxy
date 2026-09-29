@@ -88,10 +88,10 @@
               <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,190" RowSpacing="12">
                 <StackPanel Spacing="3">
                   <TextBlock Text="应用主题" FontWeight="SemiBold"/>
-                  <TextBlock Text="跟随 Windows，或固定为浅色 / 深色。" Classes="meta"/>
+                  <TextBlock Text="跟随系统，或固定为浅色 / 深色。" Classes="meta"/>
                 </StackPanel>
                 <ComboBox Grid.Column="1" ItemsSource="{Binding ThemeOptions}" SelectedItem="{Binding SelectedTheme}" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="1" Text="系统模式会实时响应 Windows 外观变化。" Classes="meta" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Text="系统模式会响应系统外观变化。" Classes="meta" VerticalAlignment="Center"/>
               </Grid>
             </Border>
             <Border Grid.Column="1" Classes="settings-row">
@@ -304,7 +304,7 @@
             </Border>
             <StackPanel Grid.Column="1" Spacing="3">
               <TextBlock Text="账户、数据与隐私" Classes="settings-title"/>
-              <TextBlock Text="凭证使用当前 Windows 用户的 DPAPI 加密；数据库备份只服务于当前数据世代。" Classes="muted" TextWrapping="Wrap"/>
+              <TextBlock Text="凭证使用系统安全存储加密；数据库备份只服务于当前数据世代。" Classes="muted" TextWrapping="Wrap"/>
             </StackPanel>
           </Grid>
           <Border Classes="settings-row">
