@@ -79,7 +79,7 @@ The app first presents a centered, draggable lightweight startup window. A start
 
 ### Requirements
 
-- Windows 10/11 or macOS 12+ (the macOS release targets Apple Silicon).
+- Windows 10/11, macOS 12+ (the macOS release targets Apple Silicon), or x86_64 Linux.
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). [`global.json`](global.json) pins `10.0.302` and permits the latest patch in the same feature band.
 - Visual Studio with .NET 10 support and the **.NET desktop development** workload.
 - Git, both for cloning RepoGalaxy and for its local-repository features.
@@ -126,6 +126,14 @@ bash scripts/publish-release-macos.sh
 Download `release/1.0.0-preview.1-osx-arm64/RepoGalaxy-1.0.0-preview.1-osx-arm64.dmg` and drag RepoGalaxy to Applications. The release directory also contains `RepoGalaxy.app`.
 
 The macOS app stores credentials in Keychain and keeps its database and logs in `~/Library/Application Support/RepoGalaxy`. This preview is not notarized with an Apple Developer ID certificate; if Gatekeeper blocks the first launch, Control-click the app in Finder, choose **Open**, and confirm **Open** again.
+
+On Ubuntu 22.04 or a compatible x86_64 Linux host, create a single-file AppImage:
+
+```bash
+bash scripts/publish-release-linux.sh
+```
+
+Building requires the .NET 10 SDK and `appimagetool`. The AppImage and SHA-256 checksum are written to `release/1.0.0-preview.1-linux-x64/`; Linux graphics libraries must be provided by the host. Linux Secret Service credential storage is not implemented in this preview, so GitHub sign-in is unavailable; guest mode remains usable.
 
 ### GitHub sign-in
 

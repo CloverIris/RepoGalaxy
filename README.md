@@ -79,7 +79,7 @@ flowchart LR
 
 ### 环境要求
 
-- Windows 10/11 或 macOS 12+（macOS 发布包针对 Apple Silicon）。
+- Windows 10/11、macOS 12+（macOS 发布包针对 Apple Silicon）或 x86_64 Linux。
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)。仓库通过 [`global.json`](global.json) 固定到 `10.0.302`，并允许同一功能带的最新补丁。
 - Visual Studio：安装支持 .NET 10 的版本及“.NET 桌面开发”工作负载。
 - Git：用于克隆本仓库，以及 RepoGalaxy 内的本地仓库能力。
@@ -126,6 +126,14 @@ bash scripts/publish-release-macos.sh
 下载 `release/1.0.0-preview.1-osx-arm64/RepoGalaxy-1.0.0-preview.1-osx-arm64.dmg`，将 RepoGalaxy 拖到“应用程序”文件夹后启动。发布目录也包含可直接运行的 `RepoGalaxy.app`。
 
 macOS 应用使用钥匙串保存 GitHub 凭证，数据库与日志位于 `~/Library/Application Support/RepoGalaxy`。预览包未使用 Developer ID 证书公证；首次打开时若 macOS 阻止启动，请在 Finder 中按住 Control 点击应用，选择“打开”，并在确认对话框中再次选择“打开”。
+
+在 Ubuntu 22.04 或兼容的 x86_64 Linux 主机上，可创建单文件 AppImage：
+
+```bash
+bash scripts/publish-release-linux.sh
+```
+
+构建需要 .NET 10 SDK 和 `appimagetool`。AppImage 与 SHA-256 校验文件位于 `release/1.0.0-preview.1-linux-x64/`；应用仍依赖主机提供的 Linux 图形库。当前预览版尚未实现 Linux Secret Service 凭证存储，因此 GitHub 登录暂不可用，游客模式仍可使用。
 
 ### 登录 GitHub
 
